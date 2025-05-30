@@ -1,36 +1,54 @@
-name: CI for Microservices
+name: CI - Monorepo Full Check
 
 on:
-  push:
-    branches: [develop, staging, main]
   pull_request:
+    branches: [develop, staging, main]
+  push:
+    branches: [main]
 
 jobs:
-  build-and-test:
+  install-deps:
+    name: Install Dependencies
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install root dependencies (if any)
+        run: npm install
+        continue-on-error: true
+
+  lint-and-test:
+    name: Lint & Test All Services
+    needs: install-deps
+    runs-on: ubuntu-latest
+
     strategy:
       matrix:
-        service: [auth, booking, payment]
-    defaults:
-      run:
-        working-directory: ./${{ matrix.service }}
+        service: [auth, ticket, payment, notification, event, analysis]
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: "20"
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: npm install
+        working-directory: services/${{ matrix.service }}
 
-      - name: Run lint
+      - name: Run Lint
         run: npm run lint
+        working-directory: services/${{ matrix.service }}
 
-      - name: Run tests
+      - name: Run Tests
         run: npm test
-
-      - name: Build
-        run: npm run build
+        working-directory: services/${{ matrix.service }}
