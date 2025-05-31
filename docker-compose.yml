@@ -1,0 +1,134 @@
+services:
+  kafka:
+    image: bitnami/kafka:latest
+    ports:
+      - "${KAFKA_PORT}:${KAFKA_PORT}"
+    environment:
+      - KAFKA_KRAFT_MODE=true
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_NODE_ID=${KAFKA_NODE_ID}
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=${KAFKA_NODE_ID}@kafka:9093
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=${KAFKA_BROKER}
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8081:8081"
+
+  auth-service:
+    build:
+      context: ./auth
+      dockerfile: Dockerfile.dev
+    env_file:
+      - .env
+      - ./auth/.env
+    ports:
+      - "${AUTH_PORT}:3000"
+    volumes:
+      - ${FIREBASE_KEY_PATH}:${FIREBASE_CREDENTIALS}:ro
+    environment:
+      - FIREBASE_CREDENTIALS=${FIREBASE_CREDENTIALS}
+      - KAFKA_BROKER=${KAFKA_BROKER}
+      - REDIS_HOST=${REDIS_HOST}
+    depends_on:
+      - kafka
+      - redis
+
+  ticket-service:
+    build:
+      context: ./ticket
+      dockerfile: Dockerfile.dev
+    env_file:
+      - .env
+      - ./ticket/.env
+    ports:
+      - "${TICKET_PORT}:3000"
+    volumes:
+      - ./firebase:/app/firebase
+    environment:
+      - FIREBASE_CREDENTIALS=${FIREBASE_CREDENTIALS}
+      - KAFKA_BROKER=${KAFKA_BROKER}
+      - REDIS_HOST=${REDIS_HOST}
+    depends_on:
+      - kafka
+      - redis
+
+  payment-service:
+    build:
+      context: ./payment
+      dockerfile: Dockerfile.dev
+    ports:
+      - "${PAYMENT_PORT}:3000"
+    volumes:
+      - ${FIREBASE_KEY_PATH}:${FIREBASE_CREDENTIALS}:ro
+    env_file:
+      - .env
+      - ./payment/.env
+    depends_on:
+      - redis
+      - kafka
+
+  analysis-service:
+    build:
+      context: ./analysis
+      dockerfile: Dockerfile.dev
+    env_file:
+      - .env
+      - ./analysis/.env
+    ports:
+      - "${ANALYSIS_PORT}:3000"
+    volumes:
+      - ${FIREBASE_KEY_PATH}:${FIREBASE_CREDENTIALS}:ro
+    depends_on:
+      - redis
+      - kafka
+
+  event-service:
+    build:
+      context: ./event
+      dockerfile: Dockerfile.dev
+    env_file:
+      - .env
+      - ./event/.env
+    ports:
+      - "${EVENT_PORT}:3000"
+    volumes:
+      - ${FIREBASE_KEY_PATH}:${FIREBASE_CREDENTIALS}:ro
+    depends_on:
+      - redis
+      - kafka
+
+  notification-service:
+    build:
+      context: ./notification
+      dockerfile: Dockerfile.dev
+    env_file:
+      - .env
+      - ./notification/.env
+    ports:
+      - "${NOTIFICATION_PORT}:3000"
+    volumes:
+      - ${FIREBASE_KEY_PATH}:${FIREBASE_CREDENTIALS}:ro
+    depends_on:
+      - redis
+      - kafka

@@ -5,7 +5,7 @@
 **/pnpm-lock.yaml
 
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -14,19 +14,19 @@ lerna-debug.log*
 .pnpm-debug.log*
 
 # Runtime data
-pids
+pids/
 *.pid
 *.seed
 *.pid.lock
 
 # Diagnostic reports
-report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+report.*.json
 
-# Coverage directories
+# Coverage
 coverage/
 .nyc_output/
 
-# Build directories
+# Build outputs
 dist/
 build/
 tmp/
@@ -35,20 +35,22 @@ temp/
 # Environment variables
 .env
 .env.*
+!.env.example
 
-# Docker files
-**/Dockerfile
-**/docker-compose.yml
-**/docker-compose.override.yml
+# Docker build files (but keep compose files!)
 .dockerignore
 
 # Kubernetes manifests
 **/k8s/
 **/kubernetes/
-**/*.yaml
-**/*.yml
+**/*.k8s.yaml
+**/*.k8s.yml
 
-# IDE and OS-specific files
+# Firebase secrets – ignore all firebase directories
+firebase/
+**/firebase/
+
+# IDE and OS-specific
 .vscode/
 .idea/
 *.sublime-project
@@ -60,16 +62,7 @@ Thumbs.db
 test-output/
 junit.xml
 
-# Optional npm cache directory
+# Cache, lint, history
 .npm/
-
-# Optional eslint cache
 .eslintcache
-
-# Optional REPL history
 .node_repl_history
-
-# Optional dotenv environment variables file
-.env.test
-.env.production
-.env.development

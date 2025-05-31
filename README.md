@@ -109,7 +109,7 @@ npm test
 {
   "scripts": {
     "start": "node src/app.js",
-    "dev": "nodemon src/app.js",
+    "dev": "node --watch src/app.js",
     "test": "jest --detectOpenHandles",
     "test:watch": "jest --watch",
     "lint": "eslint .",
