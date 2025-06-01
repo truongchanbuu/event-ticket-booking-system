@@ -22,6 +22,7 @@ jobs:
         id: filter
         uses: dorny/paths-filter@v3
         with:
+          base: "develop"
           filters: |
             auth:
               - 'auth/**'
@@ -40,14 +41,23 @@ jobs:
         id: set-matrix
         run: |
           SERVICES=()
-          [[ "${{ steps.filter.outputs.auth }}" == "true" ]] && SERVICES+=('"auth"')
-          [[ "${{ steps.filter.outputs.ticket }}" == "true" ]] && SERVICES+=('"ticket"')
-          [[ "${{ steps.filter.outputs.payment }}" == "true" ]] && SERVICES+=('"payment"')
-          [[ "${{ steps.filter.outputs.notification }}" == "true" ]] && SERVICES+=('"notification"')
-          [[ "${{ steps.filter.outputs.event }}" == "true" ]] && SERVICES+=('"event"')
-          [[ "${{ steps.filter.outputs.analysis }}" == "true" ]] && SERVICES+=('"analysis"')
-          MATRIX="{\"include\":[ $(IFS=, ; echo "${SERVICES[*]}") ]}"
+          [[ "${{ steps.filter.outputs.auth }}" == "true" ]] && SERVICES+=("auth")
+          [[ "${{ steps.filter.outputs.ticket }}" == "true" ]] && SERVICES+=("ticket")
+          [[ "${{ steps.filter.outputs.payment }}" == "true" ]] && SERVICES+=("payment")
+          [[ "${{ steps.filter.outputs.notification }}" == "true" ]] && SERVICES+=("notification")
+          [[ "${{ steps.filter.outputs.event }}" == "true" ]] && SERVICES+=("event")
+          [[ "${{ steps.filter.outputs.analysis }}" == "true" ]] && SERVICES+=("analysis")
+
+          # Kiểm tra nếu không có service nào thay đổi
+          if [ ${#SERVICES[@]} -eq 0 ]; then
+            MATRIX='{"include":[]}'
+          else
+            # Tạo JSON matrix từ danh sách services
+            MATRIX=$(printf '%s\n' "${SERVICES[@]}" | jq -R . | jq -s '{include: [.[] | {service: .}]}')
+          fi
+
           echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          echo "Generated matrix: $MATRIX"
 
   check-services:
     name: Check ${{ matrix.include }}
@@ -68,6 +78,24 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
           cache-dependency-path: ${{ matrix.include }}/package-lock.json
+
+      - name: Detect changed services
+        id: filter
+        run: |
+          echo "Checking changed directories..."
+          changed=$(git diff --name-only origin/main...HEAD | cut -d/ -f1 | sort -u)
+          echo "Changed: $changed"
+
+          services=""
+          for dir in auth ticket payment notification event analysis; do
+            if echo "$changed" | grep -q "^$dir$"; then
+              services="$services\"$dir\","
+            fi
+          done
+
+          services="[${services%,}]"
+          echo "Detected services: $services"
+          echo "affected_services=$services" >> $GITHUB_OUTPUT
 
       - name: Install dependencies
         run: npm ci
@@ -99,15 +127,22 @@ jobs:
   notify-result:
     name: Notify result
     runs-on: ubuntu-latest
-    needs: [check-services]
+    needs:
+      - detect-changes
     if: always()
-
     steps:
       - name: Check result
         run: |
-          if [ "${{ needs.check-services.result }}" == "success" ]; then
-            echo "✅ All services passed!"
-          else
-            echo "❌ A service has been failed!"
+          echo "=== JOB RESULTS ==="
+          echo "detect-changes: ${{ needs.detect-changes.result }}"
+
+          # Kiểm tra nếu có job nào failed
+          if [[ "${{ needs.detect-changes.result }}" == "failure" ]]; then
+            echo "❌ One or more jobs failed!"
             exit 1
+          elif [[ "${{ needs.detect-changes.result }}" == "cancelled" ]]; then
+            echo "⚠️ One or more jobs were cancelled!"
+            exit 1
+          else
+            echo "✅ All jobs completed successfully!"
           fi
