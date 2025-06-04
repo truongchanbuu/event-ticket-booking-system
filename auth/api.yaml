@@ -1,0 +1,490 @@
+openapi: 3.0.3
+info:
+    title: Auth Service API
+    description: Firebase-based authentication and authorization service for microservices architecture
+    version: 1.0.0
+    contact:
+        name: Auth Service Team
+        email: truongchanbuu0512@gmail.com
+
+servers:
+    - url: https://auth-service.company.com/api/v1
+      description: Production server
+    - url: http://localhost:3001
+      description: Development server
+
+security:
+    - FirebaseAuth: []
+
+paths:
+    /validate-token:
+        post:
+            summary: Verify Firebase ID token
+            description: Validates Firebase ID token using Firebase Admin SDK and returns user context
+            tags:
+                - Token Validation
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                idToken:
+                                    type: string
+                                    description: Firebase ID token from client
+                                    example: "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE2N..."
+                                service:
+                                    type: string
+                                    description: Requesting service name
+                                    example: "user-service"
+                            required:
+                                - idToken
+            responses:
+                "200":
+                    description: Token is valid
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    valid:
+                                        type: boolean
+                                        example: true
+                                    user:
+                                        $ref: "#/components/schemas/FirebaseUser"
+                                    customClaims:
+                                        type: object
+                                        additionalProperties: true
+                                        example:
+                                            role: "admin"
+                                            organizationId: "org_123"
+                                            permissions:
+                                                ["read:users", "write:orders"]
+                "401":
+                    description: Invalid, expired, or malformed token
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/Error"
+                "403":
+                    description: Token valid but user doesn't have required permissions
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/Error"
+
+    /revoke-token:
+        post:
+            summary: Revoke Firebase ID token
+            description: Revoke Firebase refresh tokens to invalidate all user sessions (logout)
+            tags:
+                - Token Validation
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                uid:
+                                    type: string
+                                    description: Firebase user UID to revoke tokens for
+                                    example: "firebase_uid_123"
+                                revokeAllSessions:
+                                    type: boolean
+                                    description: Whether to revoke all refresh tokens for this user
+                                    default: true
+                                    example: true
+                                reason:
+                                    type: string
+                                    enum:
+                                        [
+                                            "manual",
+                                            "self-request",
+                                            "blocked",
+                                            "password-reset",
+                                            "system",
+                                            "account-deleted",
+                                        ]
+                                    default: "system"
+                            required:
+                                - uid
+            responses:
+                "200":
+                    description: Tokens revoked successfully
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    message:
+                                        type: string
+                                        example: "All refresh tokens revoked successfully"
+                                    uid:
+                                        type: string
+                                        example: "firebase_uid_123"
+                                    revokedAt:
+                                        type: string
+                                        format: date-time
+                                        example: "2024-12-07T10:30:00Z"
+                                    sessionsRevoked:
+                                        type: integer
+                                        description: Number of sessions invalidated
+                                        example: 3
+                "400":
+                    description: Invalid request parameters
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/Error"
+                "404":
+                    description: User not found
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/Error"
+
+    /validate-permissions:
+        post:
+            summary: Validate user permissions for specific resource
+            description: Check if user has required permissions based on Firebase custom claims
+            tags:
+                - Authorization
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                uid:
+                                    type: string
+                                    description: Firebase user UID
+                                    example: "firebase_uid_123"
+                                resource:
+                                    type: string
+                                    description: Resource being accessed
+                                    example: "orders"
+                                action:
+                                    type: string
+                                    description: Action being performed
+                                    example: "read"
+                                    enum: ["create", "read", "update", "delete"]
+                                resourceId:
+                                    type: string
+                                    description: Optional specific resource ID
+                                    example: "order_456"
+                                organizationId:
+                                    type: string
+                                    description: Optional organization context
+                                    example: "org_123"
+                            required:
+                                - uid
+                                - resource
+                                - action
+            responses:
+                "200":
+                    description: Permission validation result
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    allowed:
+                                        type: boolean
+                                        example: true
+                                    reason:
+                                        type: string
+                                        example: "User has admin role in organization"
+                                    userRole:
+                                        type: string
+                                        example: "admin"
+                                    effectivePermissions:
+                                        type: array
+                                        items:
+                                            type: string
+                                        example:
+                                            [
+                                                "read:orders",
+                                                "write:orders",
+                                                "delete:orders",
+                                            ]
+                "400":
+                    description: Invalid request parameters
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/Error"
+
+    /claims/{uid}:
+        get:
+            summary: Get Firebase custom claims for user
+            description: Retrieve all custom claims set for a specific Firebase user
+            tags:
+                - User Management
+            parameters:
+                - name: uid
+                  in: path
+                  required: true
+                  description: Firebase user UID
+                  schema:
+                      type: string
+                  example: "firebase_uid_123"
+            responses:
+                "200":
+                    description: User custom claims
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    uid:
+                                        type: string
+                                        example: "firebase_uid_123"
+                                    email:
+                                        type: string
+                                        example: "user@example.com"
+                                    customClaims:
+                                        type: object
+                                        additionalProperties: true
+                                        example:
+                                            role: "manager"
+                                            organizationId: "org_123"
+                                            permissions:
+                                                ["read:users", "write:orders"]
+                                            department: "sales"
+                                    claimsUpdated:
+                                        type: string
+                                        format: date-time
+                                        example: "2024-12-07T10:30:00Z"
+                "404":
+                    description: User not found
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/Error"
+        post:
+            summary: Set Firebase custom claims for user
+            description: Set or update custom claims for a Firebase user (Admin only)
+            tags:
+                - User Management
+            parameters:
+                - name: uid
+                  in: path
+                  required: true
+                  description: Firebase user UID
+                  schema:
+                      type: string
+                  example: "firebase_uid_123"
+            security:
+                - AdminAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                uid:
+                                    type: string
+                                    description: Firebase user UID
+                                    example: "firebase_uid_123"
+                                customClaims:
+                                    type: object
+                                    additionalProperties: true
+                                    description: Custom claims to set
+                                    example:
+                                        role: "admin"
+                                        organizationId: "org_123"
+                                        permissions:
+                                            [
+                                                "read:users",
+                                                "write:orders",
+                                                "delete:users",
+                                            ]
+                                        department: "engineering"
+                                merge:
+                                    type: boolean
+                                    description: Whether to merge with existing claims or replace
+                                    default: true
+                                    example: true
+                            required:
+                                - uid
+                                - customClaims
+            responses:
+                "200":
+                    description: Custom claims updated successfully
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    message:
+                                        type: string
+                                        example: "Custom claims updated successfully"
+                                    uid:
+                                        type: string
+                                        example: "firebase_uid_123"
+                                    updatedClaims:
+                                        type: object
+                                        additionalProperties: true
+                                        example:
+                                            role: "admin"
+                                            organizationId: "org_123"
+                                            permissions:
+                                                [
+                                                    "read:users",
+                                                    "write:orders",
+                                                    "delete:users",
+                                                ]
+                                    updatedAt:
+                                        type: string
+                                        format: date-time
+                                        example: "2024-12-07T10:30:00Z"
+                "400":
+                    description: Invalid custom claims data
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/Error"
+                "403":
+                    description: Insufficient permissions to set custom claims
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/Error"
+
+    /health:
+        get:
+            summary: Health check endpoint
+            description: Check service health and Firebase connectivity
+            tags:
+                - Health
+            security: []
+            responses:
+                "200":
+                    description: Service is healthy
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: "healthy"
+                                    version:
+                                        type: string
+                                        example: "1.0.0"
+                                    timestamp:
+                                        type: string
+                                        format: date-time
+                                        example: "2024-12-07T10:30:00Z"
+                                    dependencies:
+                                        type: object
+                                        properties:
+                                            firebase:
+                                                type: object
+                                                properties:
+                                                    status:
+                                                        type: string
+                                                        example: "connected"
+                                                    projectId:
+                                                        type: string
+                                                        example: "my-firebase-project"
+                                                    lastCheck:
+                                                        type: string
+                                                        format: date-time
+                                                        example: "2024-12-07T10:29:55Z"
+                                            database:
+                                                type: object
+                                                properties:
+                                                    status:
+                                                        type: string
+                                                        example: "connected"
+                                                    responseTime:
+                                                        type: number
+                                                        example: 23.5
+                "503":
+                    description: Service unhealthy
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: "unhealthy"
+                                    errors:
+                                        type: array
+                                        items:
+                                            type: string
+                                        example:
+                                            [
+                                                "Firebase connection failed",
+                                                "Database timeout",
+                                            ]
+
+components:
+    securitySchemes:
+        FirebaseAuth:
+            type: http
+            scheme: bearer
+            bearerFormat: JWT
+            description: Firebase ID Token
+        AdminAuth:
+            type: apiKey
+            in: header
+            name: X-Admin-Key
+            description: Admin service key for privileged operations
+
+    schemas:
+        FirebaseUser:
+            type: object
+            properties:
+                uid:
+                    type: string
+                    description: Firebase user UID
+                    example: "firebase_uid_123"
+                email:
+                    type: string
+                    format: email
+                    example: "user@example.com"
+                verified:
+                    type: boolean
+                    example: true
+                disabled:
+                    type: boolean
+                    example: false
+        Error:
+            type: object
+            properties:
+                error:
+                    type: string
+                    example: "Invalid token"
+                code:
+                    type: string
+                    example: "AUTH_INVALID_TOKEN"
+                message:
+                    type: string
+                    example: "The provided Firebase ID token is invalid or expired"
+                timestamp:
+                    type: string
+                    format: date-time
+                    example: "2024-12-07T10:30:00Z"
+                details:
+                    type: object
+                    additionalProperties: true
+                    example:
+                        tokenType: "firebase_id_token"
+                        expiresAt: "2024-12-07T09:30:00Z"
+
+tags:
+    - name: Token Validation
+      description: Firebase ID token verification and validation
+    - name: Authorization
+      description: Permission checking based on Firebase custom claims
+    - name: User Management
+      description: Firebase user custom claims management
+    - name: Health
+      description: Service health monitoring and diagnostics
