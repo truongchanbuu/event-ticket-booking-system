@@ -1,6 +1,7 @@
 import { dirname } from "path"
 import { fileURLToPath } from "url"
 import { FlatCompat } from "@eslint/eslintrc"
+import parser from "@typescript-eslint/parser" // 👈 import parser đúng
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -16,20 +17,31 @@ const eslintConfig = [
     "plugin:prettier/recommended"
   ),
   {
+    ignores: [
+      "node_modules/**",
+      "dist/**",
+      "build/**",
+      "**/*.config.js",
+      "scripts/**",
+      "public/**",
+      ".next",
+    ],
+  },
+  {
     rules: {
       "no-console": ["error", { allow: ["info", "warn", "error"] }],
-      "tailwindcss/classnames-order": "error",
-      "tailwindcss/no-custom-classname": "warn",
+      // "tailwindcss/classnames-order": "error",
+      // "tailwindcss/no-custom-classname": "warn",
       "prettier/prettier": "error",
       "@typescript-eslint/no-unused-vars": "warn",
       "@typescript-eslint/explicit-module-boundary-types": "off",
     },
-    overrides: [
-      {
-        files: ["*.ts", "*.tsx", "*.js"],
-        parser: "@typescript-eslint/parser",
-      },
-    ],
+  },
+  {
+    files: ["*.ts", "*.tsx", "*.js"],
+    languageOptions: {
+      parser,
+    },
   },
 ]
 

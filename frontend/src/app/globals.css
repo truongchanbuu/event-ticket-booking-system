@@ -24,3 +24,9 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+button {
+  cursor: pointer;
+  transition: background-color 0.3s ease-in-out;
+  transition-delay: 1ms;
+}

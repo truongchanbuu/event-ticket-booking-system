@@ -2,7 +2,7 @@ import pino from "pino";
 
 /**
  * @param {Object} context - Logging context object
- * LogContext { requestId?: string; userId?: string; service?: string; [key: string]: any; }
+ * LogContext { requestID?: string; userID?: string; service?: string; [key: string]: any; }
  */
 export const createLogger = (context = {}) =>
   pino({
@@ -11,6 +11,7 @@ export const createLogger = (context = {}) =>
     base: {
       ...context,
       service: process.env.SERVICE_NAME || "unknown-service",
+      timeStamp: Date.now(),
     },
     transport:
       process.env.NODE_ENV === "production"

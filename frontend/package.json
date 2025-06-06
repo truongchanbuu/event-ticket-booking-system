@@ -2,22 +2,27 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
-  "engines": {
-    "node": ">=22.0.0"
-  },
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev -p 4000 --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "prepare": "husky"
+    "format:check": "prettier --check ."
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.0.1",
+    "firebase": "^11.8.1",
+    "framer-motion": "^12.16.0",
     "next": "15.3.3",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-hook-form": "^7.57.0",
+    "react-hot-toast": "^2.5.2",
+    "react-icons": "^5.5.0",
+    "react-spinners": "^0.17.0",
+    "tailwind-merge": "^3.3.0",
+    "zod": "^3.25.51"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.8.1",
@@ -28,10 +33,11 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@typescript-eslint/eslint-plugin": "^8.33.1",
     "@typescript-eslint/parser": "^8.33.1",
     "eslint": "^9",
     "eslint-config-next": "15.3.3",
-    "husky": "^9.1.7",
+    "lint-staged": "^16.1.0",
     "prettier": "3.5.3",
     "prettier-plugin-tailwindcss": "^0.6.12",
     "tailwindcss": "^4",
