@@ -1,10 +1,17 @@
+<<<<<<< HEAD
 import React, { useState } from "react"
 
 import { cn } from "@/lib/class.utils"
+=======
+import React from "react"
+import { twMerge } from "tailwind-merge"
+
+>>>>>>> bbcf576 (feat(ui): auth ui & firebase auth implementation)
 import inputDefaultClass from "@/styles/auth/input.style"
 
 interface InputFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
   keepDefault?: boolean
+<<<<<<< HEAD
   showToggle?: boolean
 }
 
@@ -31,6 +38,20 @@ const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
           </button>
         )}
       </div>
+=======
+}
+
+const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
+  ({ keepDefault = true, ...props }, ref) => {
+    const { className, ...rest } = props
+
+    return (
+      <input
+        ref={ref}
+        className={twMerge(keepDefault ? inputDefaultClass : "", className)}
+        {...rest}
+      />
+>>>>>>> bbcf576 (feat(ui): auth ui & firebase auth implementation)
     )
   }
 )

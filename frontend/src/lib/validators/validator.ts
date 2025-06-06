@@ -1,7 +1,10 @@
 import { z } from "zod"
 
+<<<<<<< HEAD
 import DateUtils from "../date.utils"
 
+=======
+>>>>>>> bbcf576 (feat(ui): auth ui & firebase auth implementation)
 // Login Schema
 export const loginSchema = z.object({
   email: z.string().min(1, "Email is required").email("Invalid email format"),
@@ -15,7 +18,11 @@ export const loginSchema = z.object({
 // Register Schema
 export const registerSchema = z
   .object({
+<<<<<<< HEAD
     username: z
+=======
+    name: z
+>>>>>>> bbcf576 (feat(ui): auth ui & firebase auth implementation)
       .string()
       .min(1, "Username is required")
       .min(2, "Username must be at least 2 characters")
@@ -36,6 +43,7 @@ export const registerSchema = z
         (val) => val === true,
         "You must accept the terms and conditions"
       ),
+<<<<<<< HEAD
     dob: z
       .date({
         invalid_type_error: "Invalid date format.",
@@ -58,6 +66,8 @@ export const registerSchema = z
           message: "Phone number must be 10-15 digits and contain only digits.",
         }
       ),
+=======
+>>>>>>> bbcf576 (feat(ui): auth ui & firebase auth implementation)
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Password doesn't match",

@@ -6,7 +6,11 @@ import { motion } from "framer-motion"
 import toast from "react-hot-toast"
 import { FcGoogle } from "react-icons/fc"
 
+<<<<<<< HEAD
 import { loginWithGoogle } from "@/lib/auth/firebase/auth.service"
+=======
+import loginWithGoogle from "@/lib/auth/firebase/auth.service"
+>>>>>>> bbcf576 (feat(ui): auth ui & firebase auth implementation)
 
 import LoginForm from "./LoginForm"
 import RegisterForm from "./RegisterForm"

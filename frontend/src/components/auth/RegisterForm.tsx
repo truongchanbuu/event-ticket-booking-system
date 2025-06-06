@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+<<<<<<< HEAD
 import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Controller, SubmitHandler, useForm } from "react-hook-form"
@@ -245,5 +246,27 @@ export default function RegisterForm({
         </p>
       )}
     </form>
+=======
+
+import AuthButton from "../ui/AuthButton"
+import InputField from "./InputField"
+
+export default function RegisterForm() {
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const loading = isSubmitting
+
+  // TODO: implement
+  setIsSubmitting(false)
+
+  return (
+    <div className="flex flex-col justify-center items-center">
+      <h2 className="text-xl font-semibold mb-4">Register</h2>
+      <InputField placeholder="Username" />
+      <InputField placeholder="Email" type="email" />
+      <InputField placeholder="Password" type="password" />
+      <AuthButton loading={loading} label="Register" />
+    </div>
+>>>>>>> bbcf576 (feat(ui): auth ui & firebase auth implementation)
   )
 }

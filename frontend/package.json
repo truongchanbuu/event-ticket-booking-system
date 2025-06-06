@@ -11,13 +11,21 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
+<<<<<<< HEAD
     "@headlessui/react": "^2.2.4",
+=======
+>>>>>>> bbcf576 (feat(ui): auth ui & firebase auth implementation)
     "@hookform/resolvers": "^5.0.1",
     "firebase": "^11.8.1",
     "framer-motion": "^12.16.0",
     "next": "15.3.3",
+<<<<<<< HEAD
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+=======
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+>>>>>>> bbcf576 (feat(ui): auth ui & firebase auth implementation)
     "react-hook-form": "^7.57.0",
     "react-hot-toast": "^2.5.2",
     "react-icons": "^5.5.0",

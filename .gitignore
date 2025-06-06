@@ -75,3 +75,4 @@ junit.xml
 # Ensure all sensitive config files are ignored
 ticket/config/
 payment/config/ 
+.husky

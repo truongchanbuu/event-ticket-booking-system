@@ -47,11 +47,14 @@ export interface RegisterFormProps extends BaseFormProps {
   onSwitchToLogin?: () => void
 }
 
+<<<<<<< HEAD
 export interface ResetFormProps extends BaseFormProps {
   isOpen: boolean
   onClose: () => void
 }
 
+=======
+>>>>>>> bbcf576 (feat(ui): auth ui & firebase auth implementation)
 // Social auth providers - "google" | "facebook"
 export type SocialProvider = "google"
 

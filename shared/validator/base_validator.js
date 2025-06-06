@@ -7,6 +7,7 @@ export default class BaseValidator {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       const formatted = errors.array().map((err) => ({
+<<<<<<< HEAD
         field: err.path || err.param,
         message: err.msg,
         location: err.location,
@@ -24,6 +25,19 @@ export default class BaseValidator {
           errors: formatted,
         })
       );
+=======
+        field: err.path,
+        message: err.msg,
+        value: err.value,
+      }));
+
+      throw new AppError({
+        message: "Invalid Data",
+        statusCode: 400,
+        errorCode: ERROR_CODE.INVALID_DATA,
+        errors: formatted,
+      });
+>>>>>>> bbcf576 (feat(ui): auth ui & firebase auth implementation)
     }
 
     next();
