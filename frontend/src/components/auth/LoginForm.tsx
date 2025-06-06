@@ -78,7 +78,9 @@ export default function LoginForm({
           aria-invalid={errors.email ? true : false}
           aria-describedby={errors.email ? "email-error" : undefined}
           className={
-            errors.email ? "border-red-500 bg-red-50" : "border-gray-300"
+            errors.email
+              ? "border-red-500 bg-red-50 red-500"
+              : "border-gray-300"
           }
         />
         {errors.email && (
@@ -112,7 +114,7 @@ export default function LoginForm({
       </section>
       <section className="w-full flex items-center justify-between mb-4">
         <label
-          className="flex items-center gap-2 text-sm text-gray-700"
+          className="flex items-center justify-center gap-2 text-base text-gray-700 whitespace-nowrap"
           htmlFor="rememberMe"
         >
           <InputField
@@ -126,12 +128,13 @@ export default function LoginForm({
         </label>
 
         <p
-          className="text-sm text-blue-500 hover:underline cursor-pointer"
+          className="text-base text-blue-500 cursor-pointer"
           onClick={onForgotPassword}
         >
           Forgot password?
         </p>
       </section>
+
       <AuthButton loading={loading} label="Login" />
       {errors.root?.message && (
         <p className="mr-auto text-red-500 text-sm" role="alert">

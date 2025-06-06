@@ -1,5 +1,7 @@
 import { z } from "zod"
 
+import DateUtils from "../date.utils"
+
 // Login Schema
 export const loginSchema = z.object({
   email: z.string().min(1, "Email is required").email("Invalid email format"),
@@ -13,7 +15,7 @@ export const loginSchema = z.object({
 // Register Schema
 export const registerSchema = z
   .object({
-    name: z
+    username: z
       .string()
       .min(1, "Username is required")
       .min(2, "Username must be at least 2 characters")
@@ -34,6 +36,20 @@ export const registerSchema = z
         (val) => val === true,
         "You must accept the terms and conditions"
       ),
+    dob: z
+      .date()
+      .min(new Date(DateUtils.minAvailableDate), {
+        message: "Invalid date of birth",
+      })
+      .max(DateUtils.maxAvailableDate, { message: "Invalid date of birth" })
+      .optional(),
+    gender: z.enum(["male", "female", "other"]).optional(),
+    phone: z
+      .string()
+      .min(10, { message: "Phone number must be at least 10 digits" })
+      .max(15, { message: "Phone number must be at most 15 digits" })
+      .regex(/^\d+$/, { message: "Phone number must contain only digits" })
+      .optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Password doesn't match",
