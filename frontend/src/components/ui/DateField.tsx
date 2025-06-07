@@ -1,6 +1,7 @@
 import { format } from "date-fns"
 
 import { cn } from "@/lib/class.utils"
+import DateUtils from "@/lib/date.utils"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import {
@@ -18,15 +19,16 @@ export default function DatePickerField({
   value?: Date
   onChange: (date: Date | undefined) => void
 }) {
+  const formatted = value ? format(value, "dd/MM/yyyy") : "Pick a date"
+
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" className={cn(inputClass, "py-6 px-11")}>
-          {value ? (
-            format(value, "PPP")
-          ) : (
-            <span className="text-gray-500">Pick a date</span>
-          )}
+        <Button
+          variant="outline"
+          className={cn(inputClass, "py-6 px-10 text-gray-500")}
+        >
+          {formatted}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0">
@@ -35,6 +37,9 @@ export default function DatePickerField({
           selected={value}
           onSelect={onChange}
           initialFocus
+          title={formatted}
+          fromDate={DateUtils.minAvailableDate}
+          toDate={DateUtils.maxAvailableDate}
         />
       </PopoverContent>
     </Popover>

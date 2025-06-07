@@ -1,11 +1,13 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { div } from "framer-motion/client"
 import { Controller, SubmitHandler, useForm } from "react-hook-form"
+import toast from "react-hot-toast"
 
 import { RegisterFormProps } from "@/types/auth/auth"
+import { registerWithFirebase } from "@/lib/auth/firebase/auth.service"
 import { RegisterFormData, registerSchema } from "@/lib/validators/validator"
 
 import AuthButton from "../ui/AuthButton"
@@ -14,8 +16,11 @@ import InputField from "./InputField"
 
 interface RegisterFormComponentProps extends RegisterFormProps {}
 
-export default function RegisterForm({ onSubmit }: RegisterFormComponentProps) {
+export default function RegisterForm({
+  onSubmit = registerWithFirebase,
+}: RegisterFormComponentProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const router = useRouter()
 
   const {
     register,
@@ -33,9 +38,6 @@ export default function RegisterForm({ onSubmit }: RegisterFormComponentProps) {
       password: "",
       confirmPassword: "",
       terms: false,
-      dob: undefined,
-      gender: undefined,
-      phone: undefined,
     },
   })
 
@@ -49,8 +51,12 @@ export default function RegisterForm({ onSubmit }: RegisterFormComponentProps) {
       if (onSubmit) {
         await onSubmit(data)
       }
+
+      toast.success("Register successful! Redirecting...")
+      router.push("/")
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
+      console.error(error)
       if (error.field) {
         setError(error.field as keyof RegisterFormData, {
           message: error.message,
@@ -66,7 +72,10 @@ export default function RegisterForm({ onSubmit }: RegisterFormComponentProps) {
   }
 
   return (
-    <div className="flex flex-col justify-center items-start">
+    <form
+      onSubmit={handleSubmit(handleFormSubmit)}
+      className="flex flex-col justify-center items-start"
+    >
       <h2 className="text-xl font-semibold mb-4 w-full text-center">
         Register
       </h2>
@@ -75,7 +84,9 @@ export default function RegisterForm({ onSubmit }: RegisterFormComponentProps) {
         placeholder="Username"
         disabled={loading}
         className={
-          errors.email ? "border-red-500 bg-red-50 red-500" : "border-gray-300"
+          errors.username
+            ? "border-red-500 bg-red-50 red-500"
+            : "border-gray-300"
         }
       />
       {errors.username && (
@@ -107,31 +118,36 @@ export default function RegisterForm({ onSubmit }: RegisterFormComponentProps) {
         type="password"
         disabled={loading}
         className={
-          errors.email ? "border-red-500 bg-red-50 red-500" : "border-gray-300"
+          errors.password
+            ? "border-red-500 bg-red-50 red-500"
+            : "border-gray-300"
         }
       />
       {errors.password && (
         <p
           id="password-error"
-          className="text-red-500 text-sm mb-2"
+          className="text-red-500 text-sm mb-2 break-words max-w-90"
           role="alert"
         >
           {errors.password.message}
         </p>
       )}
+
       <InputField
         {...register("confirmPassword")}
         placeholder="Confirm Password"
         type="password"
         disabled={loading}
         className={
-          errors.email ? "border-red-500 bg-red-50 red-500" : "border-gray-300"
+          errors.confirmPassword
+            ? "border-red-500 bg-red-50 red-500"
+            : "border-gray-300"
         }
       />
       {errors.confirmPassword && (
         <p
           id="confirmPassword-error"
-          className="text-red-500 text-sm mb-2"
+          className="text-red-500 text-sm mb-2 break-words max-w-90"
           role="alert"
         >
           {errors.confirmPassword.message}
@@ -139,37 +155,59 @@ export default function RegisterForm({ onSubmit }: RegisterFormComponentProps) {
       )}
 
       <section className="flex justify-between gap-3 mb-3">
-        <Controller
-          name="dob"
-          control={control}
-          render={({ field }) => (
-            <DatePickerField value={field.value} onChange={field.onChange} />
+        <div className="flex flex-col">
+          <Controller
+            name="dob"
+            control={control}
+            render={({ field }) => (
+              <DatePickerField value={field.value} onChange={field.onChange} />
+            )}
+          />
+          {errors.dob && (
+            <p
+              id="dob-error"
+              className="text-red-500 text-sm mt-1"
+              role="alert"
+            >
+              {errors.dob.message}
+            </p>
           )}
-        />
-        <Controller
-          name="gender"
-          control={control}
-          render={({ field }) => (
-            <div className="relative">
-              <select
-                {...field}
-                className="p-3 pr-10 border border-gray-300 rounded-md appearance-none"
-                defaultValue=""
-              >
-                <option value="" disabled>
-                  Select gender
-                </option>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-                <option value="other">Other</option>
-              </select>
+        </div>
 
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 text-sm">
-                ▼
+        <div className="flex flex-col flex-1">
+          <Controller
+            name="gender"
+            control={control}
+            render={({ field }) => (
+              <div className="relative">
+                <select
+                  {...field}
+                  className="p-3 pr-10 border border-gray-300 rounded-md appearance-none"
+                  defaultValue=""
+                >
+                  <option value="" disabled>
+                    Select gender
+                  </option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="other">Other</option>
+                </select>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 text-sm">
+                  ▼
+                </div>
               </div>
-            </div>
+            )}
+          />
+          {errors.gender && (
+            <p
+              id="gender-error"
+              className="text-red-500 text-sm mt-1"
+              role="alert"
+            >
+              {errors.gender.message}
+            </p>
           )}
-        />
+        </div>
       </section>
 
       <InputField
@@ -206,6 +244,6 @@ export default function RegisterForm({ onSubmit }: RegisterFormComponentProps) {
           {errors.terms?.message || errors.root?.message}
         </p>
       )}
-    </div>
+    </form>
   )
 }

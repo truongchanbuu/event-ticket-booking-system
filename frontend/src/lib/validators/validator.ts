@@ -37,19 +37,27 @@ export const registerSchema = z
         "You must accept the terms and conditions"
       ),
     dob: z
-      .date()
-      .min(new Date(DateUtils.minAvailableDate), {
-        message: "Invalid date of birth",
+      .date({
+        invalid_type_error: "Invalid date format.",
       })
-      .max(DateUtils.maxAvailableDate, { message: "Invalid date of birth" })
+      .min(new Date(DateUtils.minAvailableDate), {
+        message: "Invalid date of birth.",
+      })
+      .max(DateUtils.maxAvailableDate, { message: "Invalid date of birth." })
       .optional(),
     gender: z.enum(["male", "female", "other"]).optional(),
     phone: z
       .string()
-      .min(10, { message: "Phone number must be at least 10 digits" })
-      .max(15, { message: "Phone number must be at most 15 digits" })
-      .regex(/^\d+$/, { message: "Phone number must contain only digits" })
-      .optional(),
+      .optional()
+      .refine(
+        (val) =>
+          val === undefined ||
+          val === "" ||
+          (/^\d+$/.test(val) && val.length >= 10 && val.length <= 15),
+        {
+          message: "Phone number must be 10-15 digits and contain only digits.",
+        }
+      ),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Password doesn't match",

@@ -1,8 +1,10 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { SubmitHandler, useForm } from "react-hook-form"
+import toast from "react-hot-toast"
 
 import { LoginFormProps } from "@/types/auth/auth"
 import { loginWithEmail } from "@/lib/auth/firebase/auth.service"
@@ -20,6 +22,7 @@ export default function LoginForm({
   onForgotPassword,
 }: LoginFormComponentProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const router = useRouter()
 
   const {
     register,
@@ -47,6 +50,8 @@ export default function LoginForm({
       if (onSubmit) {
         await onSubmit(data)
       }
+      toast.success("Login successful! Redirecting...")
+      router.push("/")
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       if (error.field) {
