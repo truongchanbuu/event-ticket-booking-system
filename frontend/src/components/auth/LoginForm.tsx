@@ -9,8 +9,11 @@ import toast from "react-hot-toast"
 import { LoginFormProps } from "@/types/auth/auth"
 import { loginWithEmail } from "@/lib/auth/firebase/auth.service"
 import { LoginFormData, loginSchema } from "@/lib/validators/validator"
+import { useForgotPasswordDialog } from "@/hooks/useForgotPasswordDialog"
 
 import AuthButton from "../ui/AuthButton"
+import ResetPasswordDialog from "../ui/ResetPasswordDialog"
+import ForgotPasswordModalWrapper from "../ui/ResetPasswordDialogWrapper"
 import InputField from "./InputField"
 
 interface LoginFormComponentProps extends LoginFormProps {
@@ -23,6 +26,7 @@ export default function LoginForm({
 }: LoginFormComponentProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const router = useRouter()
+  const { isOpen, openDialog, closeDialog } = useForgotPasswordDialog()
 
   const {
     register,
@@ -134,10 +138,12 @@ export default function LoginForm({
 
         <p
           className="text-base text-blue-500 cursor-pointer"
-          onClick={onForgotPassword}
+          onClick={openDialog}
         >
           Forgot password?
         </p>
+
+        <ForgotPasswordModalWrapper isOpen={isOpen} onClose={closeDialog} />
       </section>
 
       <AuthButton loading={loading} label="Login" />

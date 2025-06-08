@@ -47,6 +47,11 @@ export interface RegisterFormProps extends BaseFormProps {
   onSwitchToLogin?: () => void
 }
 
+export interface ResetFormProps extends BaseFormProps {
+  isOpen: boolean
+  onClose: () => void
+}
+
 // Social auth providers - "google" | "facebook"
 export type SocialProvider = "google"
 
