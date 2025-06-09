@@ -1,5 +1,4 @@
-import { AppError } from "@event_ticket_booking_system/shared";
-import ROLE from "../enums/role.enum.js";
+import { AppError, ROLE } from "@event_ticket_booking_system/shared";
 import { admin } from "../firebase.js";
 import ERROR_CODE from "@event_ticket_booking_system/shared/error/error_code.js";
 import { FirebaseAuthErrorMap } from "@event_ticket_booking_system/shared";

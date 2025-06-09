@@ -8,3 +8,4 @@ export {
 } from "./error/index.js";
 export { createLogger } from "./logger/index.js";
 export { default as BaseValidator } from "./validator/base_validator.js";
+export { default as ROLE } from "./enums/role.enum.js";
