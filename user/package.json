@@ -1,0 +1,34 @@
+{
+    "type": "module",
+    "name": "user-service",
+    "version": "1.0.0",
+    "main": "index.js",
+    "scripts": {
+        "start": "node src/server.js",
+        "dev": "node --watch src/server.js",
+        "test": "jest --detectOpenHandles",
+        "test:watch": "jest --watch",
+        "lint": "eslint .",
+        "lint:fix": "eslint . --fix",
+        "format": "prettier --write .",
+        "docker:build": "docker build -t user-service .",
+        "docker:run": "docker run -p 3000:3000 user-service"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "description": "",
+    "dependencies": {
+        "@event_ticket_booking_system/shared": "file:../shared"
+    },
+    "devDependencies": {
+        "@babel/preset-env": "^7.27.2",
+        "awilix": "^12.0.5",
+        "awilix-express": "^9.0.2",
+        "eslint": "^9.28.0",
+        "eslint-config-prettier": "^10.1.5",
+        "eslint-plugin-prettier": "^5.4.1",
+        "prettier": "^3.5.3",
+        "supertest": "^7.1.1"
+    }
+}

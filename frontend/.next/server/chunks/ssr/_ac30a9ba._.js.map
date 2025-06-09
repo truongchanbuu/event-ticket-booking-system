@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 7, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/truon/event_ticket_booking_system/frontend/src/app/error.tsx"],"sourcesContent":["\"use client\"\n\nimport { useEffect } from \"react\"\n\nexport default function Error({\n  error,\n  reset,\n}: {\n  error: Error\n  reset: () => void\n}) {\n  useEffect(() => {\n    console.error(error)\n  }, [error])\n\n  return (\n    <div>\n      <h2>Đã xảy ra lỗi!</h2>\n      <button onClick={() => reset()}>Thử lại</button>\n    </div>\n  )\n}\n"],"names":[],"mappings":";;;;AAEA;AAFA;;;AAIe,SAAS,MAAM,EAC5B,KAAK,EACL,KAAK,EAIN;IACC,CAAA,GAAA,qMAAA,CAAA,YAAS,AAAD,EAAE;QACR,QAAQ,KAAK,CAAC;IAChB,GAAG;QAAC;KAAM;IAEV,qBACE,8OAAC;;0BACC,8OAAC;0BAAG;;;;;;0BACJ,8OAAC;gBAAO,SAAS,IAAM;0BAAS;;;;;;;;;;;;AAGtC","debugId":null}},
+    {"offset": {"line": 50, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/truon/event_ticket_booking_system/node_modules/next/src/server/route-modules/app-page/vendored/ssr/react-jsx-dev-runtime.ts"],"sourcesContent":["module.exports = require('../../module.compiled').vendored[\n  'react-ssr'\n].ReactJsxDevRuntime\n"],"names":["module","exports","require","vendored","ReactJsxDevRuntime"],"mappings":";AAAAA,OAAOC,OAAO,GAAGC,QAAQ,4HAAyBC,QAAQ,CACxD,YACD,CAACC,kBAAkB","ignoreList":[0],"debugId":null}}]
+}

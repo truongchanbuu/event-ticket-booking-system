@@ -67,3 +67,6 @@ junit.xml
 .eslintcache
 .node_repl_history
 .husky
+
+# Next
+**/.next

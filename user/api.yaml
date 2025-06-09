@@ -1,0 +1,1017 @@
+openapi: 3.0.3
+info:
+    title: User Service API
+    description: |
+        User Service provides comprehensive user management functionality including 
+        CRUD operations for users and event organizer application management.
+    version: 1.0.0
+    contact:
+        name: API Support
+        email: truongchanbuu0512@gmail.com
+
+servers:
+    - url: https://api.example.com/v1
+      description: Production server
+    - url: http://localhost:3000
+      description: Staging server
+
+security:
+    - BearerAuth: []
+
+tags:
+    - name: Users
+      description: User management operations
+    - name: Organizer Applications
+      description: Event organizer application management
+    - name: Authentication
+      description: Authentication and authorization
+
+paths:
+    # User Management Endpoints
+    /users:
+        get:
+            tags:
+                - Users
+            summary: Get all users
+            description: Retrieve a paginated list of users with optional filtering
+            parameters:
+                - name: page
+                  in: query
+                  description: Page number
+                  schema:
+                      type: integer
+                      default: 1
+                      minimum: 1
+                - name: limit
+                  in: query
+                  description: Number of items per page
+                  schema:
+                      type: integer
+                      default: 20
+                      minimum: 1
+                      maximum: 100
+                - name: search
+                  in: query
+                  description: Search by name, email, or username
+                  schema:
+                      type: string
+                - name: role
+                  in: query
+                  description: Filter by user role
+                  schema:
+                      $ref: "#/components/schemas/UserRole"
+                - name: status
+                  in: query
+                  description: Filter by user status
+                  schema:
+                      $ref: "#/components/schemas/UserStatus"
+                - name: organizerStatus
+                  in: query
+                  description: Filter by organizer status
+                  schema:
+                      $ref: "#/components/schemas/OrganizerStatus"
+                - name: sortBy
+                  in: query
+                  description: Sort field
+                  schema:
+                      type: string
+                      enum: [createdAt, firstName, lastName, email]
+                      default: createdAt
+                - name: sortOrder
+                  in: query
+                  description: Sort order
+                  schema:
+                      type: string
+                      enum: [asc, desc]
+                      default: desc
+            responses:
+                "200":
+                    description: Successful response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/UserListResponse"
+                "400":
+                    $ref: "#/components/responses/BadRequest"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+
+        post:
+            tags:
+                - Users
+            summary: Create a new user
+            description: Create a new user account
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/CreateUserRequest"
+            responses:
+                "201":
+                    description: User created successfully
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/UserResponse"
+                "400":
+                    $ref: "#/components/responses/BadRequest"
+                "409":
+                    $ref: "#/components/responses/Conflict"
+
+    /users/{userID}:
+        get:
+            tags:
+                - Users
+            summary: Get user by ID
+            description: Retrieve a specific user by their ID
+            parameters:
+                - name: userID
+                  in: path
+                  required: true
+                  description: User ID
+                  schema:
+                      type: string
+                      format: uuid
+            responses:
+                "200":
+                    description: Successful response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/UserResponse"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+
+        put:
+            tags:
+                - Users
+            summary: Update user
+            description: Update user information
+            parameters:
+                - name: userID
+                  in: path
+                  required: true
+                  description: User ID
+                  schema:
+                      type: string
+                      format: uuid
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/UpdateUserRequest"
+            responses:
+                "200":
+                    description: User updated successfully
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/UserResponse"
+                "400":
+                    $ref: "#/components/responses/BadRequest"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+        delete:
+            tags:
+                - Users
+            summary: Delete user
+            description: Delete a user account
+            parameters:
+                - name: userID
+                  in: path
+                  required: true
+                  description: User ID
+                  schema:
+                      type: string
+                      format: uuid
+            responses:
+                "200":
+                    description: User deleted successfully
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/SuccessResponse"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+
+    /users/{userID}/status:
+        patch:
+            tags:
+                - Users
+            summary: Update user status
+            description: Update user account status (active, inactive, suspended)
+            parameters:
+                - name: userID
+                  in: path
+                  required: true
+                  description: User ID
+                  schema:
+                      type: string
+                      format: uuid
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required:
+                                - status
+                            properties:
+                                status:
+                                    $ref: "#/components/schemas/UserStatus"
+            responses:
+                "200":
+                    description: Status updated successfully
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/UserResponse"
+                "400":
+                    $ref: "#/components/responses/BadRequest"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+    # Event Organizer Application Endpoints
+    /organizer/{organizerID}:
+        get:
+            tags:
+                - Organizer Applications
+            summary: Get organizer details
+            description: Get the organizer details
+            parameters:
+                - name: organizerID
+                  in: path
+                  required: true
+                  description: Organizer ID
+                  schema:
+                      type: string
+                      format: uuid
+            responses:
+                "200":
+                    description: Successful response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/OrganizerProfileResponse"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+
+        post:
+            tags:
+                - Organizer Applications
+            summary: Apply for event organizer
+            description: Submit an application to become an event organizer
+            parameters:
+                - name: organizerID
+                  in: path
+                  required: true
+                  description: Organizer ID
+                  schema:
+                      type: string
+                      format: uuid
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/OrganizerApplicationRequest"
+            responses:
+                "201":
+                    description: Application submitted successfully
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ApplicationSubmissionResponse"
+                "400":
+                    $ref: "#/components/responses/BadRequest"
+                "409":
+                    description: Application already exists
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+        put:
+            tags:
+                - Organizer Applications
+            summary: Update organizer profile
+            description: Update existing organizer profile information
+            parameters:
+                - name: organizerID
+                  in: path
+                  required: true
+                  description: Organizer ID
+                  schema:
+                      type: string
+                      format: uuid
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/OrganizerApplicationRequest"
+            responses:
+                "200":
+                    description: Profile updated successfully
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/OrganizerProfileResponse"
+                "400":
+                    $ref: "#/components/responses/BadRequest"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+    /organizer-applications:
+        get:
+            tags:
+                - Organizer Applications
+            summary: Get organizer applications
+            description: Retrieve a list of organizer applications (admin only)
+            parameters:
+                - name: page
+                  in: query
+                  description: Page number
+                  schema:
+                      type: integer
+                      default: 1
+                      minimum: 1
+                - name: limit
+                  in: query
+                  description: Number of items per page
+                  schema:
+                      type: integer
+                      default: 20
+                      minimum: 1
+                      maximum: 100
+                - name: status
+                  in: query
+                  description: Filter by application status
+                  schema:
+                      $ref: "#/components/schemas/OrganizerStatus"
+                - name: sortBy
+                  in: query
+                  description: Sort field
+                  schema:
+                      type: string
+                      enum: [applicationDate, companyName]
+                      default: applicationDate
+                - name: sortOrder
+                  in: query
+                  description: Sort order
+                  schema:
+                      type: string
+                      enum: [asc, desc]
+                      default: desc
+            responses:
+                "200":
+                    description: Successful response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ApplicationListResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+
+    /organizer-applications/{applicationID}:
+        get:
+            tags:
+                - Organizer Applications
+            summary: Get application details
+            description: Retrieve detailed information about a specific organizer application
+            parameters:
+                - name: applicationID
+                  in: path
+                  required: true
+                  description: Application ID
+                  schema:
+                      type: string
+                      format: uuid
+            responses:
+                "200":
+                    description: Successful response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/OrganizerProfileResponse"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+
+    /organizer-applications/{applicationID}/approve:
+        post:
+            tags:
+                - Organizer Applications
+            summary: Approve organizer application
+            description: Approve a pending organizer application (admin only)
+            parameters:
+                - name: applicationID
+                  in: path
+                  required: true
+                  description: Application ID
+                  schema:
+                      type: string
+                      format: uuid
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                approvalNotes:
+                                    type: string
+                                    description: Optional approval notes
+            responses:
+                "200":
+                    description: Application approved successfully
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ApplicationStatusResponse"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+
+    /organizer-applications/{applicationID}/reject:
+        post:
+            tags:
+                - Organizer Applications
+            summary: Reject organizer application
+            description: Reject a pending organizer application (admin only)
+            parameters:
+                - name: applicationID
+                  in: path
+                  required: true
+                  description: Application ID
+                  schema:
+                      type: string
+                      format: uuid
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required:
+                                - rejectionReason
+                            properties:
+                                rejectionReason:
+                                    type: string
+                                    description: Reason for rejection
+            responses:
+                "200":
+                    description: Application rejected successfully
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ApplicationStatusResponse"
+                "400":
+                    $ref: "#/components/responses/BadRequest"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+components:
+    securitySchemes:
+        BearerAuth:
+            type: http
+            scheme: bearer
+            bearerFormat: JWT
+
+    schemas:
+        # User Schemas
+        User:
+            type: object
+            properties:
+                ID:
+                    type: string
+                    format: uuid
+                    description: Unique user identifier
+                email:
+                    type: string
+                    format: email
+                    description: User email address
+                username:
+                    type: string
+                    description: Unique username
+                firstName:
+                    type: string
+                    description: User first name
+                lastName:
+                    type: string
+                    description: User last name
+                phone:
+                    type: string
+                    description: Phone number
+                    nullable: true
+                avatar:
+                    type: string
+                    format: uri
+                    description: Avatar image URL
+                    nullable: true
+                dateOfBirth:
+                    type: string
+                    format: date
+                    description: Date of birth
+                    nullable: true
+                address:
+                    $ref: "#/components/schemas/Address"
+                role:
+                    $ref: "#/components/schemas/UserRole"
+                status:
+                    $ref: "#/components/schemas/UserStatus"
+                organizerStatus:
+                    $ref: "#/components/schemas/OrganizerStatus"
+                organizerProfile:
+                    $ref: "#/components/schemas/OrganizerProfile"
+                    nullable: true
+                createdAt:
+                    type: string
+                    format: date-time
+                    description: Account creation timestamp
+                updatedAt:
+                    type: string
+                    format: date-time
+                    description: Last update timestamp
+
+        CreateUserRequest:
+            type: object
+            required:
+                - email
+                - username
+                - password
+                - firstName
+                - lastName
+            properties:
+                email:
+                    type: string
+                    format: email
+                username:
+                    type: string
+                    minLength: 3
+                    maxLength: 50
+                password:
+                    type: string
+                    minLength: 8
+                    description: Password (min 8 characters)
+                firstName:
+                    type: string
+                    minLength: 1
+                    maxLength: 50
+                lastName:
+                    type: string
+                    minLength: 1
+                    maxLength: 50
+                phone:
+                    type: string
+                dateOfBirth:
+                    type: string
+                    format: date
+                address:
+                    $ref: "#/components/schemas/Address"
+
+        UpdateUserRequest:
+            type: object
+            properties:
+                firstName:
+                    type: string
+                    minLength: 1
+                    maxLength: 50
+                lastName:
+                    type: string
+                    minLength: 1
+                    maxLength: 50
+                phone:
+                    type: string
+                avatar:
+                    type: string
+                    format: uri
+                dateOfBirth:
+                    type: string
+                    format: date
+                address:
+                    $ref: "#/components/schemas/Address"
+
+        Address:
+            type: object
+            properties:
+                street:
+                    type: string
+                city:
+                    type: string
+                state:
+                    type: string
+                country:
+                    type: string
+                zipCode:
+                    type: string
+
+        # Organizer Schemas
+        OrganizerProfile:
+            type: object
+            properties:
+                ID:
+                    type: string
+                    format: uuid
+                userID:
+                    type: string
+                    format: uuid
+                companyName:
+                    type: string
+                companyDescription:
+                    type: string
+                businessLicense:
+                    type: string
+                taxID:
+                    type: string
+                website:
+                    type: string
+                    format: uri
+                    nullable: true
+                socialMedia:
+                    $ref: "#/components/schemas/SocialMedia"
+                bankAccount:
+                    $ref: "#/components/schemas/BankAccount"
+                documents:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/Document"
+                applicationDate:
+                    type: string
+                    format: date-time
+                approvedDate:
+                    type: string
+                    format: date-time
+                    nullable: true
+                rejectedDate:
+                    type: string
+                    format: date-time
+                    nullable: true
+                rejectionReason:
+                    type: string
+                    nullable: true
+
+        OrganizerApplicationRequest:
+            type: object
+            required:
+                - companyName
+                - companyDescription
+                - businessLicense
+                - taxID
+                - bankAccount
+                - documents
+            properties:
+                companyName:
+                    type: string
+                    minLength: 1
+                    maxLength: 100
+                companyDescription:
+                    type: string
+                    minLength: 10
+                    maxLength: 1000
+                businessLicense:
+                    type: string
+                taxID:
+                    type: string
+                website:
+                    type: string
+                    format: uri
+                socialMedia:
+                    $ref: "#/components/schemas/SocialMedia"
+                bankAccount:
+                    $ref: "#/components/schemas/BankAccount"
+                documents:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/DocumentUpload"
+                    minItems: 1
+
+        SocialMedia:
+            type: object
+            properties:
+                facebook:
+                    type: string
+                    format: uri
+                instagram:
+                    type: string
+                    format: uri
+                twitter:
+                    type: string
+                    format: uri
+
+        BankAccount:
+            type: object
+            required:
+                - accountName
+                - accountNumber
+                - bankName
+            properties:
+                accountName:
+                    type: string
+                accountNumber:
+                    type: string
+                bankName:
+                    type: string
+                routingNumber:
+                    type: string
+
+        Document:
+            type: object
+            properties:
+                type:
+                    $ref: "#/components/schemas/DocumentType"
+                url:
+                    type: string
+                    format: uri
+                uploadedAt:
+                    type: string
+                    format: date-time
+
+        DocumentUpload:
+            type: object
+            required:
+                - type
+                - url
+            properties:
+                type:
+                    $ref: "#/components/schemas/DocumentType"
+                url:
+                    type: string
+                    format: uri
+
+        # Enum Schemas
+        UserRole:
+            type: string
+            enum:
+                - USER
+                - EVENT_ORGANIZER
+                - ADMIN
+
+        UserStatus:
+            type: string
+            enum:
+                - ACTIVE
+                - INACTIVE
+                - SUSPENDED
+
+        OrganizerStatus:
+            type: string
+            enum:
+                - NONE
+                - PENDING
+                - APPROVED
+                - REJECTED
+
+        DocumentType:
+            type: string
+            enum:
+                - BUSINESS_LICENSE
+                - TAX_CERTIFICATE
+                - IDENTITY_CARD
+
+        # Response Schemas
+        UserResponse:
+            type: object
+            properties:
+                success:
+                    type: boolean
+                    example: true
+                data:
+                    $ref: "#/components/schemas/User"
+
+        UserListResponse:
+            type: object
+            properties:
+                success:
+                    type: boolean
+                    example: true
+                data:
+                    type: object
+                    properties:
+                        users:
+                            type: array
+                            items:
+                                $ref: "#/components/schemas/User"
+                        pagination:
+                            $ref: "#/components/schemas/Pagination"
+
+        OrganizerProfileResponse:
+            type: object
+            properties:
+                success:
+                    type: boolean
+                    example: true
+                data:
+                    $ref: "#/components/schemas/OrganizerProfile"
+
+        ApplicationListResponse:
+            type: object
+            properties:
+                success:
+                    type: boolean
+                    example: true
+                data:
+                    type: object
+                    properties:
+                        applications:
+                            type: array
+                            items:
+                                type: object
+                                properties:
+                                    ID:
+                                        type: string
+                                        format: uuid
+                                    user:
+                                        type: object
+                                        properties:
+                                            ID:
+                                                type: string
+                                                format: uuid
+                                            firstName:
+                                                type: string
+                                            lastName:
+                                                type: string
+                                            email:
+                                                type: string
+                                                format: email
+                                    companyName:
+                                        type: string
+                                    status:
+                                        $ref: "#/components/schemas/OrganizerStatus"
+                                    applicationDate:
+                                        type: string
+                                        format: date-time
+                        pagination:
+                            $ref: "#/components/schemas/Pagination"
+
+        ApplicationSubmissionResponse:
+            type: object
+            properties:
+                success:
+                    type: boolean
+                    example: true
+                data:
+                    type: object
+                    properties:
+                        applicationID:
+                            type: string
+                            format: uuid
+                        status:
+                            type: string
+                            example: PENDING
+                        applicationDate:
+                            type: string
+                            format: date-time
+                        message:
+                            type: string
+                            example: Application submitted successfully. Review process will take 3-5 business days.
+
+        ApplicationStatusResponse:
+            type: object
+            properties:
+                success:
+                    type: boolean
+                    example: true
+                data:
+                    type: object
+                    properties:
+                        applicationID:
+                            type: string
+                            format: uuid
+                        status:
+                            $ref: "#/components/schemas/OrganizerStatus"
+                        approvedDate:
+                            type: string
+                            format: date-time
+                            nullable: true
+                        rejectedDate:
+                            type: string
+                            format: date-time
+                            nullable: true
+                        rejectionReason:
+                            type: string
+                            nullable: true
+                        message:
+                            type: string
+
+        SuccessResponse:
+            type: object
+            properties:
+                success:
+                    type: boolean
+                    example: true
+                message:
+                    type: string
+
+        ErrorResponse:
+            type: object
+            properties:
+                success:
+                    type: boolean
+                    example: false
+                error:
+                    type: object
+                    properties:
+                        code:
+                            type: string
+                        message:
+                            type: string
+                        details:
+                            type: array
+                            items:
+                                type: object
+                                properties:
+                                    field:
+                                        type: string
+                                    message:
+                                        type: string
+
+        Pagination:
+            type: object
+            properties:
+                currentPage:
+                    type: integer
+                totalPages:
+                    type: integer
+                totalItems:
+                    type: integer
+                itemsPerPage:
+                    type: integer
+
+    responses:
+        BadRequest:
+            description: Bad request
+            content:
+                application/json:
+                    schema:
+                        $ref: "#/components/schemas/ErrorResponse"
+                    example:
+                        success: false
+                        error:
+                            code: VALIDATION_ERROR
+                            message: Validation failed
+                            details:
+                                - field: email
+                                  message: Email is required
+
+        Unauthorized:
+            description: Unauthorized
+            content:
+                application/json:
+                    schema:
+                        $ref: "#/components/schemas/ErrorResponse"
+                    example:
+                        success: false
+                        error:
+                            code: UNAUTHORIZED
+                            message: Authentication required
+
+        Forbidden:
+            description: Forbidden
+            content:
+                application/json:
+                    schema:
+                        $ref: "#/components/schemas/ErrorResponse"
+                    example:
+                        success: false
+                        error:
+                            code: FORBIDDEN
+                            message: Insufficient permissions
+
+        NotFound:
+            description: Resource not found
+            content:
+                application/json:
+                    schema:
+                        $ref: "#/components/schemas/ErrorResponse"
+                    example:
+                        success: false
+                        error:
+                            code: NOT_FOUND
+                            message: Resource not found
+
+        Conflict:
+            description: Resource conflict
+            content:
+                application/json:
+                    schema:
+                        $ref: "#/components/schemas/ErrorResponse"
+                    example:
+                        success: false
+                        error:
+                            code: CONFLICT
+                            message: Resource already exists

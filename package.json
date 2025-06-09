@@ -2,9 +2,13 @@
   "name": "event_ticket_booking_system",
   "private": true,
   "workspaces": [
+    "user",
     "shared",
     "auth",
-    "frontend"
+    "event",
+    "payment",
+    "notification",
+    "ticket"
   ],
   "devDependencies": {
     "@commitlint/cli": "^19.8.1",
