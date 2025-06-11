@@ -1,23 +1,21 @@
 import ROLE from "../enums/role.enum";
+import { USER_STATUS } from "../enums/user_status.enum";
 
 export default {
     collection: "users",
     fields: {
-        userID: String, // ownerID if it is organizer
+        userID: String,
         email: String,
         password: String,
         username: String,
         phoneNumber: String,
         role: ROLE,
-        birthDate: Date,
-        followedOrganizers: [], // organizer id
+        birthday: Date,
+        followedOrganizers: [], // subcollection
         preferenceCategories: [],
-        notificationReference: [], // notification ids
+        notificationReferences: [], // notification ids
         createdAt: Date,
         updatedAt: Date | null,
-
-        organizerID: String,
-        organizerName: String,
-        bio: String,
+        status: USER_STATUS,
     },
 };

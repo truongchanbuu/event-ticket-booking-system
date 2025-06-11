@@ -1,9 +1,9 @@
 import { createContainer, asValue, asClass } from "awilix";
 import { createLogger } from "@event_ticket_booking_system/shared";
 
-import AuthRoutes from "./routes/auth.routes.js";
-import AuthService from "./services/auth.service.js";
-import AuthController from "./controllers/auth.controller.js";
+import UserService from "../src/services/user.service.js";
+import UserController from "../src/controllers/user.controller.js";
+import UserRoutes from "../src/routes/user.routes.js";
 
 const container = createContainer();
 
@@ -12,9 +12,9 @@ const loggerInstance = createLogger();
 
 container.register({
     logger: asValue(loggerInstance),
-    authService: asClass(AuthService).scoped(),
-    authController: asClass(AuthController).singleton(),
-    authRoutes: asClass(AuthRoutes).singleton(),
+    userService: asClass(UserService).scoped(),
+    userController: asClass(UserController).singleton(),
+    userRoutes: asClass(UserRoutes).singleton(),
 });
 
 export default container;

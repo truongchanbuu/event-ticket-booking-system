@@ -2,11 +2,10 @@ import express from "express";
 
 import { AppError } from "@event_ticket_booking_system/shared";
 import ERROR_CODE from "@event_ticket_booking_system/shared/error/error_code.js";
-import { checkKafka } from "../kafka/kafka.js";
-import container from "../container.js";
+// import container from "../container.js";
 
 const router = express.Router();
-const authService = container.resolve("authService");
+// const userService = container.resolve("userService");
 
 router.get("/health", (_, res) => {
     try {
@@ -24,33 +23,33 @@ router.get("/health", (_, res) => {
     }
 });
 
-router.get("/ready", async (_, res) => {
-    try {
-        const [kafkaStatus, firebaseStatus] = await Promise.all([
-            checkKafka(),
-            authService.healthCheck(),
-        ]);
+// router.get("/ready", async (_, res) => {
+//     try {
+//         const [kafkaStatus, firebaseStatus] = await Promise.all([
+//             checkKafka(),
+//             userService.healthCheck(),
+//         ]);
 
-        const allHealthy =
-            kafkaStatus.status === "connected" &&
-            firebaseStatus.status === "connected";
+//         const allHealthy =
+//             kafkaStatus.status === "connected" &&
+//             firebaseStatus.status === "connected";
 
-        return res.status(allHealthy ? 200 : 503).json({
-            status: allHealthy ? "ok" : "not ok",
-            timestamp: new Date().toISOString(),
-            dependencies: {
-                kafka: kafkaStatus,
-                firebase: firebaseStatus,
-            },
-        });
-    } catch (error) {
-        res.status(503).json({
-            code: 503,
-            status: "not ok",
-            timestamp: new Date().toISOString(),
-            error: error.message,
-        });
-    }
-});
+//         return res.status(allHealthy ? 200 : 503).json({
+//             status: allHealthy ? "ok" : "not ok",
+//             timestamp: new Date().toISOString(),
+//             dependencies: {
+//                 kafka: kafkaStatus,
+//                 firebase: firebaseStatus,
+//             },
+//         });
+//     } catch (error) {
+//         res.status(503).json({
+//             code: 503,
+//             status: "not ok",
+//             timestamp: new Date().toISOString(),
+//             error: error.message,
+//         });
+//     }
+// });
 
 export default router;

@@ -1,16 +1,6 @@
-import { initializeApp } from "firebase-admin/app";
-import { getFirestore, Timestamp } from "firebase-admin/firestore";
+import { db } from "../src/firebase-emulator";
 
-// Giả lập Firebase App kết nối đến emulator
-process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:9098";
-
-initializeApp({
-    projectId: "event-ticket-booking-sys-44eb4",
-});
-
-const db = getFirestore();
-
-async function seedUsers() {
+export async function seedUsers() {
     const now = new Date();
 
     const users = [
@@ -23,7 +13,7 @@ async function seedUsers() {
             role: "admin",
             status: "active",
             organizerStatus: "approved",
-            createdAt: Timestamp.fromDate(now),
+            createdAt: now,
             updatedAt: null,
         },
         {
@@ -35,7 +25,7 @@ async function seedUsers() {
             role: "user",
             status: "inactive",
             organizerStatus: "pending",
-            createdAt: Timestamp.fromDate(new Date(now.getTime() - 86400000)), // -1 day
+            createdAt: new Date(now.getTime() - 86400000), // -1 day
             updatedAt: null,
         },
         {
@@ -47,8 +37,8 @@ async function seedUsers() {
             role: "organizer",
             status: "active",
             organizerStatus: "approved",
-            createdAt: Timestamp.fromDate(new Date(now.getTime() - 172800000)), // -2 days
-            updatedAt: Timestamp.fromDate(now),
+            createdAt: new Date(now.getTime() - 172800000), // -2 days
+            updatedAt: Date.now(),
             organizer: {
                 organizerID: "user3",
                 name: "Mary Events Co.",
@@ -67,7 +57,3 @@ async function seedUsers() {
     await batch.commit();
     console.log("✅ Seeded users into Firestore emulator");
 }
-
-seedUsers().catch((err) => {
-    console.error("❌ Failed to seed users:", err);
-});

@@ -2,8 +2,8 @@ import express from "express";
 import {
     checkAdmin,
     verifyToken,
-} from "../middlewares/firebase_auth.middleware";
-import UserValidator from "../utils/validator";
+} from "../middlewares/firebase_auth.middleware.js";
+import UserValidator from "../utils/validator.js";
 
 export default class UserRoutes {
     constructor({ userController }) {
@@ -17,8 +17,19 @@ export default class UserRoutes {
             "/",
             verifyToken,
             checkAdmin,
-            UserValidator.validateGetUsers,
-            this.userController.getAllUsers(),
+            UserValidator.validateGetUsers(),
+            UserValidator.handleValidationErrors,
+            this.userController.getAllUser,
         );
+        this.router.post(
+            "/",
+            UserValidator.validateRegister(),
+            UserValidator.handleValidationErrors,
+            this.userController.registerUser,
+        );
+    }
+
+    get userRouter() {
+        return this.router;
     }
 }

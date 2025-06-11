@@ -1,7 +1,7 @@
 const ROLE = {
-    CUSTOMER: "customer",
-    ADMIN: "admin",
-    EVENT_ORGANIZER: "event_organizer",
+  CUSTOMER: "customer",
+  ADMIN: "admin",
+  EVENT_ORGANIZER: "event_organizer",
 };
 
 export default ROLE;

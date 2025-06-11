@@ -7,4 +7,6 @@ const admin = firebaseAdmin.initializeApp({
 
 const db = admin.firestore();
 
-export { admin, db };
+const serverTimestamp = firebaseAdmin.firestore.FieldValue.serverTimestamp();
+
+export { admin, db, serverTimestamp };
