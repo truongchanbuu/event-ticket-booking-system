@@ -3,7 +3,7 @@ import cors from "cors";
 import { scopePerRequest } from "awilix-express";
 
 import healthRouter from "./routes/health.js";
-import { errorHandler } from "@event_ticket_booking_system/shared";
+import { checkJson, errorHandler } from "@event_ticket_booking_system/shared";
 import container from "./container.js";
 import { ENV } from "../src/config/env.js";
 import { ERROR_CODE } from "@event_ticket_booking_system/shared";
@@ -16,6 +16,7 @@ export default async function createApp() {
     if (ENV.NODE_ENV == "development") app.use(cors());
 
     app.use(express.json());
+    app.use(checkJson);
     app.use(scopePerRequest(container));
 
     const authRoutes = container.resolve("authRoutes");

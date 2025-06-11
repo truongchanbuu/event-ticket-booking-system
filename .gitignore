@@ -66,20 +66,9 @@ junit.xml
 .npm/
 .eslintcache
 .node_repl_history
-<<<<<<< HEAD
-.husky
-
-# Next
-**/.next
-=======
->>>>>>> de39bcafb278bb6ae50bdebb6df28527424e14c7
 
 # Firebase config
 # Ensure all sensitive config files are ignored
 ticket/config/
-<<<<<<< HEAD
 payment/config/ 
 .husky
-=======
-payment/config/ 
->>>>>>> de39bcafb278bb6ae50bdebb6df28527424e14c7
