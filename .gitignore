@@ -67,5 +67,7 @@ junit.xml
 .eslintcache
 .node_repl_history
 
-ticket/config/event-ticket-booking-sys-77ef6-firebase-adminsdk-fbsvc-8f3ec27051.json
-payment/config/event-ticket-booking-sys-77ef6-firebase-adminsdk-fbsvc-8f3ec27051.json
+# Firebase config
+# Ensure all sensitive config files are ignored
+ticket/config/
+payment/config/ 
