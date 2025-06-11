@@ -1,0 +1,25 @@
+### Payment Service Health Check
+GET http://localhost:3002/
+
+### IMPORTANT: Re-get Firebase ID Token
+# Tokens expire! Re-run get_token.html in your browser, log in, and get a fresh token.
+# Paste the new token here.
+@id_token = eyJhbGciOiJSUzI1NiIsImtpZCI6ImE0YTEwZGVjZTk4MzY2ZDZmNjNlMTY3Mjg2YWU5YjYxMWQyYmFhMjciLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vZXZlbnQtdGlja2V0LWJvb2tpbmctc3lzLTc3ZWY2IiwiYXVkIjoiZXZlbnQtdGlja2V0LWJvb2tpbmctc3lzLTc3ZWY2IiwiYXV0aF90aW1lIjoxNzQ5NTQ3ODgxLCJ1c2VyX2lkIjoiMzJtQlFYSmJtUVZiSWlEaFZPOVh2dnE3eXJqMiIsInN1YiI6IjMybUJRWEpibVFWYklpRGhWTzlYdnZxN3lyajIiLCJpYXQiOjE3NDk1NDc4ODEsImV4cCI6MTc0OTU1MTQ4MSwiZW1haWwiOiJ0ZXN0dXNlckBleGFtcGxlLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjpmYWxzZSwiZmlyZWJhc2UiOnsiaWRlbnRpdGllcyI6eyJlbWFpbCI6WyJ0ZXN0dXNlckBleGFtcGxlLmNvbSJdfSwic2lnbl9pbl9wcm92aWRlciI6InBhc3N3b3JkIn19.ZvioLRareJMK0nKugD-dTRELTJC-EUWwTEDw3di4kJaYOIm2psx1SnBkiGN8DinCNXivcZqtrEIwUVqv-QBS4Jmab3Mre_DwRA5R3a0pTH0qWjL4Xn1xbcQfU8w3fi9M6jZCFeQGpt-kV6XDPWCNb_zo9mK8FDDxM4pmylcZppwdsSUBFsigpmWyYlU5KUEuOzm6qFFlThk5ysmJzxJkmztgBpSveikLk-H6HI-GirfO3_UOa2_4ayTZFZC7vlq-vLCAV93aquxtROBb_rj-Qu4ZTYnAeywXY17Q2Q8giPHkrOGdezOHpQf-gvYZ9KiGYP5S9_PfFpX2iEwIbFcdyA
+
+
+### Process Payment
+POST http://localhost:3002/api/payments/process
+Content-Type: application/json
+Authorization: Bearer {{id_token}}
+
+{
+  "bookingId": "some_booking_id_from_your_ticket_service",
+  "amount": 49.99,
+  "currency": "USD",
+  "paymentMethod": "credit_card"
+}
+
+### Get Payment Status by ID
+# Replace <PAYMENT_ID_TO_FETCH> with an ID from the 'Process Payment' response
+GET http://localhost:3002/api/payments/GCFlzNQdIUjD88waeLXx
+Authorization: Bearer {{id_token}}
