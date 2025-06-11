@@ -1,7 +1,5 @@
 {
   "name": "event_ticket_booking_system",
-<<<<<<< HEAD
-  "private": true,
   "workspaces": [
     "user",
     "shared",
@@ -11,14 +9,6 @@
     "notification",
     "ticket"
   ],
-=======
-  "workspaces": [
-    "shared",
-    "auth",
-    "frontend"
-  ],
-  "type": "module",
->>>>>>> bbcf576 (feat(ui): auth ui & firebase auth implementation)
   "dependencies": {
     "awilix": "^12.0.5",
     "awilix-express": "^9.0.2",
