@@ -1,0 +1,38 @@
+### Health Check
+GET http://localhost:3001/
+
+### Create Test User
+POST http://localhost:3001/api/auth/create-test-user
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "password123"
+}
+
+### IMPORTANT: Get Firebase ID Token (requires client-side login)
+# Use the get_token.html page you created earlier, or your React frontend.
+# Replace <YOUR_FIREBASE_ID_TOKEN_HERE> with the actual token you obtain.
+# This token is temporary and will expire after about 1 hour.
+@id_token = eyJhbGciOiJSUzI1NiIsImtpZCI6ImE0YTEwZGVjZTk4MzY2ZDZmNjNlMTY3Mjg2YWU5YjYxMWQyYmFhMjciLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vZXZlbnQtdGlja2V0LWJvb2tpbmctc3lzLTc3ZWY2IiwiYXVkIjoiZXZlbnQtdGlja2V0LWJvb2tpbmctc3lzLTc3ZWY2IiwiYXV0aF90aW1lIjoxNzQ5NTM0MTE0LCJ1c2VyX2lkIjoiWDQxSnU4Qmp6TmVKVWZiaTB4OHA4cEExc2dLMiIsInN1YiI6Ilg0MUp1OEJqek5lSlVmYmkweDhwOHBBMXNnSzIiLCJpYXQiOjE3NDk1MzQxMTQsImV4cCI6MTc0OTUzNzcxNCwiZW1haWwiOiJ0ZXN0dXNlQGV4YW1wbGUuY29tIiwiZW1haWxfdmVyaWZpZWQiOmZhbHNlLCJmaXJlYmFzZSI6eyJpZGVudGl0aWVzIjp7ImVtYWlsIjpbInRlc3R1c2VAZXhhbXBsZS5jb20iXX0sInNpZ25faW5fcHJvdmlkZXIiOiJwYXNzd29yZCJ9fQ.Mo7XityVNFwChNXoYfpEL1O6c0hmmJh7OlQek9e3pqkFj4HYy3BwzeUqm710guo519LUOdTP4ztJyMJWDZahO34LpR_GLTusQrsdbviVFFedO2cCRDBStTIU4l7dsUZdaxWtWCT7D7A6OzAIN9SMgwBFQYqwAhJk8bfF9Clsp6KZBsdVUgSc6NXFZVv2GK2ihj7txQt8eNKdzwdtKF1FqdxP-YwoW9a74oHRBlDqjGFOYJaz08C-uNYO5A7glf35Lx7-wRdWCK8gZJy_Deyei3O5g7QzpmjbfPbZaWOugXmft55Zw6CS29vImJLeLEEVlfe-mnTHI5dsfHPFW2CSWg
+
+
+### Create Booking
+POST http://localhost:3001/api/bookings
+Content-Type: application/json
+Authorization: Bearer {{id_token}}
+
+{
+  "eventName": "Live Concert - Backend Test",
+  "eventDate": "2025-10-20",
+  "numTickets": 2
+}
+
+### Get My Bookings
+GET http://localhost:3001/api/bookings/my
+Authorization: Bearer {{id_token}}
+
+### Delete Booking
+# Replace <BOOKING_ID_TO_DELETE> with an actual booking ID from the 'Get My Bookings' response.
+DELETE http://localhost:3001/api/bookings/rUhCWOa2dU8uZmjnHR3B
+Authorization: Bearer {{id_token}}
