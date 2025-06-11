@@ -1,6 +1,6 @@
-// import { admin, db } from "../firebase.js";
+// import { db, serverTimestamp } from "../firebase.js";
 import { AppError } from "@event_ticket_booking_system/shared";
-import { admin, db, serverTimestamp } from "../firebase-emulator.js"; // TODO: Test only
+import { db, serverTimestamp } from "../firebase-emulator.js"; // TODO: Test only
 export default class UserService {
     constructor({ logger }) {
         this.logger = logger;
@@ -115,16 +115,20 @@ export default class UserService {
                 userID: userID,
             });
 
-            return { success: true, userID };
+            return { success: true, data: user };
         });
     }
 
     async updateUser(user) {
-        const userRef = this.userCollection.doc(user.userID);
-        user.updatedAt = serverTimestamp;
+        try {
+            const userRef = this.userCollection.doc(user.userID);
+            user.updatedAt = serverTimestamp;
 
-        await userRef.update(user);
-        return { success: true, userID };
+            await userRef.update(user);
+            return { success: true, data: user };
+        } catch (e) {
+            return { success: false };
+        }
     }
 
     async followOrganizers(userID, follwedOrganizers) {

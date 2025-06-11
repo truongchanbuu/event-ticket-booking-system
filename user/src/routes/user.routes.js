@@ -23,9 +23,15 @@ export default class UserRoutes {
         );
         this.router.post(
             "/",
-            UserValidator.validateRegister(),
+            UserValidator.validateCreateUser(),
             UserValidator.handleValidationErrors,
             this.userController.registerUser,
+        );
+        this.router.put(
+            "/:userID",
+            UserValidator.validateUpdateUser(),
+            UserValidator.handleValidationErrors,
+            this.userController.updateUser,
         );
     }
 

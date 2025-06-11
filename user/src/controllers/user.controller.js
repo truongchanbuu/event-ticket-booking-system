@@ -6,6 +6,7 @@ export default class UserController {
 
         this.getAllUser = catchAsync(this.getAllUser.bind(this));
         this.registerUser = catchAsync(this.registerUser.bind(this));
+        this.updateUser = catchAsync(this.updateUser.bind(this));
     }
 
     async getAllUser(req, res) {
@@ -18,7 +19,7 @@ export default class UserController {
     }
 
     async registerUser(req, res) {
-        const { success, userID } = await this.userService.createUser(req.body);
+        const { success, user } = await this.userService.createUser(req.body);
 
         if (!success) {
             return res
@@ -28,7 +29,22 @@ export default class UserController {
 
         return res.status(201).json({
             success,
-            userID,
+            data: user,
         });
+    }
+
+    async updateUser(req, res) {
+        const { success, data } = await this.userService.updateUser({
+            userID: req.params.userID,
+            ...req.body,
+        });
+
+        if (!success) {
+            return res
+                .status(400)
+                .json({ success, message: "failed to update" });
+        }
+
+        return res.status(200).json({ success, data });
     }
 }

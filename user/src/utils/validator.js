@@ -1,4 +1,4 @@
-import { body, query } from "express-validator";
+import { body, param, query } from "express-validator";
 import {
     BaseValidator,
     EnumHelper,
@@ -69,30 +69,56 @@ export default class UserValidator extends BaseValidator {
         ];
     }
 
-    /**
-     * Validate register user
-     */
-    static validateRegister() {
+    static validateCreateUser() {
         return [
             body("email")
                 .trim()
+                .notEmpty()
+                .withMessage("Email is required")
                 .isEmail()
                 .withMessage("Invalid email")
                 .normalizeEmail(),
 
-            // Username validation
             body("username")
                 .trim()
+                .notEmpty()
+                .withMessage("Username is required")
                 .isLength({ min: 2, max: 30 })
                 .withMessage("Username must have at least 2-30 characters"),
 
-            // Phone number validation
+            ...this._sharedUserValidationRules(),
+        ];
+    }
+
+    static validateUpdateUser() {
+        return [
+            param("userID")
+                .exists()
+                .notEmpty()
+                .withMessage("User ID is required"),
+
+            body("email")
+                .optional()
+                .isEmail()
+                .withMessage("Invalid email")
+                .normalizeEmail(),
+
+            body("username")
+                .optional()
+                .isLength({ min: 2, max: 30 })
+                .withMessage("Username must have at least 2-30 characters"),
+
+            ...this._sharedUserValidationRules(),
+        ];
+    }
+
+    static _sharedUserValidationRules() {
+        return [
             body("phoneNumber")
                 .optional()
                 .matches(/^(\+84|0)[3|5|7|8|9]\d{8}$/)
                 .withMessage("Invalid phone number"),
 
-            // Role validation
             body("role")
                 .optional()
                 .isIn(ROLE)
@@ -101,7 +127,6 @@ export default class UserValidator extends BaseValidator {
                 )
                 .default(ROLE.CUSTOMER),
 
-            // Birth date validation
             body("birthday")
                 .optional()
                 .isISO8601()
@@ -109,10 +134,8 @@ export default class UserValidator extends BaseValidator {
                 .custom((value) => {
                     const birthday = new Date(value);
                     const now = new Date();
-
                     const MIN_AGE = 16;
                     const MAX_AGE = 100;
-
                     const minDate = new Date(
                         now.getFullYear() - MAX_AGE,
                         now.getMonth(),
@@ -129,11 +152,9 @@ export default class UserValidator extends BaseValidator {
                             "Invalid birthday. Age must be within 16-100",
                         );
                     }
-
                     return true;
                 }),
 
-            // Preference categories validation
             body("preferenceCategories")
                 .optional()
                 .isArray()
@@ -150,19 +171,16 @@ export default class UserValidator extends BaseValidator {
                     return true;
                 }),
 
-            // Followed organizers validation
             body("followedOrganizers")
                 .optional()
                 .isArray()
                 .withMessage("Following organizers must be an array"),
 
-            // Notification reference validation
             body("notificationReferences")
                 .optional()
                 .isArray()
                 .withMessage("Notification list must be an array"),
 
-            // Status validation
             body("status")
                 .optional()
                 .isIn(USER_STATUS)
