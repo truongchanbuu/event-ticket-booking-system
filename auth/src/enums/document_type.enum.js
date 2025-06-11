@@ -1,0 +1,6 @@
+const DOCUMENT_TYPE = {
+    ID_CARD: "ID_CARD",
+    BUSINESS_LICENSE: "BUSINESS_LICENSE",
+};
+
+export default DOCUMENT_TYPE;
