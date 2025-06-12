@@ -1,4 +1,4 @@
-import ERROR_CODE from "../../error/error_code";
+import ERROR_CODE from "../../error/error_code.js";
 
 export default function checkJson(err, req, res, next) {
   if (err instanceof SyntaxError && err.status === 400 && "body" in err) {
