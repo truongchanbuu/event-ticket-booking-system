@@ -1,10 +1,9 @@
 import createApp from "./app.js";
 import { ENV } from "./config/env.js";
-import { initProducer } from "./kafka/procuder.js";
-import { shutdownKafka } from "./kafka/shutdown.js";
+import { KafkaUtils } from "@event_ticket_booking_system/shared";
 
 async function bootstrap() {
-    await initProducer();
+    await KafkaUtils.initProducer();
     const app = await createApp();
     const PORT = ENV.PORT || 3000;
     app.listen(PORT, () => {
@@ -12,11 +11,11 @@ async function bootstrap() {
     });
 
     process.on("SIGINT", async () => {
-        await shutdownKafka();
+        await KafkaUtils.shutdownKafka();
         process.exit(0);
     });
     process.on("SIGTERM", async () => {
-        await shutdownKafka();
+        await KafkaUtils.shutdownKafka();
         process.exit(0);
     });
 }

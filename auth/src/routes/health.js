@@ -1,8 +1,7 @@
 import express from "express";
 
-import { AppError } from "@event_ticket_booking_system/shared";
+import { AppError, KafkaUtils } from "@event_ticket_booking_system/shared";
 import ERROR_CODE from "@event_ticket_booking_system/shared/error/error_code.js";
-import { checkKafka } from "../kafka/kafka.js";
 import container from "../container.js";
 
 const router = express.Router();
@@ -27,7 +26,7 @@ router.get("/health", (_, res) => {
 router.get("/ready", async (_, res) => {
     try {
         const [kafkaStatus, firebaseStatus] = await Promise.all([
-            checkKafka(),
+            KafkaUtils.checkKafka(),
             authService.healthCheck(),
         ]);
 
