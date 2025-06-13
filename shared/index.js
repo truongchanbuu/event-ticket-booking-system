@@ -9,6 +9,8 @@ export {
 
 export { createLogger } from "./logger/index.js";
 
+export * as KafkaUtils from "./kafka";
+
 export { default as BaseValidator } from "./validator/base_validator.js";
 export { default as ROLE } from "./enums/role.enum.js";
 export { default as NOTIFICATION_REF } from "./enums/notification_ref.enum.js";
