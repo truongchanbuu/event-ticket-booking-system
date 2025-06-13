@@ -1,24 +1,19 @@
+import { KafkaManager } from "@event_ticket_booking_system/shared";
 import createApp from "./app.js";
 import { ENV } from "./config/env.js";
-import { initProducer } from "./kafka/procuder.js";
-import { shutdownKafka } from "./kafka/shutdown.js";
+import kafkaConfig from "./config/kafka.config.js";
 
 async function bootstrap() {
-    // await initProducer();
+    KafkaManager.initKafka(kafkaConfig);
+    await KafkaManager.initProducer();
+
     const app = await createApp();
     const PORT = ENV.PORT || 3000;
     app.listen(PORT, () => {
         console.log(`🚀 User service running on port ${PORT}`);
     });
 
-    process.on("SIGINT", async () => {
-        await shutdownKafka();
-        process.exit(0);
-    });
-    process.on("SIGTERM", async () => {
-        await shutdownKafka();
-        process.exit(0);
-    });
+    await KafkaManager.disconnectKafka();
 }
 
 bootstrap().catch((e) => {

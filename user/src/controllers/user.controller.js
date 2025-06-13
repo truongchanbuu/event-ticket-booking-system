@@ -7,6 +7,15 @@ export default class UserController {
         this.getAllUser = catchAsync(this.getAllUser.bind(this));
         this.registerUser = catchAsync(this.registerUser.bind(this));
         this.updateUser = catchAsync(this.updateUser.bind(this));
+        this.updateFollowedOrganizers = catchAsync(
+            this.updateFollowedOrganizers.bind(this),
+        );
+        this.updateNotifications = catchAsync(
+            this.updateNotifications.bind(this),
+        );
+        this.updateNotificationStatus = catchAsync(
+            this.updateNotificationStatus.bind(this),
+        );
     }
 
     async getAllUser(req, res) {
@@ -46,5 +55,45 @@ export default class UserController {
         }
 
         return res.status(200).json({ success, data });
+    }
+
+    async updateFollowedOrganizers(req, res) {
+        const executedAmount = await this.userService.updateFollowedOrganizers(
+            req.params.userID,
+            req.body.followedOrganizers,
+            req.body.action,
+        );
+
+        if (executedAmount <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "failed to update organizers",
+            });
+        }
+
+        return res
+            .status(200)
+            .json({ success: true, executed: executedAmount });
+    }
+
+    async updateNotifications(req, res) {
+        const data = await this.userService.updateNotifications(
+            req.params.userID,
+            req.body.notificationReferences,
+            req.body.action,
+        );
+
+        return res.status(200).json(data);
+    }
+
+    async updateNotificationStatus(req, res) {
+        const { userID, notificationID } = req.params;
+        const data = this.userService.updateNotificationStatus(
+            userID,
+            notificationID,
+            req.body.status,
+        );
+
+        return res.status(200).json({ success: true, data });
     }
 }

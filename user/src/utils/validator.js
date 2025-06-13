@@ -2,10 +2,22 @@ import { body, param, query } from "express-validator";
 import {
     BaseValidator,
     EnumHelper,
+    NOTIFICATION_REF,
+    NOTIFICATION_STATUS,
     ROLE,
 } from "@event_ticket_booking_system/shared";
 import { USER_STATUS } from "../enums/user_status.enum.js";
 
+const FOLLOW_ACTION_ENUM = ["follow", "unfollow"];
+const NOTIFICATION_ACTION_ENUM = ["create", "delete", "update"];
+const ALLOWED_SORT_FIELDS = [
+    "createdAt",
+    "updatedAt",
+    "username_lowercase",
+    "email",
+    "phoneNumber",
+    "birthday",
+];
 export default class UserValidator extends BaseValidator {
     /**
      * Validate get users API
@@ -25,26 +37,28 @@ export default class UserValidator extends BaseValidator {
             query("role")
                 .optional()
                 .isString()
-                .isIn(["admin", "user", "organizer"])
-                .withMessage("Role must be one of: admin, user, organizer"),
-
-            query("status")
-                .optional()
-                .isString()
-                .isIn(["active", "inactive", "banned"])
-                .withMessage("Status must be one of: active, inactive, banned"),
+                .isIn(Object.values(ROLE))
+                .withMessage(
+                    `Role must be one of: ${EnumHelper.enumToString(ROLE)}`,
+                ),
 
             query("sortBy")
                 .optional()
-                .isIn(["createdAt", "firstName", "lastName", "email"])
+                .customSanitizer((value) => {
+                    if (!value) return "createdAt";
+                    if (value === "username") return "username_lowercase";
+                    return value;
+                })
+                .isIn(ALLOWED_SORT_FIELDS)
                 .withMessage(
-                    "SortBy must be one of: createdAt, firstName, lastName, email",
+                    `sortBy must be one of: username, ${ALLOWED_SORT_FIELDS.join(", ")}`,
                 ),
 
             query("sortOrder")
                 .optional()
                 .isIn(["asc", "desc"])
                 .withMessage("SortOrder must be either asc or desc"),
+
             query("lastVisibleValue")
                 .optional()
                 .custom((value, { req }) => {
@@ -92,10 +106,7 @@ export default class UserValidator extends BaseValidator {
 
     static validateUpdateUser() {
         return [
-            param("userID")
-                .exists()
-                .notEmpty()
-                .withMessage("User ID is required"),
+            this._validateUserIDParam(),
 
             body("email")
                 .optional()
@@ -110,6 +121,111 @@ export default class UserValidator extends BaseValidator {
 
             ...this._sharedUserValidationRules(),
         ];
+    }
+
+    static validateFollowedOrganizer() {
+        return [
+            this._validateUserIDParam(),
+
+            body("action")
+                .exists()
+                .withMessage("Action is required")
+                .isString()
+                .withMessage("Action must be a string")
+                .isIn(FOLLOW_ACTION_ENUM)
+                .withMessage(
+                    `Action must be one of: ${FOLLOW_ACTION_ENUM.join(", ")}`,
+                ),
+
+            body("followedOrganizers")
+                .isArray({ min: 1 })
+                .withMessage("Following organizers must be an array"),
+
+            body("followedOrganizers.*.orgID")
+                .notEmpty()
+                .withMessage("Each followed organizer must have an orgID"),
+
+            body("followedOrganizers.*.orgName")
+                .notEmpty()
+                .withMessage("Each followed organizer must have a name"),
+
+            body("followedOrganizers.*.orgAvatar")
+                .optional()
+                .isURL()
+                .withMessage("Avatar must be a valid URL if provided"),
+        ];
+    }
+
+    static validateNotification() {
+        return [
+            this._validateUserIDParam(),
+
+            body("action")
+                .exists()
+                .withMessage("Action is required")
+                .isIn(NOTIFICATION_ACTION_ENUM)
+                .withMessage(
+                    `Action must be one of ${NOTIFICATION_ACTION_ENUM.join(", ")}`,
+                ),
+            body("notificationReferences")
+                .isArray({ min: 1 })
+                .withMessage("Notification list must be an array"),
+
+            body("notificationReferences.*.notificationID")
+                .exists()
+                .withMessage("Each reference must have a notificationID")
+                .isString()
+                .withMessage("notificationID must be a string"),
+
+            body("notificationReferences.*.notificationRef")
+                .exists()
+                .withMessage("Each reference must have a notificationRef")
+                .isIn(Object.values(NOTIFICATION_REF))
+                .withMessage(
+                    `notificationRef must be one of: ${EnumHelper.enumToString(NOTIFICATION_REF)}`,
+                ),
+
+            body("notificationReferences.*.title")
+                .optional()
+                .isString()
+                .withMessage("Title must be a string"),
+
+            body("notificationReferences.*.desc")
+                .optional()
+                .isString()
+                .withMessage("Description must be a string"),
+        ];
+    }
+
+    static validateUpdateNotificationStatus() {
+        return [
+            this._validateUserIDParam(),
+
+            param("notificationID")
+                .exists()
+                .isString()
+                .notEmpty()
+                .withMessage("Notification ID is required"),
+
+            body("status")
+                .isIn(Object.values(NOTIFICATION_STATUS))
+                .withMessage(
+                    `Invalid status. Allowed values: ${EnumHelper.enumToString(NOTIFICATION_STATUS)}`,
+                ),
+            ,
+        ];
+    }
+
+    static validateDeleteUser() {
+        return [this._validateUserIDParam()];
+    }
+
+    static _validateUserIDParam() {
+        return param("userID")
+            .exists()
+            .isString()
+            .notEmpty()
+            .withMessage("User ID is required");
     }
 
     static _sharedUserValidationRules() {
@@ -170,16 +286,6 @@ export default class UserValidator extends BaseValidator {
                     }
                     return true;
                 }),
-
-            body("followedOrganizers")
-                .optional()
-                .isArray()
-                .withMessage("Following organizers must be an array"),
-
-            body("notificationReferences")
-                .optional()
-                .isArray()
-                .withMessage("Notification list must be an array"),
 
             body("status")
                 .optional()

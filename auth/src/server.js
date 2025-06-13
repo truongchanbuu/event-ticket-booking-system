@@ -1,6 +1,6 @@
 import createApp from "./app.js";
 import { ENV } from "./config/env.js";
-import { KafkaManager, KafkaUtils } from "@event_ticket_booking_system/shared";
+import { KafkaManager } from "@event_ticket_booking_system/shared";
 import kafkaConfig from "./config/kafka.config.js";
 
 async function bootstrap() {

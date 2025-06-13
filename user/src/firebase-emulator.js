@@ -15,5 +15,6 @@ if (!firebaseAdmin.apps?.length) {
 const db = adminApp.firestore();
 
 const serverTimestamp = firebaseAdmin.firestore.FieldValue.serverTimestamp();
+const increment = firebaseAdmin.firestore.FieldValue.increment;
 
-export { adminApp as admin, db, serverTimestamp };
+export { adminApp as admin, db, serverTimestamp, increment };

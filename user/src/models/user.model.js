@@ -12,7 +12,7 @@ export default {
         role: ROLE,
         birthday: Date,
         followedOrganizers: [], // subcollection
-        preferenceCategories: [],
+        preferenceCategories: [], // string array
         notificationReferences: [], // notification ids
         createdAt: Date,
         updatedAt: Date | null,

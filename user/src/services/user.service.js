@@ -1,6 +1,9 @@
-// import { db, serverTimestamp } from "../firebase.js";
-import { AppError } from "@event_ticket_booking_system/shared";
-import { db, serverTimestamp } from "../firebase-emulator.js"; // TODO: Test only
+// import { db, serverTimestamp, increment } from "../firebase.js";
+import {
+    AppError,
+    NOTIFICATION_STATUS,
+} from "@event_ticket_booking_system/shared";
+import { db, serverTimestamp, increment } from "../firebase-emulator.js"; // TODO: Test only
 export default class UserService {
     constructor({ logger }) {
         this.logger = logger;
@@ -131,88 +134,93 @@ export default class UserService {
         }
     }
 
-    async followOrganizers(userID, follwedOrganizers) {
-        const batch = db.batch();
+    async updateFollowedOrganizers(userID, organizers, action = "follow") {
         const userRef = this.userCollection.doc(userID);
+        const batch = db.batch();
 
-        follwedOrganizers.forEach((org) => {
-            if (!org.organizerID) {
-                throw new Error("Missing organizerID");
-            }
-
+        organizers.forEach((org) => {
             const orgRef = userRef
-                .collection("followedOrganizers")
-                .doc(org.organizerID);
-            batch.set(orgRef, {
-                ...org,
-                followedAt: serverTimestamp(),
-            });
+                .collection(ORGANIZERS_COLLECTION)
+                .doc(org.orgID);
+
+            if (action === "follow") {
+                batch.set(
+                    orgRef,
+                    {
+                        ...org,
+                        followedAt: serverTimestamp,
+                    },
+                    { merge: true },
+                );
+            } else if (action === "unfollow") {
+                batch.delete(orgRef);
+            }
         });
 
+        const countDelta =
+            action === "follow" ? organizers.length : -organizers.length;
+
         batch.update(userRef, {
-            followedOrganizersCount: increment(follwedOrganizers.length),
-            updatedAt: serverTimestamp(),
+            followedOrganizersCount: increment(countDelta),
+            updatedAt: serverTimestamp,
         });
 
         await batch.commit();
-        return { success: true };
+        return organizers.length;
     }
 
-    async unfollowOrganizers(userID, organizerIDs) {
+    async updateNotifications(userID, notifications, action = "create") {
         const batch = db.batch();
         const userRef = this.userCollection.doc(userID);
-
-        organizerIDs.forEach((orgID) => {
-            const orgRef = userRef.collection("followedOrganizers").doc(orgID);
-            batch.delete(orgRef);
-        });
-
-        batch.update(userRef, {
-            followedOrganizersCount: increment(-organizerIDs.length),
-            updatedAt: serverTimestamp(),
-        });
-
-        await batch.commit();
-        return { success: true };
-    }
-
-    async addNotifications(userId, notifications) {
-        const batch = db.batch();
-        const userRef = this.userCollection.doc(userId);
+        const notifCollection = userRef.collection(NOTIFICATIONS_COLLECTION);
 
         let unreadCount = 0;
 
-        notifications.forEach((notification) => {
-            const notificationID =
-                notification.notificationID ||
-                userRef.collection("notifications").doc().id;
-            const notifRef = userRef
-                .collection("notifications")
-                .doc(notificationID);
+        notifications.forEach((notif) => {
+            const notifID = notif.notificationID;
+            if (!notifID && action !== "create") return;
 
-            const notifData = {
-                ...notification,
-                notificationID: notificationID,
-                createdAt: serverTimestamp(),
-                read: notification.read || false,
-            };
+            const notifRef = notifCollection.doc(
+                notifID || notifCollection.doc().id,
+            );
+            const status = notif.status || NOTIFICATION_STATUS.UNREAD;
 
-            if (!notifData.read) {
-                unreadCount++;
+            if (action === "delete") {
+                batch.delete(notifRef);
+                if (status === NOTIFICATION_STATUS.UNREAD) unreadCount--;
+                return;
             }
 
-            batch.set(notifRef, notifData);
+            const notifData = {
+                ...notif,
+                notificationID: notifID || notifRef.id,
+                status,
+            };
+
+            if (action === "create") {
+                notifData.createdAt = serverTimestamp;
+                if (status === NOTIFICATION_STATUS.UNREAD) unreadCount++;
+                batch.set(notifRef, notifData);
+            } else if (action === "update") {
+                if (status === NOTIFICATION_STATUS.UNREAD) unreadCount++;
+                if (status === NOTIFICATION_STATUS.READ) unreadCount--;
+                batch.set(notifRef, notifData, { merge: true });
+            }
         });
 
-        if (unreadCount > 0) {
+        if (unreadCount !== 0) {
             batch.update(userRef, {
                 unreadNotificationCount: increment(unreadCount),
-                updatedAt: serverTimestamp(),
+                updatedAt: serverTimestamp,
             });
         }
 
         await batch.commit();
-        return { success: true };
+        return {
+            success: true,
+            action,
+            unreadDelta: unreadCount,
+        };
     }
 
     async markNotificationsAsRead(userId, notificationIDs) {
@@ -236,5 +244,23 @@ export default class UserService {
 
         await batch.commit();
         return { success: true };
+    }
+
+    async updateNotificationStatus(userID, notificationID, status) {
+        const notifRef = this.userCollection
+            .doc(userID)
+            .collection(NOTIFICATIONS_COLLECTION)
+            .doc(notificationID);
+
+        await notifRef.set({ status }, { merge: true });
+
+        if (status === NOTIFICATION_STATUS.READ) {
+            await this.userCollection.doc(userID).update({
+                unreadNotificationCount: increment(-1),
+                updatedAt: serverTimestamp,
+            });
+        }
+
+        return { notificationID, status };
     }
 }
