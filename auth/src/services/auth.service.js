@@ -1,7 +1,6 @@
 import admin from "firebase-admin";
 import REVOKE_REASON from "../enums/revoke_reason.enum.js";
-import { REVOKE_TOPIC } from "../kafka/topics.js";
-import { sendKafkaMessage } from "../kafka/procuder.js";
+import { KafkaUtils } from "@event_ticket_booking_system/shared";
 
 export default class AuthService {
     constructor({ logger }) {
@@ -12,8 +11,8 @@ export default class AuthService {
         try {
             await admin.auth().revokeRefreshTokens(uid);
 
-            await sendKafkaMessage({
-                topic: REVOKE_TOPIC,
+            await KafkaUtils.sendKafkaMessage({
+                topic: KafkaUtils.REVOKE_TOPIC,
                 key: uid,
                 value: {
                     uid,

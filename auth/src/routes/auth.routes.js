@@ -1,6 +1,10 @@
 import express from "express";
 import AuthValidator from "../utils/validator.js";
-// import {} from "@event_ticket_booking_system/shared";
+import {
+    verifyToken,
+    checkAdmin,
+    checkOwnerOrAdmin,
+} from "@event_ticket_booking_system/shared";
 
 export default class AuthRoutes {
     constructor({ authController }) {
