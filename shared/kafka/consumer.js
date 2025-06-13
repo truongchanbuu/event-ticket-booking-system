@@ -1,6 +1,6 @@
-const { default: kafka } = require("./kafka");
+import kafka from "./kafka.js";
 
-async function initConsumer({ groupId, topic, handler }) {
+export async function initConsumer({ groupId, topic, handler }) {
   const consumer = kafka.consumer({ groupId });
   await consumer.connect();
   await consumer.subscribe({ topic, fromBeginning: false });
@@ -16,7 +16,3 @@ async function initConsumer({ groupId, topic, handler }) {
 
   return consumer;
 }
-
-export default {
-  initConsumer,
-};

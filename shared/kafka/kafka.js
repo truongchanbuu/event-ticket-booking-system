@@ -1,4 +1,5 @@
 import { Kafka } from "kafkajs";
+import { ENV } from "../config/env.js";
 
 const kafka = new Kafka({
   clientId: ENV.SERVICE_NAME,
