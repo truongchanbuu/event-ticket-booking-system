@@ -42,6 +42,16 @@ export default class AuthValidator extends BaseValidator {
         ];
     }
 
+    static validateDeleteUser() {
+        return [
+            param("uid")
+                .exists()
+                .isString()
+                .notEmpty()
+                .withMessage("UID is required"),
+        ];
+    }
+
     /**
      * Validate user ID param for get claims
      */

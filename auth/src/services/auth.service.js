@@ -12,7 +12,7 @@ export default class AuthService {
             await admin.auth().revokeRefreshTokens(uid);
 
             await KafkaUtils.sendKafkaMessage({
-                topic: KafkaUtils.REVOKE_TOPIC,
+                topic: KafkaUtils.AUTH_EVENTS,
                 key: uid,
                 value: {
                     uid,
@@ -54,6 +54,16 @@ export default class AuthService {
         } catch (e) {
             this.logger.error("Failed to set claims:", e);
             throw e;
+        }
+    }
+
+    async deleteUser(uid) {
+        try {
+            await admin.auth().deleteUser(uid);
+            return uid;
+        } catch (e) {
+            console.error("failed to delete: ", e);
+            return null;
         }
     }
 

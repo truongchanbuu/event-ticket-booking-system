@@ -1,1 +1,2 @@
-export const REVOKE_TOPIC = "auth.token.revoked";
+export const AUTH_EVENTS = "auth.events";
+export const USER_EVENT = "user.events";

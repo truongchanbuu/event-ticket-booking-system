@@ -1,5 +1,6 @@
 import { catchAsync } from "@event_ticket_booking_system/shared";
 import REVOKE_REASON from "../enums/revoke_reason.enum.js";
+import { sendUserDeleted } from "../kafka/auth.event.js";
 
 export default class AuthController {
     constructor({ authService }) {
@@ -42,6 +43,22 @@ export default class AuthController {
             uid,
             message: "Token revoked successfully",
         });
+    }
+
+    async deleteUser(req, res) {
+        const { uid } = req.params;
+        const deletedUID = await this.authService.deleteUser(uid);
+
+        if (!deletedUID) {
+            return res
+                .status(400)
+                .json({ success: false, message: "failed to delete user" });
+        }
+
+        sendUserDeleted({ userID: uid }).catch((err) => {
+            console.error("Kafka sendUserDeleted error:", err);
+        });
+        return res.status(200).json({ success: true, data: deletedUID });
     }
 
     async logout(req, res) {

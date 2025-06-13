@@ -1,0 +1,4 @@
+export default EVENT_TYPES = {
+  USER_CREATED: "USER_CREATED",
+  USER_DELETED: "USER_DELETED",
+};

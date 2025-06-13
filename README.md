@@ -42,13 +42,13 @@ A cloud-native, scalable microservice-based platform for creating, managing, and
 
 ```bash
 event-ticket-booking-system/
-├── auth-service/
-├── event-service/
-├── ticket-service/
-├── payment-service/
-├── notification-service/
-├── admin-service/
-├── analysis-service/
+├── auth/
+├── event/
+├── ticket/
+├── payment/
+├── notification/
+├── admin/
+├── analysis/
 ├── frontend/ # React client
 ├── k8s/ # Kubernetes manifests
 ├── docker-compose.yml # Local dev orchestration
@@ -83,10 +83,10 @@ docker-compose up --build
 
 Access services via:
 
-- **Frontend:** <http://localhost:3000>
-- **Backend:** <http://localhost:8000>, 8001, etc.
+- **Frontend:** <http://localhost:4000>
+- **Backend:** <http://localhost:3000>, 3001, etc.
 
-### 4. Run in Kubernetes
+### 4. Run in Kubernetes (Unimplemented)
 
 ```bash
 kubectl apply -f k8s/
@@ -98,7 +98,7 @@ Each service includes its own test suite using Jest.
 
 ```bash
 # Example (inside a service)
-cd auth-service
+cd auth
 npm install
 npm test
 ```
@@ -115,10 +115,20 @@ npm test
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "docker:build": "docker build -t auth-service .",
-    "docker:run": "docker run -p 3000:3000 auth-service"
+    "docker:build": "docker build -t auth .",
+    "docker:run": "docker run -p 3000:3000 auth"
   }
 }
+
+# Frontend scripts
+"scripts": {
+  "dev": "next dev -p 4000 --turbopack",
+  "build": "next build",
+  "start": "next start",
+  "lint": "next lint",
+  "format": "prettier --write .",
+  "format:check": "prettier --check ."
+},
 ```
 
 ## 💻 Development Workflow
@@ -135,7 +145,7 @@ npm test
 
 ## 🔐 Security
 
-- OAuth 2.0 / Firebase Auth
+- Firebase Auth
 - Secure secrets via `.env` or GCP Secret Manager
 - HTTPS enforced
 

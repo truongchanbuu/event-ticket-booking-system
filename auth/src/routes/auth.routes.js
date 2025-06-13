@@ -29,6 +29,14 @@ export default class AuthRoutes {
         );
         this.router.post("/logout", verifyToken, this.authController.logout);
 
+        this.router.delete(
+            "/:uid",
+            verifyToken,
+            checkOwnerOrAdmin,
+            AuthValidator.validateDeleteUser(),
+            AuthValidator.handleValidationErrors,
+        );
+
         this.router.get(
             "/claims/:uid",
             verifyToken,
