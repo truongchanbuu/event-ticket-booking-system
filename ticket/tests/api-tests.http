@@ -6,7 +6,7 @@ POST http://localhost:3001/api/auth/create-test-user
 Content-Type: application/json
 
 {
-  "email": "test@example.com",
+  "email": "newuser@example.com",
   "password": "password123"
 }
 
@@ -14,7 +14,7 @@ Content-Type: application/json
 # Use the get_token.html page you created earlier, or your React frontend.
 # Replace <YOUR_FIREBASE_ID_TOKEN_HERE> with the actual token you obtain.
 # This token is temporary and will expire after about 1 hour.
-@id_token = eyJhbGciOiJSUzI1NiIsImtpZCI6ImE0YTEwZGVjZTk4MzY2ZDZmNjNlMTY3Mjg2YWU5YjYxMWQyYmFhMjciLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vZXZlbnQtdGlja2V0LWJvb2tpbmctc3lzLTc3ZWY2IiwiYXVkIjoiZXZlbnQtdGlja2V0LWJvb2tpbmctc3lzLTc3ZWY2IiwiYXV0aF90aW1lIjoxNzQ5NTM0MTE0LCJ1c2VyX2lkIjoiWDQxSnU4Qmp6TmVKVWZiaTB4OHA4cEExc2dLMiIsInN1YiI6Ilg0MUp1OEJqek5lSlVmYmkweDhwOHBBMXNnSzIiLCJpYXQiOjE3NDk1MzQxMTQsImV4cCI6MTc0OTUzNzcxNCwiZW1haWwiOiJ0ZXN0dXNlQGV4YW1wbGUuY29tIiwiZW1haWxfdmVyaWZpZWQiOmZhbHNlLCJmaXJlYmFzZSI6eyJpZGVudGl0aWVzIjp7ImVtYWlsIjpbInRlc3R1c2VAZXhhbXBsZS5jb20iXX0sInNpZ25faW5fcHJvdmlkZXIiOiJwYXNzd29yZCJ9fQ.Mo7XityVNFwChNXoYfpEL1O6c0hmmJh7OlQek9e3pqkFj4HYy3BwzeUqm710guo519LUOdTP4ztJyMJWDZahO34LpR_GLTusQrsdbviVFFedO2cCRDBStTIU4l7dsUZdaxWtWCT7D7A6OzAIN9SMgwBFQYqwAhJk8bfF9Clsp6KZBsdVUgSc6NXFZVv2GK2ihj7txQt8eNKdzwdtKF1FqdxP-YwoW9a74oHRBlDqjGFOYJaz08C-uNYO5A7glf35Lx7-wRdWCK8gZJy_Deyei3O5g7QzpmjbfPbZaWOugXmft55Zw6CS29vImJLeLEEVlfe-mnTHI5dsfHPFW2CSWg
+@id_token = eyJhbGciOiJSUzI1NiIsImtpZCI6ImE0YTEwZGVjZTk4MzY2ZDZmNjNlMTY3Mjg2YWU5YjYxMWQyYmFhMjciLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vZXZlbnQtdGlja2V0LWJvb2tpbmctc3lzLTc3ZWY2IiwiYXVkIjoiZXZlbnQtdGlja2V0LWJvb2tpbmctc3lzLTc3ZWY2IiwiYXV0aF90aW1lIjoxNzQ5NjIyMzE5LCJ1c2VyX2lkIjoiblJQdndJUUpRaGZ1UU5rZkx3SGtlaVNMcmRIMiIsInN1YiI6Im5SUHZ3SVFKUWhmdVFOa2ZMd0hrZWlTTHJkSDIiLCJpYXQiOjE3NDk2MjIzMTksImV4cCI6MTc0OTYyNTkxOSwiZW1haWwiOiJuZXd1c2VyQGV4YW1wbGUuY29tIiwiZW1haWxfdmVyaWZpZWQiOmZhbHNlLCJmaXJlYmFzZSI6eyJpZGVudGl0aWVzIjp7ImVtYWlsIjpbIm5ld3VzZXJAZXhhbXBsZS5jb20iXX0sInNpZ25faW5fcHJvdmlkZXIiOiJwYXNzd29yZCJ9fQ.ipBynln6rl2jhXO-DHKHz7j6UxgHQSM7Z3abYMcGih6QwMehO0ewnBxst1n2aAnEjI9-xMSGIuBiYRk7uJgwcsxg5oNlWdXd8PnI8OpyttvdQ-R9WXzWzt84nB94r6Uf42cTT9kPro72RVmylKkwi5n0tHjNEhup2svwIf7xM_XPwzLrsM0e5XorHHWUAlE6twMebfLP22UIjcTrbqSP8-umWx-CYjVU9xm4zOiuPWnVIBgd4jAkqEshjYnP7Rphe0XUkYG3kZCH1ph-0SbZ85-RjsaKbTtCIaFvlwadRor3rbsypl-F5_5FoVjya77cQh42ioPk7Sj-GYIsi8VOyg
 
 
 ### Create Booking
@@ -29,10 +29,11 @@ Authorization: Bearer {{id_token}}
 }
 
 ### Get My Bookings
+# get event id instead of event name
 GET http://localhost:3001/api/bookings/my
 Authorization: Bearer {{id_token}}
 
 ### Delete Booking
 # Replace <BOOKING_ID_TO_DELETE> with an actual booking ID from the 'Get My Bookings' response.
-DELETE http://localhost:3001/api/bookings/rUhCWOa2dU8uZmjnHR3B
+DELETE http://localhost:3001/api/bookings/
 Authorization: Bearer {{id_token}}

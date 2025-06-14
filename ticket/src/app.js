@@ -1,4 +1,3 @@
-// src/app.js - Your main Express application
 import express from 'express';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -8,11 +7,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { promises as fsPromises } from 'fs'; // <--- IMPORTANT FIX: Import promises as fsPromises
 
-// __dirname equivalent for ES Modules
+// dirname equivalent for ES Modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --- DEBUG LOGS FOR .ENV LOADING ---
+// DEBUG LOGS FOR .ENV LOADING 
 console.log(`Current __dirname in app.js: ${__dirname}`);
 const dotenvPath = path.resolve(__dirname, '../.env'); // Path should be D:\GitHub\event-ticket-booking-system\ticket\.env
 console.log(`Attempting to load .env from: ${dotenvPath}`);
@@ -25,16 +24,15 @@ if (result.error) {
   console.error('This often means the .env file does not exist at the specified path.');
 } else {
   console.log('.env file loaded successfully.');
-  // console.log('Parsed variables:', result.parsed); // Uncomment to see all parsed vars (might contain sensitive data)
   console.log(`FIREBASE_KEY_PATH from process.env: ${process.env.FIREBASE_KEY_PATH}`);
   console.log(`AUTH_PORT from process.env: ${process.env.AUTH_PORT}`);
 }
-// --- END DEBUG LOGS ---
+//     END DEBUG LOGS 
 
 const app = express();
 const AUTH_PORT = process.env.AUTH_PORT || 3001; // Port for this service. Should now pick up from .env if loaded.
 
-// --- Firebase Admin SDK Initialization ---
+// Firebase Admin SDK Initialization 
 // IMPORTANT: This path is relative to the project root (D:\GitHub\event-ticket-booking-system\ticket\)
 const serviceAccountPath = process.env.FIREBASE_KEY_PATH;
 
@@ -54,7 +52,7 @@ try {
   const absoluteServiceAccountPath = path.resolve(__dirname, '..', serviceAccountPath);
   console.log(`Attempting to load service account key from: ${absoluteServiceAccountPath}`);
   
-  // Read and parse the JSON file asynchronously using fsPromises
+  // Read and parse the JSON file same time using fsPromises
   const serviceAccountContent = await fsPromises.readFile(absoluteServiceAccountPath, 'utf8'); // <--- IMPORTANT FIX: Use fsPromises
   const serviceAccount = JSON.parse(serviceAccountContent);
   
@@ -66,7 +64,7 @@ try {
   console.log("Firebase Admin SDK initialized successfully.");
 } catch (error) {
   console.error("Failed to initialize Firebase Admin SDK:", error);
-  if (error.code === 'ENOENT') { // ENOENT means 'Error NO ENTry', file not found
+  if (error.code === 'ENOENT') { // ENOENT means 'Error NO ENTry' or file not found
     console.error(`Error: Service account key file not found at "${absoluteServiceAccountPath}".`);
     console.error("Please ensure the file exists and FIREBASE_KEY_PATH in your .env is correct.");
   } else if (error.name === 'SyntaxError') {
