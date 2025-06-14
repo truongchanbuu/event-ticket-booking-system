@@ -13,13 +13,5 @@ export const ENV = {
   PORT: process.env.PORT ? +process.env.PORT : 3000,
   DATABASE_URL: process.env.DATABASE_URL || "",
   JWT_SECRET: process.env.JWT_SECRET || "",
-  KAFKA_BROKER_1: process.env.KAFKA_BROKER_1
-    ? `${process.env.KAFKA_BROKER_1}:${KAFKA_PORT}`
-    : KAFKA_BROKER_DEFAULT,
-  KAFKA_BROKER_2: process.env.KAFKA_BROKER_2
-    ? `${process.env.KAFKA_BROKER_2}:${KAFKA_PORT}`
-    : KAFKA_BROKER_DEFAULT,
-  KAFKA_BROKER_3: process.env.KAFKA_BROKER_3
-    ? `${process.env.KAFKA_BROKER_3}:${KAFKA_PORT}`
-    : KAFKA_BROKER_DEFAULT,
+  KAFKA_BROKERS: process.env.KAFKA_BROKERS,
 };

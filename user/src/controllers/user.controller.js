@@ -96,4 +96,8 @@ export default class UserController {
 
         return res.status(200).json({ success: true, data });
     }
+
+    async softDeleteUser(req, res) {
+        this.userService.softDeleteUser(req.params.userID);
+    }
 }

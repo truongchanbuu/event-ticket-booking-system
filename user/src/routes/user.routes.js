@@ -1,10 +1,10 @@
 import express from "express";
+import UserValidator from "../utils/validator.js";
 import {
     checkAdmin,
     checkOwnerOrAdmin,
     verifyToken,
-} from "../middlewares/firebase_auth.middleware.js";
-import UserValidator from "../utils/validator.js";
+} from "@event_ticket_booking_system/shared";
 
 export default class UserRoutes {
     constructor({ userController }) {
@@ -22,14 +22,14 @@ export default class UserRoutes {
             UserValidator.handleValidationErrors,
             this.userController.getAllUser,
         );
-        // this.router.delete(
-        //     "/:userID",
-        //     verifyToken,
-        //     checkOwnerOrAdmin,
-        //     UserValidator.validateDeleteUser,
-        //     UserValidator.handleValidationErrors,
-        //     this.userController.deleteUser,
-        // );
+        this.router.delete(
+            "/:userID",
+            verifyToken,
+            checkOwnerOrAdmin,
+            UserValidator.validateDeleteUser(),
+            UserValidator.handleValidationErrors,
+            this.userController.softDeleteUser,
+        );
         this.router.post(
             "/",
             UserValidator.validateCreateUser(),

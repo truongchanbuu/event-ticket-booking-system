@@ -5,7 +5,7 @@ import kafkaConfig from "./config/kafka.config.js";
 
 async function bootstrap() {
     KafkaManager.initKafka(kafkaConfig);
-    await KafkaManager.initProducer();
+    await KafkaManager.getProducer("user-producer");
 
     const app = await createApp();
     const PORT = ENV.PORT || 3000;
@@ -17,6 +17,6 @@ async function bootstrap() {
 }
 
 bootstrap().catch((e) => {
-    console.error("❌ Failed to start the auth service", e);
+    console.error("❌ Failed to start the user service", e);
     process.exit(1);
 });

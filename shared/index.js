@@ -24,7 +24,7 @@ export { default as BaseValidator } from "./validator/base_validator.js";
 export { default as ROLE } from "./enums/role.enum.js";
 export { default as NOTIFICATION_REF } from "./enums/notification_ref.enum.js";
 export { default as NOTIFICATION_STATUS } from "./enums/notification_status.enum.js";
-export { default as EVENT_TYPES } from "./enums/event_types.enum.js";
+export { EVENT_TYPES } from "./enums/event_types.enum.js";
 export { default as EnumHelper } from "./enums/helpers/enum.helper.js";
 
 export { default as checkJson } from "./validator/helpers/syntax.validator.js";

@@ -1,7 +1,7 @@
-import { ENV } from "../config/env.js";
+import { Kafka } from "kafkajs";
+import { v4 } from "uuid";
 
-const { Kafka } = require("kafkajs");
-const { v4: uuidv4 } = require("uuid");
+import { ENV } from "../config/env.js";
 
 let kafkaState = {
   instance: null,
@@ -14,7 +14,7 @@ let kafkaState = {
 // 2. CONFIGURATION
 const defaultKafkaConfig = {
   clientId: ENV.KAFKA_CLIENT_ID || "my-app",
-  brokers: (KAFKA_BROKERS || "localhost:9092").split(","),
+  brokers: (ENV.KAFKA_BROKERS || "localhost:9092").split(","),
   connectionTimeout: parseInt(ENV.KAFKA_CONNECTION_TIMEOUT) || 3000,
   authenticationTimeout: parseInt(ENV.KAFKA_AUTH_TIMEOUT) || 1000,
   retry: {
@@ -286,7 +286,7 @@ function createStandardMessage({
   partition,
   timestamp,
 }) {
-  const messageId = headers.messageId || uuidv4();
+  const messageId = headers.messageId || v4();
   const messageTimestamp = timestamp || Date.now();
 
   const standardHeaders = {

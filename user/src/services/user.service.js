@@ -1,9 +1,15 @@
-// import { db, serverTimestamp, increment } from "../firebase.js";
 import {
     AppError,
     NOTIFICATION_STATUS,
 } from "@event_ticket_booking_system/shared";
-import { db, serverTimestamp, increment } from "../firebase-emulator.js"; // TODO: Test only
+import {
+    db,
+    serverTimestamp,
+    increment,
+    admin,
+    auth,
+} from "../firebase-emulator.js"; // TODO: Test only
+import { sendUserDeleted } from "../kafka/user.event.js";
 export default class UserService {
     constructor({ logger }) {
         this.logger = logger;
@@ -262,5 +268,16 @@ export default class UserService {
         }
 
         return { notificationID, status };
+    }
+
+    async softDeleteUser(userID) {
+        await this.userCollection.doc(userID).update({
+            isDeleted: true,
+            deletedAt: serverTimestamp,
+            disabled: true,
+        });
+
+        await auth.updateUser(userID, { disabled: true });
+        sendUserDeleted(userID).catch((e) => console.log("Kafka sends failed"));
     }
 }

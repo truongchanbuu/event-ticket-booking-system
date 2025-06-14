@@ -1,4 +1,4 @@
-export default EVENT_TYPES = {
+export const EVENT_TYPES = {
   USER_CREATED: "USER_CREATED",
   USER_DELETED: "USER_DELETED",
 };

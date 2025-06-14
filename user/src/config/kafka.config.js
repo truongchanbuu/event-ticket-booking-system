@@ -1,5 +1,7 @@
 import { ENV } from "./env.js";
 
-export default kafkaConfig = {
+const kafkaConfig = {
     clientId: ENV.KAFKA_CLIENT_ID || "my-app",
 };
+
+export default kafkaConfig;
