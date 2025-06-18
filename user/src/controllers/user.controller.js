@@ -1,10 +1,11 @@
 import { catchAsync } from "@event_ticket_booking_system/shared";
+import { serverTimestamp } from "../firebase-emulator.js";
 
 export default class UserController {
     constructor({ userService }) {
         this.userService = userService;
 
-        this.getAllUser = catchAsync(this.getAllUser.bind(this));
+        this.getUsers = catchAsync(this.getUsers.bind(this));
         this.registerUser = catchAsync(this.registerUser.bind(this));
         this.updateUser = catchAsync(this.updateUser.bind(this));
         this.updateFollowedOrganizers = catchAsync(
@@ -18,12 +19,12 @@ export default class UserController {
         );
     }
 
-    async getAllUser(req, res) {
-        const users = await this.userService.getUsers(req.query);
+    async getUsers(req, res) {
+        const data = await this.userService.getUsers(req.query);
 
         return res.status(200).json({
             success: true,
-            data: users,
+            data,
         });
     }
 
@@ -43,8 +44,10 @@ export default class UserController {
     }
 
     async updateUser(req, res) {
+        const userID = req.params.userID || req.user.uid;
+
         const { success, data } = await this.userService.updateUser({
-            userID: req.params.userID,
+            userID,
             ...req.body,
         });
 
@@ -58,8 +61,9 @@ export default class UserController {
     }
 
     async updateFollowedOrganizers(req, res) {
+        const userID = req.user.uid;
         const executedAmount = await this.userService.updateFollowedOrganizers(
-            req.params.userID,
+            userID,
             req.body.followedOrganizers,
             req.body.action,
         );
@@ -77,8 +81,9 @@ export default class UserController {
     }
 
     async updateNotifications(req, res) {
+        const userID = req.user.uid;
         const data = await this.userService.updateNotifications(
-            req.params.userID,
+            userID,
             req.body.notificationReferences,
             req.body.action,
         );
@@ -87,7 +92,8 @@ export default class UserController {
     }
 
     async updateNotificationStatus(req, res) {
-        const { userID, notificationID } = req.params;
+        const userID = req.user.uid;
+        const { notificationID } = req.params;
         const data = this.userService.updateNotificationStatus(
             userID,
             notificationID,
@@ -98,6 +104,36 @@ export default class UserController {
     }
 
     async softDeleteUser(req, res) {
-        this.userService.softDeleteUser(req.params.userID);
+        const userID = req.params.userID || req.user.uid;
+        await this.userService.softDeleteUser(userID);
+
+        return res.status(200).json({
+            success: true,
+            data: { userID, deletedAt: serverTimestamp, deletedBy: req.user },
+        });
+    }
+
+    async deleteUser(req, res) {
+        const userID = req.params.userID;
+        const force = req.query.force;
+
+        if (!force) {
+            await this.userService.softDeleteUser(userID);
+        } else {
+            await this.userService.hardDeleteUser(userID);
+        }
+        return res.status(200).json({
+            success: true,
+            data: { userID, deletedAt: serverTimestamp, deletedBy: req.user },
+        });
+    }
+
+    async getProfile(req, res) {
+        const user = this.userService.getUserByID(req.user.uid);
+
+        return res.status(200).json({
+            success: true,
+            data: user,
+        });
     }
 }

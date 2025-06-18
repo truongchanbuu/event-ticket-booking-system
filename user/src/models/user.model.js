@@ -1,3 +1,4 @@
+import { ORGANIZER_STATUS } from "@event_ticket_booking_system/shared";
 import ROLE from "../enums/role.enum";
 import { USER_STATUS } from "../enums/user_status.enum";
 
@@ -6,10 +7,10 @@ export default {
     fields: {
         userID: String,
         email: String,
-        password: String,
         username: String,
         phoneNumber: String,
         role: ROLE,
+        photoUrl: String,
         birthday: Date,
         followedOrganizers: [], // subcollection
         preferenceCategories: [], // string array
@@ -17,5 +18,8 @@ export default {
         createdAt: Date,
         updatedAt: Date | null,
         status: USER_STATUS,
+        organizerStatus: ORGANIZER_STATUS,
+        reportCount: 0,
+        riskScore: 0, // 0-1
     },
 };

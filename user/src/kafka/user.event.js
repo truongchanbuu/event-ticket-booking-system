@@ -13,3 +13,11 @@ export const sendUserDeleted = (userData) =>
         value: { ...userData, deletedAt: new Date().toISOString() },
         eventType: EVENT_TYPES.USER_DELETED,
     });
+
+export const sendUserRoleChanged = (userData) => {
+    sendUserEvent({
+        key: userData.userID,
+        value: { ...userData, updatedAt: new Date().toISOString() },
+        eventType: EVENT_TYPES.USER_ROLE_CHANGED,
+    });
+};

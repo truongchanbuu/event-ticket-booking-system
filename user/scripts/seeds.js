@@ -40,7 +40,7 @@ export async function seedUsers() {
             createdAt: new Date(now.getTime() - 172800000), // -2 days
             updatedAt: Date.now(),
             organizer: {
-                organizerID: "user3",
+                orgID: "user3",
                 name: "Mary Events Co.",
                 bio: "We organize music concerts",
             },

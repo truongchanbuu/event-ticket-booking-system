@@ -239,14 +239,14 @@ paths:
                     $ref: "#/components/responses/NotFound"
 
     # Event Organizer Application Endpoints
-    /organizer/{organizerID}:
+    /organizer/{orgID}:
         get:
             tags:
                 - Organizer Applications
             summary: Get organizer details
             description: Get the organizer details
             parameters:
-                - name: organizerID
+                - name: orgID
                   in: path
                   required: true
                   description: Organizer ID
@@ -273,7 +273,7 @@ paths:
             summary: Apply for event organizer
             description: Submit an application to become an event organizer
             parameters:
-                - name: organizerID
+                - name: orgID
                   in: path
                   required: true
                   description: Organizer ID
@@ -308,7 +308,7 @@ paths:
             summary: Update organizer profile
             description: Update existing organizer profile information
             parameters:
-                - name: organizerID
+                - name: orgID
                   in: path
                   required: true
                   description: Organizer ID

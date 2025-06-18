@@ -14,57 +14,79 @@ export default class UserRoutes {
     }
 
     initRoutes() {
-        this.router.get(
-            "/",
+        // profile
+        this.router.get("/me", verifyToken, this.userController.getProfile);
+        this.router.put(
+            "/me",
             verifyToken,
-            checkAdmin,
-            UserValidator.validateGetUsers(),
+            UserValidator.validateUpdateUser(),
             UserValidator.handleValidationErrors,
-            this.userController.getAllUser,
+            this.userController.updateUser,
         );
         this.router.delete(
-            "/:userID",
-            verifyToken,
-            checkOwnerOrAdmin,
+            "/me",
             UserValidator.validateDeleteUser(),
             UserValidator.handleValidationErrors,
             this.userController.softDeleteUser,
         );
         this.router.post(
-            "/",
-            UserValidator.validateCreateUser(),
-            UserValidator.handleValidationErrors,
-            this.userController.registerUser,
-        );
-        this.router.put(
-            "/:userID",
+            "/me/followed-organizers",
             verifyToken,
-            checkOwnerOrAdmin,
-            UserValidator.validateUpdateUser(),
-            UserValidator.handleValidationErrors,
-            this.userController.updateUser,
-        );
-        this.router.post(
-            "/:userID/followed-organizers",
-            verifyToken,
-            checkOwnerOrAdmin,
             UserValidator.validateFollowedOrganizer(),
             UserValidator.handleValidationErrors,
             this.userController.updateUser,
         );
         this.router.post(
-            "/:userID/notifications",
+            "/me/notifications",
             verifyToken,
             UserValidator.validateNotification(),
             UserValidator.handleValidationErrors,
             this.userController.updateNotifications,
         );
         this.router.put(
-            "/:userID/notifications/:notificationID/status",
+            "/me/notifications/:notificationID/status",
             verifyToken,
             UserValidator.validateUpdateNotificationStatus(),
             UserValidator.handleValidationErrors,
             this.userController.updateNotificationStatus,
+        );
+
+        // admin-access
+        this.router.get(
+            "/users",
+            verifyToken,
+            checkAdmin,
+            UserValidator.validateGetUsers(),
+            UserValidator.handleValidationErrors,
+            this.userController.getUsers,
+        );
+        this.router.get(
+            "/users/:userID",
+            verifyToken,
+            checkAdmin,
+            this.userController.getProfile,
+        );
+        this.router.post(
+            "/users",
+            UserValidator.validateCreateUser(),
+            UserValidator.handleValidationErrors,
+            this.userController.registerUser,
+        );
+        this.router.put(
+            "/users/:userID",
+            verifyToken,
+            checkAdmin,
+            UserValidator.validateUpdateUser(),
+            UserValidator.handleValidationErrors,
+            this.userController.updateUser,
+        );
+        this.router.delete(
+            "/users/:userID",
+            verifyToken,
+            checkAdmin,
+            UserValidator.validateDeleteUser(),
+            UserValidator.handleValidationErrors,
+            this.userController.deleteUser,
         );
     }
 

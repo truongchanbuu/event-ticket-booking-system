@@ -1,51 +1,47 @@
 import {
     AppError,
+    ERROR_CODE,
     NOTIFICATION_STATUS,
+    ROLE,
 } from "@event_ticket_booking_system/shared";
-import {
-    db,
-    serverTimestamp,
-    increment,
-    admin,
-    auth,
-} from "../firebase-emulator.js"; // TODO: Test only
+import { db, serverTimestamp, increment, auth } from "../firebase-emulator.js"; // TODO: Test only
 import { sendUserDeleted } from "../kafka/user.event.js";
+import { USER_STATUS } from "../enums/user_status.enum.js";
+import { sanitizeUserData } from "../utils/sanitize.js";
+
+const NOTIFICATIONS_COLLECTION = "notifcations";
+const ORGANIZERS_COLLECTION = "followedOrganizers";
 export default class UserService {
     constructor({ logger }) {
         this.logger = logger;
         this.userCollection = db.collection("users");
     }
 
+    // User
     async getUsers({
         limit = 20,
         search,
-        role,
+        role = ROLE.CUSTOMER,
         status,
+        isDeleted,
         lastVisibleValue,
         sortBy = "createdAt",
         sortOrder = "desc",
     }) {
-        sortBy = sortBy == "username" ? "username_lowercase" : sortBy;
-        const ALLOWED_SORTED_FIELDS = [
-            "createdAt",
-            "updatedAt",
-            "username_lowercase",
-            "email",
-            "phoneNumber",
-            "birthday",
-        ];
-
-        const sortField = ALLOWED_SORTED_FIELDS.includes(sortBy)
-            ? sortBy
-            : "createdAt";
-
         let firebaseQuery = this.userCollection;
 
         if (role) firebaseQuery = firebaseQuery.where("role", "==", role);
         if (status) firebaseQuery = firebaseQuery.where("status", "==", status);
+        if (isDeleted) {
+            firebaseQuery = firebaseQuery.where(
+                "isDeleted",
+                "==",
+                isDeleted === "true" || isDeleted === true,
+            );
+        }
 
         firebaseQuery = firebaseQuery.orderBy(
-            sortField,
+            sortBy,
             sortOrder === "asc" ? "asc" : "desc",
         );
 
@@ -74,7 +70,7 @@ export default class UserService {
 
         const nextCursor =
             snapshot.docs.length > 0
-                ? snapshot.docs[snapshot.docs.length - 1].get(sortField)
+                ? snapshot.docs[snapshot.docs.length - 1].get(sortBy)
                 : null;
 
         return {
@@ -82,6 +78,30 @@ export default class UserService {
             nextCursor,
             hasMore: snapshot.docs.length === limit,
         };
+    }
+
+    async getUserByID(userID) {
+        const doc = await this.userCollection.doc(userID).get();
+
+        if (!doc.exists) {
+            throw new AppError({
+                message: "User not found",
+                errorCode: ERROR_CODE.NOT_FOUND,
+                statusCode: 404,
+            });
+        }
+
+        const user = { id: doc.id, ...doc.data() };
+
+        if (user.isDeleted) {
+            throw new AppError({
+                message: "This user account is not available",
+                errorCode: ERROR_CODE.USER_DELETED,
+                statusCode: 403,
+            });
+        }
+
+        return user;
     }
 
     async getUserByEmail(email) {
@@ -229,29 +249,6 @@ export default class UserService {
         };
     }
 
-    async markNotificationsAsRead(userId, notificationIDs) {
-        const batch = db.batch();
-        const userRef = this.userCollection.doc(userId);
-
-        notificationIDs.forEach((notificationID) => {
-            const notifRef = userRef
-                .collection("notifications")
-                .doc(notificationID);
-            batch.update(notifRef, {
-                read: true,
-                readAt: serverTimestamp(),
-            });
-        });
-
-        batch.update(userRef, {
-            unreadNotificationCount: increment(-notificationIDs.length),
-            updatedAt: serverTimestamp(),
-        });
-
-        await batch.commit();
-        return { success: true };
-    }
-
     async updateNotificationStatus(userID, notificationID, status) {
         const notifRef = this.userCollection
             .doc(userID)
@@ -274,10 +271,68 @@ export default class UserService {
         await this.userCollection.doc(userID).update({
             isDeleted: true,
             deletedAt: serverTimestamp,
-            disabled: true,
         });
 
         await auth.updateUser(userID, { disabled: true });
-        sendUserDeleted(userID).catch((e) => console.log("Kafka sends failed"));
+        sendUserDeleted({ userID, deleteType: "soft" }).catch((e) =>
+            console.log("Kafka sends failed: ", e),
+        );
+    }
+
+    async hardDeleteUser(userID) {
+        const userRef = this.userCollection.doc(userID);
+
+        const subcollections = [
+            ORGANIZERS_COLLECTION,
+            NOTIFICATIONS_COLLECTION,
+        ];
+
+        for (const sub of subcollections) {
+            const subColRef = userRef.collection(sub);
+            const snapshot = await subColRef.get();
+
+            const batch = db.batch();
+            snapshot.docs.forEach((doc) => {
+                batch.delete(doc.ref);
+            });
+            await batch.commit();
+        }
+
+        await userRef.delete();
+
+        await auth.deleteUser(userID);
+
+        sendUserDeleted({ userID, deleteType: "hard" }).catch((e) =>
+            console.log("Kafka sends failed: ", e),
+        );
+
+        return { success: true, deletedUserID: userID };
+    }
+
+    async getPublicOrganizers(query) {
+        const enrichedQuery = {
+            ...query,
+            role: ROLE.EVENT_ORGANIZER,
+            isDeleted: false,
+        };
+
+        const result = await this.getUsers(enrichedQuery);
+
+        const organizers = result.users
+            .filter((u) =>
+                [USER_STATUS.ACTIVE, USER_STATUS.VERIFIED].includes(u.status),
+            )
+            .map((u) => sanitizeUserData(u, false));
+
+        return {
+            organizers,
+            nextCursor: result.nextCursor,
+            hasMore: result.hasMore,
+        };
+    }
+
+    async getOrganizerProfile(orgID) {
+        const user = await this.getUserByID(orgID);
+        return sanitizeUserData(user, false);
     }
 }

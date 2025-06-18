@@ -15,22 +15,26 @@ export default class AuthRoutes {
 
     initRoutes() {
         this.router.post(
-            "/validate-token",
+            "/auth/validate-token",
             verifyToken,
             this.authController.validateToken,
         );
         this.router.post(
-            "/revoke-token",
+            "/auth/revoke-token",
             verifyToken,
             checkOwnerOrAdmin,
             AuthValidator.validateRevokeToken(),
             AuthValidator.handleValidationErrors,
             this.authController.revokeToken,
         );
-        this.router.post("/logout", verifyToken, this.authController.logout);
+        this.router.post(
+            "/auth/logout",
+            verifyToken,
+            this.authController.logout,
+        );
 
         this.router.delete(
-            "/:uid",
+            "/auth/:uid",
             verifyToken,
             checkOwnerOrAdmin,
             AuthValidator.validateDeleteUser(),
@@ -38,7 +42,7 @@ export default class AuthRoutes {
         );
 
         this.router.get(
-            "/claims/:uid",
+            "/auth/claims/:uid",
             verifyToken,
             checkOwnerOrAdmin,
             AuthValidator.validateGetClaims(),
@@ -46,7 +50,7 @@ export default class AuthRoutes {
             this.authController.getClaims,
         );
         this.router.post(
-            "/claims/:uid",
+            "/auth/claims/:uid",
             verifyToken,
             checkAdmin,
             AuthValidator.validateSetClaims(),
