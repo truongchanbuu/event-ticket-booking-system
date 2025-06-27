@@ -32,3 +32,7 @@ export { default as EnumHelper } from "./enums/helpers/enum.helper.js";
 export * from "./types/category.js";
 
 export { default as checkJson } from "./validator/helpers/syntax.validator.js";
+export { default as BaseValidator } from "./validator/base_validator.js";
+
+// Schema
+export * from "./schema/index.js";
