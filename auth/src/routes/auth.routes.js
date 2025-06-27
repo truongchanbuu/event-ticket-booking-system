@@ -1,5 +1,5 @@
 import express from "express";
-import AuthValidator from "../utils/validator.js";
+import AuthValidator from "../middlewares/validator.js";
 import {
     verifyToken,
     checkAdmin,

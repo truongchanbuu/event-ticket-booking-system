@@ -1,5 +1,5 @@
 import express from "express";
-import UserValidator from "../utils/validator.js";
+import UserValidator from "../middlewares/validator.js";
 import {
     checkAdmin,
     checkOwnerOrAdmin,

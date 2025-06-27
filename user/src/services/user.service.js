@@ -62,7 +62,7 @@ export default class UserService {
         if (search) {
             const s = search.toLowerCase();
             filteredUsers = users.filter((user) =>
-                [user.username_lowercase, user.email].some((field) =>
+                [user.usernameLowerCase, user.email].some((field) =>
                     field?.toLowerCase().includes(s),
                 ),
             );
@@ -127,7 +127,7 @@ export default class UserService {
                     errorCode: "EMAIL_EXISTS",
                 });
             }
-            user.username_lowercase = user.username.toLowerCase();
+            user.usernameLowerCase = user.username.toLowerCase();
             if (user.birthday) {
                 user.birthday = Timestamp.fromDate(user.birthday);
             }
