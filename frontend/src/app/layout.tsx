@@ -1,25 +1,23 @@
-import { QueryClientProvider } from "@tanstack/react-query"
-import { Route, Switch } from "wouter"
-
-import { queryClient } from "@/lib/queryClients"
-import { Toaster } from "@/components/ui/toaster"
-import { TooltipProvider } from "@/components/ui/tooltip"
+import Header from "@/components/app-header";
+import "./globals.css";
+import { AuthProvider } from "./providers/AuthProvider";
+import { ClientProviders } from "./providers/ClientProvider";
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode
-}>) {
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
       <body>
-        <QueryClientProvider client={queryClient}>
-          <TooltipProvider>
-            <Toaster />
+        <AuthProvider>
+          <ClientProviders>
+            <Header />
             {children}
-          </TooltipProvider>
-        </QueryClientProvider>
+          </ClientProviders>
+        </AuthProvider>
       </body>
     </html>
-  )
+  );
 }

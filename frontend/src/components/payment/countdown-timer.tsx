@@ -1,9 +1,13 @@
-import { useEffect, useState } from "react"
+import {
+  INITAL_COUNTDOWN_MIN,
+  INITAL_COUNTDOWN_SEC,
+} from "@/constants/payment";
+import { useEffect, useState } from "react";
 
 interface CountdownTimerProps {
-  initialMinutes?: number
-  initialSeconds?: number
-  onExpired?: () => void
+  initialMinutes?: number;
+  initialSeconds?: number;
+  onExpired?: () => void;
 }
 
 export default function CountdownTimer({
@@ -11,31 +15,31 @@ export default function CountdownTimer({
   initialSeconds = INITAL_COUNTDOWN_SEC,
   onExpired,
 }: CountdownTimerProps) {
-  const [minutes, setMinutes] = useState(initialMinutes)
-  const [seconds, setSeconds] = useState(initialSeconds)
+  const [minutes, setMinutes] = useState(initialMinutes);
+  const [seconds, setSeconds] = useState(initialSeconds);
 
   useEffect(() => {
     const interval = setInterval(() => {
       if (seconds > 0) {
-        setSeconds(seconds - 1)
+        setSeconds(seconds - 1);
       } else if (minutes > 0) {
-        setMinutes(minutes - 1)
-        setSeconds(59)
+        setMinutes(minutes - 1);
+        setSeconds(59);
       } else {
-        clearInterval(interval)
-        onExpired?.()
+        clearInterval(interval);
+        onExpired?.();
       }
-    }, 1000)
+    }, 1000);
 
-    return () => clearInterval(interval)
-  }, [minutes, seconds, onExpired])
+    return () => clearInterval(interval);
+  }, [minutes, seconds, onExpired]);
 
-  const formattedTime = `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
+  const formattedTime = `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
 
   return (
     <div className="text-right">
       <div className="text-sm text-gray-500">Tickets held for</div>
       <div className="countdown-text">{formattedTime}</div>
     </div>
-  )
+  );
 }

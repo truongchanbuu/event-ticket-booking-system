@@ -1,8 +1,12 @@
+import PaymentPage from "./payment/page";
+
 export default function Home() {
   return (
     <div>
-      <main></main>
+      <main>
+        <PaymentPage />
+      </main>
       <footer></footer>
     </div>
-  )
+  );
 }

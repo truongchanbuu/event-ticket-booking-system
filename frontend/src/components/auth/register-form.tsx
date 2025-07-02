@@ -1,26 +1,22 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { Controller, SubmitHandler, useForm } from "react-hook-form"
-import toast from "react-hot-toast"
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Controller, SubmitHandler, useForm } from "react-hook-form";
+import toast from "react-hot-toast";
 
-import { RegisterFormProps } from "@/types/auth/auth"
-import { registerWithFirebase } from "@/lib/auth/firebase/auth.service"
-import { RegisterFormData, registerSchema } from "@/lib/validators/validator"
-
-import DatePickerField from "../ui/date-field"
-import AuthButton from "./auth-button"
-import InputField from "./input-field"
+import DatePickerField from "../ui/date-field";
+import AuthButton from "./auth-button";
+import InputField from "./input-field";
 
 interface RegisterFormComponentProps extends RegisterFormProps {}
 
 export default function RegisterForm({
   onSubmit = registerWithFirebase,
 }: RegisterFormComponentProps) {
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const router = useRouter()
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const router = useRouter();
 
   const {
     register,
@@ -39,37 +35,37 @@ export default function RegisterForm({
       confirmPassword: "",
       terms: false,
     },
-  })
+  });
 
-  const loading = isSubmitting
+  const loading = isSubmitting;
 
   const handleFormSubmit: SubmitHandler<RegisterFormData> = async (data) => {
     try {
-      setIsSubmitting(true)
-      clearErrors()
+      setIsSubmitting(true);
+      clearErrors();
 
       if (onSubmit) {
-        await onSubmit(data)
+        await onSubmit(data);
       }
 
-      toast.success("Register successful! Redirecting...")
-      router.push("/")
+      toast.success("Register successful! Redirecting...");
+      router.push("/");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      console.error(error)
+      console.error(error);
       if (error.field) {
         setError(error.field as keyof RegisterFormData, {
           message: error.message,
-        })
+        });
       } else {
         setError("root", {
           message: error.message || "An error occurred during login.",
-        })
+        });
       }
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   return (
     <form
@@ -245,5 +241,5 @@ export default function RegisterForm({
         </p>
       )}
     </form>
-  )
+  );
 }
