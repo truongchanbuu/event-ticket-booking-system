@@ -24,8 +24,6 @@ import { Button } from "@headlessui/react";
 import { PurchaseItem } from "@/schema/booking";
 import { PurchaseWithDetails, timestampSchema } from "@/schema";
 import PAYMENT_STATUS from "@/schema/enums/payment-status";
-import html2canvas from "html2canvas";
-import { ConfirmModal } from "@/components/ui/confirm-dialog";
 
 // Mock data
 const mockPurchaseWithDetails: PurchaseWithDetails = {
@@ -94,15 +92,11 @@ export default function SuccessPage() {
   const router = useRouter();
   // TODO: Open when production
   // const { purchaseId } = useParams();
+
   const [showAllTickets, setShowAllTickets] = useState(false);
   const [selectedTickets, setSelectedTickets] = useState<string[]>([]);
-  const [isSavingAll, setIsSavingAll] = useState(false);
-  const [isSavingSelected, setIsSavingSelected] = useState(false);
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [reviewType, setReviewType] = useState<"all" | "selected" | null>(null);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
-  const [isConfirmed, setIsConfirmed] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   const goHome = () => router.replace("/");
   const tickets = mockPurchaseWithDetails.items;
@@ -158,51 +152,6 @@ export default function SuccessPage() {
     }
   };
 
-  // Hàm lưu vé trong modal review
-  const saveTicketsInReview = async () => {
-    const ticketList =
-      reviewType === "all"
-        ? tickets
-        : tickets.filter((t) => selectedTickets.includes(t.ticketTypeId));
-
-    if (ticketList.length === 0) return;
-
-    if (!isConfirmed && ticketList.length > 1) {
-      setShowConfirmModal(true);
-      return;
-    }
-
-    reviewType === "all" ? setIsSavingAll(true) : setIsSavingSelected(true);
-
-    await Promise.all(
-      ticketList.map(async (ticket) => {
-        const el = document.getElementById(
-          `review-ticket-${ticket.ticketTypeId}`
-        );
-        if (!el) return;
-
-        const canvas = await html2canvas(el, { backgroundColor: null });
-        const dataUrl = canvas.toDataURL("image/png");
-
-        const link = document.createElement("a");
-        link.href = dataUrl;
-        link.download = `ticket_${ticket.ticketTypeId}.png`;
-        link.click();
-      })
-    );
-
-    setIsSavingAll(false);
-    setIsSavingSelected(false);
-    setSaveMessage(
-      reviewType === "all" ? "All tickets saved!" : "Selected tickets saved!"
-    );
-    setTimeout(() => setSaveMessage(null), 2000);
-    setIsReviewOpen(false);
-    setReviewType(null);
-  };
-
-  // TODO: In trung
-  // Hàm in vé trong modal review
   const printTicketsInReview = () => {
     window.print();
   };
@@ -608,30 +557,30 @@ export default function SuccessPage() {
 
               {/* Action Buttons */}
               <div className="flex gap-3 print:hidden w-full mx-auto">
-                {/* Save All */}
+                {/* Print All */}
                 <button
                   className="flex-1 flex items-center justify-center gap-2 h-12 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg shadow-sm transition-all duration-200 disabled:opacity-50"
                   onClick={() => {
                     setReviewType("all");
                     setIsReviewOpen(true);
                   }}
-                  disabled={isSavingAll}
                 >
                   <Ticket className="h-5 w-5 flex-shrink-0" />
-                  <span className="text-md font-medium">Save All Tickets</span>
+                  <span className="text-md font-medium">Print All Tickets</span>
                 </button>
-                {/* Save Selected */}
+
+                {/* Print Selected */}
                 <button
                   className="flex-1 flex items-center justify-center gap-2 h-12 px-4 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white rounded-lg shadow-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={() => {
                     setReviewType("selected");
                     setIsReviewOpen(true);
                   }}
-                  disabled={selectedTickets.length === 0 || isSavingSelected}
+                  disabled={selectedTickets.length === 0}
                 >
                   <Ticket className="h-5 w-5 flex-shrink-0" />
                   <span className="text-md font-medium">
-                    Save Selected Tickets
+                    Print Selected Tickets
                   </span>
                 </button>
                 {/* Go Back */}
@@ -659,7 +608,7 @@ export default function SuccessPage() {
           />
           <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full mx-auto z-50 p-6 print:p-0 print:shadow-none print:rounded-none print:max-w-full print:w-full print:static">
             <DialogTitle className="text-xl font-bold mb-4 print:hidden">
-              Review Ticket(s) to Save
+              Review Ticket(s) to Print
             </DialogTitle>
             <div className="max-h-[60vh] overflow-y-auto space-y-6 print:max-h-none print:overflow-visible print:space-y-0 print:block print:w-full print:static">
               {(reviewType === "all"
@@ -755,15 +704,6 @@ export default function SuccessPage() {
             </div>
             <div className="flex gap-3 mt-6 print:hidden">
               <button
-                className="flex-1 flex items-center justify-center gap-2 h-11 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm font-medium disabled:opacity-50"
-                onClick={() => setShowConfirmModal(true)}
-                disabled={isSavingAll || isSavingSelected}
-              >
-                {isSavingAll || isSavingSelected
-                  ? "Saving..."
-                  : "Save To Device"}
-              </button>
-              <button
                 className="flex-1 flex items-center justify-center gap-2 h-11 px-4 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg shadow-sm font-medium"
                 onClick={printTicketsInReview}
               >
@@ -782,28 +722,6 @@ export default function SuccessPage() {
           </div>
         </div>
       </Dialog>
-      {/* Confirm Dialog */}
-      {showConfirmModal && (
-        <ConfirmModal
-          open={showConfirmModal}
-          message="Save ticket could take a lot of time. Do you want to continue?"
-          onCancel={() => {
-            setShowConfirmModal(false);
-            setIsConfirmed(false);
-          }}
-          onConfirm={() => {
-            setShowConfirmModal(false);
-            setIsConfirmed(true);
-            saveTicketsInReview();
-          }}
-        />
-      )}
-      {/* Toast message */}
-      {saveMessage && (
-        <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 text-md font-semibold animate-fade-in">
-          {saveMessage}
-        </div>
-      )}
     </>
   );
 }

@@ -27,7 +27,7 @@ export default function Header({
 
   const getHeaderStyles = () => {
     const baseStyles =
-      "border-b px-4 sm:px-6 lg:px-10 py-4 mb-5 transition-all duration-200";
+      "border-b px-4 sm:px-6 lg:px-10 py-4 mb-5 transition-all duration-200 print:hidden";
     const stickyStyles = sticky ? "sticky top-0 z-50 backdrop-blur-sm" : "";
 
     switch (variant) {
