@@ -14,21 +14,28 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-export function formatDate(date: Date | string): string {
+export function formatDate(date: Date | string | Timestamp): string {
+  if (date instanceof Timestamp) {
+    date = date.toDate();
+  }
+
   const d = typeof date === "string" ? new Date(date) : date;
+
   return new Intl.DateTimeFormat("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
+    weekday: "long", // e.g., Thursday
+    year: "numeric", // e.g., 2025
+    month: "long", // e.g., July
+    day: "numeric", // e.g., 4
   }).format(d);
 }
 
-export function formatTime(date: Date | string): string {
+export function formatTime(date: Date | string | Timestamp): string {
+  if (date instanceof Timestamp) {
+    date = date.toDate();
+  }
+
   const d = typeof date === "string" ? new Date(date) : date;
+
   return new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
@@ -62,11 +69,35 @@ export function formatDateTime(
 
 export function safeToDate(value: any): Date {
   if (value?.toDate && typeof value.toDate === "function") {
-    return value.toDate(); 
+    return value.toDate();
   }
-  return new Date(value); 
+  return new Date(value);
 }
 
 export function generateQRCodeData(purchaseId: string, qrCode: string): string {
   return `TICKET:${purchaseId}:${qrCode}`;
+}
+
+export function getCategoryColor(categoryId: string) {
+  const colors = {
+    music: "category-music",
+    sports: "category-sports",
+    tech: "category-tech",
+    food: "category-food",
+    art: "category-art",
+    business: "category-business",
+  };
+  return colors[categoryId as keyof typeof colors] || "gray-500";
+}
+
+export function getStatusColor(status: string) {
+  const colors = {
+    available: "text-green-600",
+    selling_fast: "text-orange-600",
+    sold_out: "text-red-600",
+    confirmed: "text-green-600",
+    pending: "text-yellow-600",
+    cancelled: "text-red-600",
+  };
+  return colors[status as keyof typeof colors] || "text-gray-600";
 }

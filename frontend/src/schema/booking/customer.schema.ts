@@ -1,10 +1,8 @@
 import { z } from "zod";
+import { UserSchema } from "../user/user.schema";
 
-export const CustomerSchema = z.object({
+export const CustomerSchema = UserSchema.extend({
   id: z.string().optional(),
-  fullName: z.string(),
-  email: z.string().email(),
-  phone: z.string(),
   dateOfBirth: z.string().optional(),
 });
 

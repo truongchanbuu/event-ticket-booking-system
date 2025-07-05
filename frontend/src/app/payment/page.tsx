@@ -43,6 +43,7 @@ import { PaymentCustomerFormInfo } from "@/schema/payments/payment-customer-form
 import PaymentCustomerInfo from "@/components/payment/custom-info-card";
 import { APP_NAME, REDIRECT_TIME } from "@/constants/app";
 import { EventWithTicketTypes, MinimizedTicketType } from "@/schema";
+import EVENT_STATUS from "@/schema/enums/enum-status";
 
 export default function PaymentPage() {
   const [, setLocation] = useLocation();
@@ -66,9 +67,14 @@ export default function PaymentPage() {
       "https://images.unsplash.com/photo-1459749411175-04bf5292ceea?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
       "https://images.unsplash.com/photo-1429514513361-8fa32282fd5f?q=80&w=1074&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
     ],
-    category: [
-      { id: "music", name: "Music" },
-      { id: "festival", name: "Festival" },
+    categories: [
+      {
+        id: "music",
+        name: "Music",
+        color: "#000000",
+        description: "Music and Liveshow",
+        slug: "/music",
+      },
     ],
     participantCount: 128,
     location: "Madison Square Garden, New York",
@@ -92,7 +98,7 @@ export default function PaymentPage() {
         remaining: 20,
       },
     ],
-    status: "UPCOMING", // 👈 khớp với enum EVENT_STATUS
+    status: EVENT_STATUS.PUBLISHED,
     createdAt: Timestamp.fromDate(new Date()),
     updatedAt: Timestamp.fromDate(new Date()),
     participants: [],

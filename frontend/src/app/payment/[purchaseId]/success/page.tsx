@@ -35,7 +35,7 @@ const mockPurchaseWithDetails: PurchaseWithDetails = {
   paymentUrl: "https://example.com/qrcode/purchase_001",
 
   customer: {
-    fullName: "Alice Example",
+    name: "Alice Example",
     email: "alice@example.com",
     phone: "+84123456789",
     dateOfBirth: "2000-05-20",
@@ -209,7 +209,7 @@ export default function SuccessPage() {
                     <div>
                       <span className="text-gray-600">Customer:</span>
                       <div className="font-semibold">
-                        {purchase.customer.fullName}
+                        {purchase.customer.name}
                       </div>
                     </div>
                   </div>

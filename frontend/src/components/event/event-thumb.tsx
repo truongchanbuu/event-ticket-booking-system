@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Image as ImageIcon } from "lucide-react";
 
 const SLIDER_INTERVAL_TIME = 3000;
 
@@ -18,6 +18,9 @@ export default function EventThumbnail({
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [imageLoadErrors, setImageLoadErrors] = useState<Set<number>>(
+    new Set()
+  );
 
   useEffect(() => {
     if (!isAutoPlaying || isModalOpen || thumbnails.length <= 1) return;
@@ -52,6 +55,10 @@ export default function EventThumbnail({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isModalOpen, thumbnails.length]);
 
+  const handleImageError = (index: number) => {
+    setImageLoadErrors((prev) => new Set([...prev, index]));
+  };
+
   const nextImage = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     setCurrentImageIndex((prev) =>
@@ -81,6 +88,30 @@ export default function EventThumbnail({
     setIsAutoPlaying(true);
   };
 
+  const DefaultImagePlaceholder = ({ className }: { className?: string }) => (
+    <div
+      className={`bg-gray-200 flex items-center justify-center ${className}`}
+    >
+      <div className="text-center text-gray-500">
+        <ImageIcon className="h-16 w-16 mx-auto mb-2 opacity-50" />
+        <p className="text-sm font-medium">{eventName || "Event"}</p>
+        <p className="text-xs opacity-70">No image available</p>
+      </div>
+    </div>
+  );
+
+  // If no thumbnails provided, show default placeholder
+  if (!thumbnails || thumbnails.length === 0) {
+    return (
+      <div className="bg-white rounded-xxl shadow-lg overflow-hidden cursor-pointer group hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
+        <div className="relative h-56 overflow-hidden">
+          <DefaultImagePlaceholder className="w-full h-full" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div
@@ -96,12 +127,21 @@ export default function EventThumbnail({
             style={{ transform: `translateX(-${currentImageIndex * 100}%)` }}
           >
             {thumbnails.map((image, index) => (
-              <img
+              <div
                 key={`${eventName}-${index}-${image}`}
-                src={image}
-                alt={`${eventName} - Image ${index + 1}${eventDesc ? ` - ${eventDesc}` : ""}`}
-                className="w-full h-full object-cover flex-shrink-0"
-              />
+                className="w-full h-full flex-shrink-0"
+              >
+                {imageLoadErrors.has(index) ? (
+                  <DefaultImagePlaceholder className="w-full h-full" />
+                ) : (
+                  <img
+                    src={image}
+                    alt={`${eventName} - Image ${index + 1}${eventDesc ? ` - ${eventDesc}` : ""}`}
+                    className="w-full h-full object-cover"
+                    onError={() => handleImageError(index)}
+                  />
+                )}
+              </div>
             ))}
           </div>
 
@@ -182,11 +222,25 @@ export default function EventThumbnail({
               </button>
             )}
 
-            <img
-              src={thumbnails[currentImageIndex]}
-              alt="Full Image"
-              className="w-full h-auto max-h-[90vh] object-contain rounded-lg"
-            />
+            {imageLoadErrors.has(currentImageIndex) ? (
+              <div
+                className="w-full max-h-[90vh] bg-gray-200 rounded-lg flex items-center justify-center"
+                style={{ minHeight: "400px" }}
+              >
+                <div className="text-center text-gray-500">
+                  <ImageIcon className="h-24 w-24 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium">{eventName || "Event"}</p>
+                  <p className="text-sm opacity-70">Image not available</p>
+                </div>
+              </div>
+            ) : (
+              <img
+                src={thumbnails[currentImageIndex]}
+                alt="Full Image"
+                className="w-full h-auto max-h-[90vh] object-contain rounded-lg"
+                onError={() => handleImageError(currentImageIndex)}
+              />
+            )}
           </div>
         </div>
       )}

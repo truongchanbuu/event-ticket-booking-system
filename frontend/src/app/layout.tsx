@@ -1,7 +1,8 @@
-import Header from "@/components/app-header";
+import AppFooter from "@/components/app-footer";
 import "./globals.css";
 import { AuthProvider } from "./providers/AuthProvider";
 import { ClientProviders } from "./providers/ClientProvider";
+import Header from "@/components/app-header";
 
 export default function RootLayout({
   children,
@@ -12,11 +13,10 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <AuthProvider>
-          <ClientProviders>
-            <Header />
-            {children}
-          </ClientProviders>
+          <ClientProviders>{children}</ClientProviders>
         </AuthProvider>
+
+        <AppFooter />
       </body>
     </html>
   );

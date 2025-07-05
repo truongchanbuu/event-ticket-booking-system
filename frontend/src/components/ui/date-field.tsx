@@ -1,25 +1,24 @@
-import { format } from "date-fns"
+import { format } from "date-fns";
 
-import { cn } from "@/lib/class.utils"
-import DateUtils from "@/lib/date.utils"
-import { Button } from "@/components/ui/button"
-import { Calendar } from "@/components/ui/calendar"
+// import DateUtils from "@/lib/date.utils";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover"
+} from "@/components/ui/popover";
 
-import inputClass from "../../helpers/ClassNameHelper"
+import inputClass from "../../helpers/ClassNameHelper";
 
 export default function DatePickerField({
   value,
   onChange,
 }: {
-  value?: Date
-  onChange: (date: Date | undefined) => void
+  value?: Date;
+  onChange: (date: Date | undefined) => void;
 }) {
-  const formatted = value ? format(value, "dd/MM/yyyy") : "Pick a date"
+  const formatted = value ? format(value, "dd/MM/yyyy") : "Pick a date";
 
   return (
     <Popover>
@@ -43,5 +42,5 @@ export default function DatePickerField({
         />
       </PopoverContent>
     </Popover>
-  )
+  );
 }

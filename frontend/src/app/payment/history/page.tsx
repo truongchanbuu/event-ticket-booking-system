@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo } from "react";
 import {
-  Calendar,
   Clock,
   CreditCard,
   Eye,
@@ -25,10 +24,6 @@ const mockPurchases: Purchase[] = [
     userId: "user-123",
     eventId: "event-001",
     eventName: "Summer Music Festival 2024",
-    tickets: [
-      { id: "ticket-001", ticketTypeId: "VIP", unitPrice: 150, quantity: 2 },
-      { id: "ticket-002", ticketTypeId: "General", unitPrice: 75, quantity: 1 },
-    ],
     totalPrice: 375,
     paymentStatus: PAYMENT_STATUS.SUCCESS,
     paymentUrl: "https://payment.example.com/purchase-001",
@@ -38,14 +33,6 @@ const mockPurchases: Purchase[] = [
     userId: "user-123",
     eventId: "event-002",
     eventName: "Tech Conference 2024",
-    tickets: [
-      {
-        id: "ticket-003",
-        ticketTypeId: "Early Bird",
-        unitPrice: 200,
-        quantity: 1,
-      },
-    ],
     totalPrice: 200,
     paymentStatus: PAYMENT_STATUS.PENDING,
     paymentUrl: "https://payment.example.com/purchase-002",
@@ -55,14 +42,6 @@ const mockPurchases: Purchase[] = [
     userId: "user-123",
     eventId: "event-003",
     eventName: "Art Gallery Opening Night",
-    tickets: [
-      {
-        id: "ticket-004",
-        ticketTypeId: "Premium",
-        unitPrice: 100,
-        quantity: 2,
-      },
-    ],
     totalPrice: 200,
     paymentStatus: PAYMENT_STATUS.FAILED,
     paymentUrl: "https://payment.example.com/purchase-003",
@@ -73,15 +52,6 @@ const mockPurchases: Purchase[] = [
     userId: "user-123",
     eventId: "event-004",
     eventName: "Comedy Show - Downtown",
-    tickets: [
-      {
-        id: "ticket-005",
-        ticketTypeId: "Front Row",
-        unitPrice: 80,
-        quantity: 4,
-      },
-    ],
-    totalPrice: 320,
     paymentStatus: PAYMENT_STATUS.SUCCESS,
     paymentUrl: "https://payment.example.com/purchase-004",
   },
@@ -90,14 +60,6 @@ const mockPurchases: Purchase[] = [
     userId: "user-123",
     eventId: "event-005",
     eventName: "Wine Tasting Workshop",
-    tickets: [
-      {
-        id: "ticket-006",
-        ticketTypeId: "Standard",
-        unitPrice: 60,
-        quantity: 1,
-      },
-    ],
     totalPrice: 60,
     paymentStatus: PAYMENT_STATUS.FAILED,
     paymentUrl: "https://payment.example.com/purchase-005",
@@ -143,7 +105,7 @@ const StatusBadge = ({
     <span
       className={`inline-flex items-center gap-2 px-3 py-2 rounded-full text-md font-medium ${config.bgColor} ${config.textColor} ${className}`}
     >
-      <Icon className={`w-6 h-6 ${config.iconColor}`} />
+      <Icon className={`w-5 h-5 ${config.iconColor}`} />
       {config.text}
     </span>
   );
@@ -167,7 +129,7 @@ const PurchaseCard = ({
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-2 mb-2">
-              <h3 className="font-semibold text-gray-900 text-xl truncate">
+              <h3 className="font-semibold text-gray-900 text-lg sm:text-lg truncate">
                 {purchase.eventName}
               </h3>
               <StatusBadge status={purchase.paymentStatus} />
@@ -175,11 +137,11 @@ const PurchaseCard = ({
 
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-md text-gray-600">
               <div className="flex items-center gap-2 text-md text-gray-700">
-                <CalendarClock className="w-6 h-6" />
+                <CalendarClock className="w-5 h-5" />
                 <span>{formatDateTime(purchase.createdAt)}</span>
               </div>
               <div className="flex items-center gap-2">
-                <CreditCard className="w-6 h-6" />
+                <CreditCard className="w-5 h-5" />
                 <span className="font-medium">
                   {formatCurrency(purchase.totalPrice)}
                 </span>
@@ -189,7 +151,7 @@ const PurchaseCard = ({
             {purchase.paymentStatus === PAYMENT_STATUS.FAILED &&
               purchase.reason && (
                 <div className="mt-2 flex items-start gap-2 p-2 bg-red-50 rounded text-md">
-                  <AlertCircle className="w-6 h-6 text-red-500 mt-0.5 flex-shrink-0" />
+                  <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
                   <span className="text-red-700">{purchase.reason}</span>
                 </div>
               )}
@@ -389,7 +351,7 @@ const TicketHistoryUI = () => {
       <div className="w-full mx-auto">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+          <h1 className="text-2xl sm:text-2xl font-bold text-gray-900 mb-2">
             Ticket History
           </h1>
           <p className="text-gray-600">
@@ -413,14 +375,14 @@ const TicketHistoryUI = () => {
               onClick={expandAll}
               className="flex items-center gap-2 px-3 py-1.5 text-md text-gray-600 hover:text-gray-900 border border-gray-300 rounded-md hover:bg-gray-50"
             >
-              <Eye className="w-6 h-6" />
+              <Eye className="w-5 h-5" />
               Expand All
             </button>
             <button
               onClick={collapseAll}
               className="flex items-center gap-2 px-3 py-1.5 text-md text-gray-600 hover:text-gray-900 border border-gray-300 rounded-md hover:bg-gray-50"
             >
-              <EyeOff className="w-6 h-6" />
+              <EyeOff className="w-5 h-5" />
               Collapse All
             </button>
           </div>

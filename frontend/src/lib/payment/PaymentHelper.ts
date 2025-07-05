@@ -1,5 +1,5 @@
+import { EventWithTicketTypes } from "@/schema/relationship.schema";
 import { TicketQuantity } from "@/schema/tickets/ticket-quantity.schema";
-import { EventWithTicketTypes } from "@event_ticket_booking_system/shared";
 
 export default class PaymentHelper {
   public static calculateTotals(

@@ -2,6 +2,7 @@
 import { APP_NAME } from "@/constants/app";
 import Link from "next/link";
 import { useState } from "react";
+import { User } from "lucide-react";
 
 type HeaderProps = {
   showTabs?: boolean;
@@ -10,6 +11,7 @@ type HeaderProps = {
   sticky?: boolean;
   showSearch?: boolean;
   userAvatar?: string;
+  username?: string;
   notifications?: number;
 };
 
@@ -20,6 +22,7 @@ export default function Header({
   sticky = false,
   showSearch = false,
   userAvatar,
+  username,
   notifications = 0,
 }: HeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -128,8 +131,25 @@ export default function Header({
                 <Link className={getLinkStyles()} href="/tickets">
                   My Tickets
                 </Link>
-                <Link className={getLinkStyles()} href="/profile">
-                  Profile
+                {/* Profile Section - Username + Avatar or Default */}
+                <Link
+                  className={`${getLinkStyles()} flex items-center space-x-2`}
+                  href="/profile"
+                >
+                  {userAvatar ? (
+                    <img
+                      src={userAvatar}
+                      alt="User Avatar"
+                      className="w-8 h-8 rounded-full border-2 border-gray-300 hover:border-blue-500 transition-colors"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center hover:bg-gray-300 transition-colors">
+                      <User className="w-4 h-4 text-gray-600" />
+                    </div>
+                  )}
+                  <span className="max-w-24 truncate">
+                    {username || "Profile"}
+                  </span>
                 </Link>
               </>
             )}
@@ -161,17 +181,6 @@ export default function Header({
                     {notifications > 9 ? "9+" : notifications}
                   </span>
                 </button>
-              </div>
-            )}
-
-            {/* User Avatar */}
-            {userAvatar && (
-              <div className="relative">
-                <img
-                  src={userAvatar}
-                  alt="User Avatar"
-                  className="w-10 h-10 rounded-full border-2 border-gray-300 hover:border-blue-500 transition-colors cursor-pointer"
-                />
               </div>
             )}
           </nav>
@@ -238,35 +247,38 @@ export default function Header({
                 >
                   My Tickets
                 </Link>
+                {/* Mobile Profile Section - Username + Avatar or Default */}
                 <Link
-                  className={`${getLinkStyles()} px-2 py-1`}
+                  className={`${getLinkStyles()} px-2 py-1 flex items-center space-x-2`}
                   href="/profile"
                 >
-                  Profile
+                  {userAvatar ? (
+                    <img
+                      src={userAvatar}
+                      alt="User Avatar"
+                      className="w-6 h-6 rounded-full border-2 border-gray-300"
+                    />
+                  ) : (
+                    <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
+                      <User className="w-3 h-3 text-gray-600" />
+                    </div>
+                  )}
+                  <span>{username || "Profile"}</span>
                 </Link>
               </>
             )}
 
-            {/* Mobile User Section */}
-            {(userAvatar || notifications > 0) && (
+            {/* Mobile User Section - Only show notifications if no username/avatar in nav */}
+            {notifications > 0 && !(username || userAvatar) && (
               <div className="flex items-center justify-between px-2 pt-3 border-t border-gray-200/20 mt-3">
-                {userAvatar && (
-                  <img
-                    src={userAvatar}
-                    alt="User Avatar"
-                    className="w-8 h-8 rounded-full border-2 border-gray-300"
-                  />
-                )}
-                {notifications > 0 && (
-                  <div className="flex items-center space-x-2">
-                    <span className={`text-sm ${getTextStyles()}`}>
-                      Notifications
-                    </span>
-                    <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                      {notifications > 9 ? "9+" : notifications}
-                    </span>
-                  </div>
-                )}
+                <div className="flex items-center space-x-2">
+                  <span className={`text-sm ${getTextStyles()}`}>
+                    Notifications
+                  </span>
+                  <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                    {notifications > 9 ? "9+" : notifications}
+                  </span>
+                </div>
               </div>
             )}
           </nav>

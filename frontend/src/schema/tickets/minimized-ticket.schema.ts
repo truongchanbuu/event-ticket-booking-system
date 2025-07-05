@@ -7,6 +7,7 @@ export const MinimizedTicket = z.object({
   price: z.number().nonnegative(),
   serviceFee: z.number().default(0),
   remaining: z.number().int().nonnegative(),
+  maxPerPerson: z.number().int().nonnegative().default(1),
   qrCode: z.string(),
 });
 
