@@ -16,13 +16,13 @@ import {
   FileText,
 } from "lucide-react";
 import TicketSelector from "@/components/ticket/ticket-selector";
-import EventCategories from "@/components/event/event-categories";
+import EventCategories from "@/components/events/event-categories";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import type { EventType, Organizer, MinimizedTicketType } from "@/schema";
+import type { EventType, Organizer } from "@/schema";
 import { mockEvent } from "@/schema/events/events.mock";
 import { mockOrganizer } from "@/schema/user/organizer.mock";
-import EventThumbnail from "@/components/event/event-thumb";
+import EventThumbnail from "@/components/events/event-thumb";
 import { formatDate, formatTime } from "@/lib/utils";
 import { useParams } from "next/navigation";
 import Link from "next/link";

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { OrganizerStatusEnum } from "../enums/organizer-status";
 import { UserSchema } from "./user.schema";
+import { CategorySchema } from "../events/category.schema";
 
 export const OrganizerUserSchema = UserSchema.extend({
   organizerId: z.string(),
@@ -12,6 +13,7 @@ export const OrganizerUserSchema = UserSchema.extend({
   organizerStatus: OrganizerStatusEnum,
   followersCount: z.number().default(0),
   eventsCount: z.number().default(0),
+  categories: z.array(CategorySchema).default([]),
 });
 
 export type Organizer = z.infer<typeof OrganizerUserSchema>;

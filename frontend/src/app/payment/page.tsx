@@ -34,8 +34,8 @@ import {
 } from "lucide-react";
 
 import PaymentHelper from "@/lib/payment/PaymentHelper";
-import EventThumbnail from "@/components/event/event-thumb";
-import EventNotFound from "@/components/event/event-not-found";
+import EventThumbnail from "@/components/events/event-thumb";
+import EventNotFound from "@/components/events/event-not-found";
 import { TicketQuantity } from "@/schema/tickets/ticket-quantity.schema";
 import { Timestamp } from "firebase/firestore";
 import { usePaymenntCustomerForm } from "@/hooks/use-payment-customer-form";
@@ -43,7 +43,7 @@ import { PaymentCustomerFormInfo } from "@/schema/payments/payment-customer-form
 import PaymentCustomerInfo from "@/components/payment/custom-info-card";
 import { APP_NAME, REDIRECT_TIME } from "@/constants/app";
 import { EventWithTicketTypes, MinimizedTicketType } from "@/schema";
-import EVENT_STATUS from "@/schema/enums/enum-status";
+import EVENT_STATUS from "@/schema/enums/event-status";
 
 export default function PaymentPage() {
   const [, setLocation] = useLocation();

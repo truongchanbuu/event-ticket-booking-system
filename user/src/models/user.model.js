@@ -12,6 +12,8 @@ export default {
         role: ROLE,
         photoUrl: String,
         birthday: Date,
+        emailVerified: Boolean,
+        phoneNumberVerified: Boolean,
         followedOrganizers: [], // subcollection
         preferenceCategories: [], // string array
         notificationReferences: [], // notification ids

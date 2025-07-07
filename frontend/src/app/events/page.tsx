@@ -4,9 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import EventCard from "@/components/event/event-card";
-import EventFilterBar from "@/components/event/event-filter-bar";
-import EventLoadingSkeleton from "@/components/event/event-loading-skeleton";
+import EventCard from "@/components/events/event-card";
+import EventFilterBar from "@/components/events/event-filter-bar";
+import EventLoadingSkeleton from "@/components/events/event-loading-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { EventType, Organizer, EventFilters } from "@/schema";
 import { mockEvents } from "@/schema/events/events.mock";
@@ -225,11 +225,13 @@ export default function EventsPage() {
               >
                 <Avatar className="h-12 w-12">
                   <AvatarImage src={organizer.photoUrl} />
-                  <AvatarFallback>{organizer.name.charAt(0)}</AvatarFallback>
+                  <AvatarFallback>
+                    {organizer.username.charAt(0)}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="flex-1">
                   <h4 className="font-medium text-gray-900">
-                    {organizer.name}
+                    {organizer.username}
                   </h4>
                   <p className="text-sm text-gray-600">
                     {organizer.followersCount} followers

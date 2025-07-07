@@ -7,7 +7,7 @@ import type { EventType } from "@/schema/index";
 import Link from "next/link";
 import EventThumbnail from "./event-thumb";
 import EventCategories from "./event-categories";
-import EVENT_STATUS from "@/schema/enums/enum-status";
+import EVENT_STATUS from "@/schema/enums/event-status";
 
 interface EventCardProps {
   event: EventType;
@@ -27,7 +27,7 @@ export default function EventCard({
   const firstTicketPrice = ticketTypes.length > 0 ? ticketTypes[0].price : 0;
 
   return (
-    <Link href={`/event/${event.eventID}`}>
+    <Link href={`/events/${event.eventID}`}>
       <Card className="overflow-hidden hover:shadow-lg transition-shadow duration-300 cursor-pointer group">
         <div className="relative">
           <EventThumbnail

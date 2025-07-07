@@ -1,8 +1,8 @@
-import { EventType, MinimizedEvent, MinimizedTicketType } from "@/schema";
+import { EventType, MinimizedEvent, TicketType } from "@/schema";
 import { Customer, Purchase, PurchaseItem } from "@/schema/booking";
 
 export type EventWithTicketTypes = EventType & {
-  ticketTypes: MinimizedTicketType[];
+  ticketTypes: TicketType[];
 };
 
 export type PurchaseWithDetails = Purchase & {

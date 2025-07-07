@@ -22,54 +22,86 @@ import QRCode from "react-qr-code";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@headlessui/react";
 import { PurchaseItem } from "@/schema/booking";
-import { PurchaseWithDetails, timestampSchema } from "@/schema";
+import { PurchaseWithDetails, TICKET_STATUS, timestampSchema } from "@/schema";
 import PAYMENT_STATUS from "@/schema/enums/payment-status";
+import PAYMENT_METHODS from "@/schema/enums/payment-method";
 
 // Mock data
-const mockPurchaseWithDetails: PurchaseWithDetails = {
-  id: "purchase_001",
-  userId: "user_abc",
-  eventId: "event_xyz",
-  totalPrice: 200,
+const mockPurchasesWithDetails: PurchaseWithDetails = {
+  id: "purchase-001",
+  userId: "user-123",
+  eventId: "event-001",
+  eventName: "Summer Music Festival 2024",
+  totalPrice: 375,
   paymentStatus: PAYMENT_STATUS.SUCCESS,
-  paymentUrl: "https://example.com/qrcode/purchase_001",
-
-  customer: {
-    name: "Alice Example",
-    email: "alice@example.com",
-    phone: "+84123456789",
-    dateOfBirth: "2000-05-20",
-  },
+  paymentMethod: PAYMENT_METHODS.MOMO,
+  paymentUrl: "https://payment.example.com/purchase-001",
+  createdAt: Timestamp.fromDate(new Date("2024-12-15T10:30:00Z")),
+  updatedAt: Timestamp.fromDate(new Date("2024-12-15T10:35:00Z")),
 
   event: {
-    eventID: "event_xyz",
+    eventID: "event-001",
     eventTitle: "Summer Music Festival 2024",
     thumbnails: [
       "https://images.unsplash.com/photo-1504674900247-0877df9cc836",
       "https://images.unsplash.com/photo-1529156069898-49953e39b3ac",
     ],
-    location: "Ho Chi Minh City, Vietnam",
-    startTime: Timestamp.fromDate(new Date()),
+    location: "Ho Chi Minh City",
+    startTime: Timestamp.fromDate(new Date("2024-12-20T18:00:00Z")),
   },
 
   items: [
     {
-      purchaseId: "1",
-      ticketTypeId: "1",
-      ticketTypeName: "VIP",
-      quantity: 10,
-      unitPrice: 50,
-      serviceFee: 5,
-      qrCode: "qr_123",
+      purchaseId: "purchase-001",
+      ticketTypeId: "vip-001",
+      ticketTypeName: "VIP Ticket",
+      quantity: 2,
+      unitPrice: 150,
+      serviceFee: 10,
     },
     {
-      purchaseId: "1",
-      ticketTypeId: "2",
-      ticketTypeName: "Standard",
+      purchaseId: "purchase-001",
+      ticketTypeId: "std-001",
+      ticketTypeName: "Standard Ticket",
       quantity: 1,
-      unitPrice: 100,
-      serviceFee: 10,
-      qrCode: "qr_3333",
+      unitPrice: 75,
+      serviceFee: 5,
+    },
+  ],
+
+  tickets: [
+    {
+      ticketId: "ticket-001-vip-1",
+      purchaseId: "purchase-001",
+      eventId: "event-001",
+      userId: "user-123",
+      ticketTypeId: "vip-001",
+      ticketTypeName: "VIP Ticket",
+      qrCode: "qrcode-vip-1",
+      status: TICKET_STATUS.ACTIVE,
+      issuedAt: Timestamp.fromDate(new Date()),
+    },
+    {
+      ticketId: "ticket-001-vip-2",
+      purchaseId: "purchase-001",
+      eventId: "event-001",
+      userId: "user-123",
+      ticketTypeId: "vip-001",
+      ticketTypeName: "VIP Ticket",
+      qrCode: "qrcode-vip-2",
+      status: TICKET_STATUS.ACTIVE,
+      issuedAt: Timestamp.fromDate(new Date()),
+    },
+    {
+      ticketId: "ticket-001-std-1",
+      purchaseId: "purchase-001",
+      eventId: "event-001",
+      userId: "user-123",
+      ticketTypeId: "std-001",
+      ticketTypeName: "Standard Ticket",
+      qrCode: "qrcode-std-1",
+      status: TICKET_STATUS.ACTIVE,
+      issuedAt: Timestamp.fromDate(new Date()),
     },
   ],
 };
@@ -88,7 +120,7 @@ function GoBackHomeButton(
 
 const INITIAL_TICKETS_SHOW = 6;
 export default function SuccessPage() {
-  const purchase: PurchaseWithDetails = mockPurchaseWithDetails;
+  const purchase: PurchaseWithDetails = mockPurchasesWithDetails;
   const router = useRouter();
   // TODO: Open when production
   // const { purchaseId } = useParams();
@@ -99,7 +131,9 @@ export default function SuccessPage() {
   const [isReviewOpen, setIsReviewOpen] = useState(false);
 
   const goHome = () => router.replace("/");
-  const tickets = mockPurchaseWithDetails.items;
+
+  // Use tickets from purchase.tickets instead of purchase.items
+  const tickets = mockPurchasesWithDetails.tickets;
 
   if (!tickets || tickets.length === 0) {
     return (
@@ -127,7 +161,7 @@ export default function SuccessPage() {
   // const { data: purchase, isLoading } = useQuery<PurchaseWithDetails>({
   //   queryKey: [`/api/purchases/${purchaseId}`],
   //   queryFn: (): Promise<PurchaseWithDetails> =>
-  //     Promise.resolve(mockPurchaseWithDetails),
+  //     Promise.resolve(mockPurchasesWithDetails),
   //   enabled: Boolean(purchaseId),
   // });
   // useEffect(() => {
@@ -148,7 +182,7 @@ export default function SuccessPage() {
     if (selectedTickets.length === tickets.length) {
       setSelectedTickets([]);
     } else {
-      setSelectedTickets(tickets.map((t) => t.ticketTypeId));
+      setSelectedTickets(tickets.map((t) => t.ticketId));
     }
   };
 
@@ -172,7 +206,7 @@ export default function SuccessPage() {
                   Payment Successfully!
                 </h2>
                 <p className="text-gray-600">
-                  You paid {tickets.length} tickets
+                  You paid {tickets.length} tickets for{" "}
                   <span className="font-semibold">
                     {purchase.event.eventTitle}
                   </span>
@@ -277,23 +311,23 @@ export default function SuccessPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {displayedTickets.map((ticket, index) => (
                 <Card
-                  key={ticket.ticketTypeId}
+                  key={ticket.ticketId}
                   className={`overflow-hidden transition-all duration-200 border-2 ${
-                    selectedTickets.includes(ticket.ticketTypeId)
+                    selectedTickets.includes(ticket.ticketId)
                       ? "border-blue-600 ring-2 ring-blue-200 bg-blue-50 shadow-xl"
                       : "border-gray-200 hover:border-blue-400"
                   }`}
                 >
                   <label
-                    htmlFor={`select-ticket-${ticket.ticketTypeId}`}
+                    htmlFor={`select-ticket-${ticket.ticketId}`}
                     className="block cursor-pointer"
                   >
                     <CardContent className="p-0">
                       <input
                         type="checkbox"
-                        checked={selectedTickets.includes(ticket.ticketTypeId)}
-                        onChange={() => handleSelectTicket(ticket.ticketTypeId)}
-                        id={`select-ticket-${ticket.ticketTypeId}`}
+                        checked={selectedTickets.includes(ticket.ticketId)}
+                        onChange={() => handleSelectTicket(ticket.ticketId)}
+                        id={`select-ticket-${ticket.ticketId}`}
                         className="sr-only peer"
                       />
 
@@ -310,10 +344,11 @@ export default function SuccessPage() {
                           </div>
                           <div className="text-right">
                             <div className="text-lg font-bold">
-                              {formatCurrency(ticket.unitPrice)}
+                              {formatCurrency(50)}{" "}
+                              {/* Default price for demo */}
                             </div>
                             <div className="text-xs text-blue-100">
-                              + {formatCurrency(ticket.serviceFee)} service fee
+                              + {formatCurrency(5)} service fee
                             </div>
                           </div>
                         </div>
@@ -329,7 +364,7 @@ export default function SuccessPage() {
 
                         <div className="space-y-2">
                           <div className="text-xs font-mono text-gray-600 bg-gray-50 px-2 py-1 rounded">
-                            Ticket Code: {ticket.ticketTypeId}
+                            Ticket Code: {ticket.ticketId}
                           </div>
                           <p className="text-xs text-gray-500">
                             Please show this QR code at entry gate
@@ -341,14 +376,14 @@ export default function SuccessPage() {
                       <div className="flex items-center gap-2 px-4 pb-4">
                         <div
                           className={`relative w-5 h-5 border-2 rounded-md transition-colors duration-200 ${
-                            selectedTickets.includes(ticket.ticketTypeId)
+                            selectedTickets.includes(ticket.ticketId)
                               ? "bg-blue-600 border-blue-600"
                               : "bg-white border-gray-300 hover:border-blue-400"
                           }`}
                         >
                           <Check
                             className={`absolute inset-0 w-3 h-3 m-auto text-white transition-opacity duration-200 ${
-                              selectedTickets.includes(ticket.ticketTypeId)
+                              selectedTickets.includes(ticket.ticketId)
                                 ? "opacity-100"
                                 : "opacity-0"
                             }`}
@@ -390,16 +425,14 @@ export default function SuccessPage() {
           <div style={{ display: "none" }}>
             <div className="print-tickets-container">
               {tickets
-                .filter((ticket) =>
-                  selectedTickets.includes(ticket.ticketTypeId)
-                )
+                .filter((ticket) => selectedTickets.includes(ticket.ticketId))
                 .map((ticket, idx) => {
                   const ticketRef = React.createRef<HTMLDivElement>();
                   return (
                     <div
-                      key={ticket.ticketTypeId}
+                      key={ticket.ticketId}
                       ref={ticketRef}
-                      id={`ticket-print-${ticket.ticketTypeId}`}
+                      id={`ticket-print-${ticket.ticketId}`}
                       className="ticket-print bg-white shadow-lg rounded-lg overflow-hidden w-full max-w-lg mx-auto mb-8 border-2 border-dashed border-gray-300 min-h-96 relative"
                       style={{ pageBreakAfter: "always" }}
                     >
@@ -481,7 +514,7 @@ export default function SuccessPage() {
                               TICKET CODE
                             </div>
                             <div className="font-mono text-sm font-bold text-gray-700 bg-yellow-100 px-3 py-1 rounded-full inline-block">
-                              {ticket.ticketTypeId}
+                              {ticket.ticketId}
                             </div>
                           </div>
                         </div>
@@ -613,13 +646,11 @@ export default function SuccessPage() {
             <div className="max-h-[60vh] overflow-y-auto space-y-6 print:max-h-none print:overflow-visible print:space-y-0 print:block print:w-full print:static">
               {(reviewType === "all"
                 ? tickets
-                : tickets.filter((t) =>
-                    selectedTickets.includes(t.ticketTypeId)
-                  )
+                : tickets.filter((t) => selectedTickets.includes(t.ticketId))
               ).map((ticket) => (
                 <div
-                  key={ticket.ticketTypeId}
-                  id={`review-ticket-${ticket.ticketTypeId}`}
+                  key={ticket.ticketId}
+                  id={`review-ticket-${ticket.ticketId}`}
                   className="bg-white shadow rounded-lg border border-gray-200 p-4 relative print:shadow-none print:rounded-none print:border print:border-gray-200 print:p-4 print:mb-8 print:static"
                   style={{ pageBreakAfter: "always" }}
                 >
@@ -687,7 +718,7 @@ export default function SuccessPage() {
                           TICKET CODE
                         </div>
                         <div className="font-mono text-xs font-bold text-gray-700 bg-yellow-100 px-2 py-1 rounded-full inline-block print:text-[10px] print:px-1 print:py-0.5 print:rounded-none print:static">
-                          {ticket.ticketTypeId}
+                          {ticket.ticketId}
                         </div>
                       </div>
                     </div>

@@ -1,1 +1,2 @@
-export * from "./minimized-ticket.schema";
+export * from "./ticket-type";
+export * from "./ticket.schema";

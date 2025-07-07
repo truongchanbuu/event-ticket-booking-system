@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import {
   Check,
   CheckCircle,
-  CheckIcon,
   Clock,
   FileText,
   Info,
@@ -13,12 +12,14 @@ import {
   X,
 } from "lucide-react";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
-import { PaymentStatus } from "@/schema/payments/payment.schema";
+import { PAYMENT_STATUS, PaymentStatus, PaymentStatusEnum } from "@/schema";
 
 const MoMoPaymentDemo = () => {
   const [paymentData, setPaymentData] = useState(null);
   const [qrCode, setQrCode] = useState("");
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("pending");
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>(
+    PAYMENT_STATUS.PENDING
+  );
   const [loading, setLoading] = useState(false);
 
   // Mock data từ backend
@@ -50,36 +51,17 @@ const MoMoPaymentDemo = () => {
     }, 1500);
   };
 
-  // Simulate kiểm tra trạng thái thanh toán
-  const simulatePaymentStatusCheck = () => {
-    const statuses = ["pending", "awaiting", "success", "failed"];
-    let currentIndex = 0;
-
-    const interval = setInterval(() => {
-      currentIndex = (currentIndex + 1) % statuses.length;
-      setPaymentStatus(statuses[currentIndex]);
-
-      // Dừng khi thành công hoặc thất bại
-      if (
-        statuses[currentIndex] === "success" ||
-        statuses[currentIndex] === "failed"
-      ) {
-        clearInterval(interval);
-      }
-    }, 3000);
-  };
-
   useEffect(() => {
     fetchPaymentData();
   }, []);
 
   const getStatusColor = () => {
     switch (paymentStatus) {
-      case "success":
+      case PAYMENT_STATUS.SUCCESS:
         return "text-green-600 bg-green-50 border-green-200";
-      case "failed":
+      case PAYMENT_STATUS.FAILED:
         return "text-red-600 bg-red-50 border-red-200";
-      case "awaiting":
+      case PAYMENT_STATUS.PENDING:
         return "text-blue-600 bg-blue-50 border-blue-200";
       default:
         return "text-gray-600 bg-gray-50 border-gray-200";
@@ -88,11 +70,11 @@ const MoMoPaymentDemo = () => {
 
   const getStatusText = () => {
     switch (paymentStatus) {
-      case "success":
+      case PAYMENT_STATUS.SUCCESS:
         return "Payment Successfully!";
-      case "failed":
+      case PAYMENT_STATUS.FAILED:
         return "Payment Failed";
-      case "awaiting":
+      case PAYMENT_STATUS.PENDING:
         return "Payment Loading...";
       default:
         return "QR Scanning...";
@@ -101,11 +83,11 @@ const MoMoPaymentDemo = () => {
 
   const getStatusIcon = () => {
     switch (paymentStatus) {
-      case "success":
+      case PAYMENT_STATUS.SUCCESS:
         return <Check className="w-5 h-5 text-current" />;
-      case "failed":
+      case PAYMENT_STATUS.FAILED:
         return <X className="w-5 h-5 text-current" />;
-      case "awaiting":
+      case PAYMENT_STATUS.PENDING:
         return <Loader2 className="w-5 h-5 animate-spin text-current" />;
       default:
         return <Clock className="w-5 h-5 text-current" />;
@@ -167,7 +149,7 @@ const MoMoPaymentDemo = () => {
                     </button>
                   </div>
                   <button
-                    onClick={simulatePaymentStatusCheck}
+                    onClick={() => {}}
                     className="flex-1 bg-gray-100 text-gray-700 py-3 px-6 rounded-lg font-semibold hover:bg-gray-200 transition-colors"
                   >
                     Demo trạng thái

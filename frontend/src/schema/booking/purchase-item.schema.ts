@@ -7,7 +7,6 @@ export const PurchaseItemSchema = z.object({
   serviceFee: z.number().default(0),
   quantity: z.number(),
   unitPrice: z.number(),
-  qrCode: z.string(),
 });
 
 export type PurchaseItem = z.infer<typeof PurchaseItemSchema>;

@@ -6,7 +6,7 @@ const EVENT_STATUS = {
   SOLD_OUT: "sold_out",
   ONGOING: "on_going",
   ENDED: "ended",
-  ARCHIVED: "achieved",
+  ARCHIVED: "archived",
 };
 
 export default EVENT_STATUS;

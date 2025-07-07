@@ -1,6 +1,6 @@
 import { optional, z } from "zod";
 
-export const MinimizedTicket = z.object({
+export const TicketTypeSchema = z.object({
   typeID: z.string(),
   name: z.string(),
   description: z.string(),
@@ -8,7 +8,6 @@ export const MinimizedTicket = z.object({
   serviceFee: z.number().default(0),
   remaining: z.number().int().nonnegative(),
   maxPerPerson: z.number().int().nonnegative().default(1),
-  qrCode: z.string(),
 });
 
-export type MinimizedTicketType = z.infer<typeof MinimizedTicket>;
+export type TicketType = z.infer<typeof TicketTypeSchema>;

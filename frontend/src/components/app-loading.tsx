@@ -1,6 +1,14 @@
 import React from "react";
 
-const LoadingPage = () => {
+interface LoadingPageProps {
+  message?: string;
+  subMessage?: string;
+}
+
+const LoadingPage = ({
+  message = "Finding the best events for you...",
+  subMessage = "Loading your journey...",
+}: LoadingPageProps) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
       <div className="text-center">
@@ -72,15 +80,13 @@ const LoadingPage = () => {
 
         {/* Loading Text */}
         <div className="text-gray-600 font-medium">
-          <div className="animate-pulse">
-            Finding the best events for you...
-          </div>
+          <div className="animate-pulse">{message}</div>
         </div>
 
         {/* Status Messages */}
         <div className="mt-6 text-sm text-gray-500">
           <div className="animate-fade-in-out">
-            <span>Loading your journey...</span>
+            <span>{subMessage}</span>
           </div>
         </div>
       </div>

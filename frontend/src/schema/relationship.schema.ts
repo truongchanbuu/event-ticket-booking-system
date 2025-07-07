@@ -1,13 +1,13 @@
 import { Customer, PurchaseItem, Purchase } from "./booking";
 import { EventType, MinimizedEvent } from "./events";
-import { MinimizedTicketType } from "./tickets";
+import { TicketType } from "./tickets";
 
 export type EventWithTicketTypes = EventType & {
-  ticketTypes: MinimizedTicketType[];
+  ticketTypes: TicketType[];
 };
 
 export type PurchaseWithDetails = Purchase & {
-  customer: Customer;
+  customer?: Customer;
   event: MinimizedEvent;
   items: PurchaseItem[];
 };
