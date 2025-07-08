@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { useUser } from "@/hooks/use-user";
 
 type HeaderProps = {
   showTabs?: boolean;
@@ -30,6 +31,7 @@ export default function Header({
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const pathname = usePathname();
   const { user, loading } = useAuth();
+  const { userProfile } = useUser();
 
   const handleSignOut = async () => {
     try {
@@ -237,6 +239,20 @@ export default function Header({
                 >
                   My Tickets
                 </Link>
+                <Link
+                  className={getLinkStyles(pathname === "/payment/history")}
+                  href="/payment/history"
+                >
+                  Payment History
+                </Link>
+                {userProfile?.role === "organizer" && (
+                  <Link
+                    className={getLinkStyles(pathname === "/profile/my-events")}
+                    href="/profile/my-events"
+                  >
+                    My Events
+                  </Link>
+                )}
 
                 {/* Notifications */}
                 {notifications > 0 && (
@@ -318,10 +334,13 @@ export default function Header({
                   Events
                 </Link>
                 <div className="flex items-center space-x-3">
-                  <Link href="/auth" className={getSecondaryButtonStyles()}>
+                  <Link
+                    href="/auth?mode=signup"
+                    className={getSecondaryButtonStyles()}
+                  >
                     Sign Up
                   </Link>
-                  <Link href="/auth" className={getButtonStyles()}>
+                  <Link href="/auth?mode=signin" className={getButtonStyles()}>
                     Login
                   </Link>
                 </div>
@@ -396,6 +415,22 @@ export default function Header({
                 >
                   My Tickets
                 </Link>
+                <Link
+                  className={`${getLinkStyles(pathname === "/payment/history")} px-2 py-1`}
+                  href="/payment/history"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Payment History
+                </Link>
+                {userProfile?.role === "organizer" && (
+                  <Link
+                    className={`${getLinkStyles(pathname === "/profile/my-events")} px-2 py-1`}
+                    href="/profile/my-events"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    My Events
+                  </Link>
+                )}
 
                 {/* Mobile User Profile Section */}
                 <div className="px-2 py-2 border-t border-gray-200/20">
@@ -480,13 +515,13 @@ export default function Header({
                 </Link>
                 <div className="flex flex-col space-y-3 pt-3 border-t border-gray-200/20">
                   <Link
-                    href="/unauthorized"
+                    href="/auth?mode=signup"
                     className={`${getSecondaryButtonStyles()} text-center`}
                   >
                     Sign Up
                   </Link>
                   <Link
-                    href="/unauthorized"
+                    href="/auth?mode=signin"
                     className={`${getButtonStyles()} text-center`}
                   >
                     Login

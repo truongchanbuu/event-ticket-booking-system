@@ -8,8 +8,8 @@ export type OrganizerType = "personal" | "business";
 interface ApplyOrganizerFormProps {
   onSubmit: (data: {
     type: OrganizerType;
-    cccdFront: File;
-    cccdBack: File;
+    identityCardFront: File;
+    identityCardBack: File;
     businessLicense?: File;
     eventLicense?: File;
   }) => void | Promise<void>;
@@ -23,8 +23,12 @@ export const ApplyOrganizerForm: React.FC<ApplyOrganizerFormProps> = ({
   defaultType = "personal",
 }) => {
   const [type, setType] = React.useState<OrganizerType>(defaultType);
-  const [cccdFront, setCccdFront] = React.useState<File | null>(null);
-  const [cccdBack, setCccdBack] = React.useState<File | null>(null);
+  const [identityCardFront, setIdentityCardFront] = React.useState<File | null>(
+    null
+  );
+  const [identityCardBack, setIdentityCardBack] = React.useState<File | null>(
+    null
+  );
   const [businessLicense, setBusinessLicense] = React.useState<File | null>(
     null
   );
@@ -33,19 +37,19 @@ export const ApplyOrganizerForm: React.FC<ApplyOrganizerFormProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cccdFront || !cccdBack) {
-      setError("Vui lòng upload đủ ảnh CCCD mặt trước và mặt sau.");
+    if (!identityCardFront || !identityCardBack) {
+      setError("Please upload both front and back of your Identity Card.");
       return;
     }
     if (type === "business" && !businessLicense) {
-      setError("Vui lòng upload Giấy phép Kinh doanh.");
+      setError("Please upload business license.");
       return;
     }
     setError(null);
     onSubmit({
       type,
-      cccdFront,
-      cccdBack,
+      identityCardFront,
+      identityCardBack,
       businessLicense: type === "business" ? businessLicense! : undefined,
       eventLicense: eventLicense || undefined,
     });
@@ -60,7 +64,7 @@ export const ApplyOrganizerForm: React.FC<ApplyOrganizerFormProps> = ({
     >
       <div>
         <label className="block font-medium mb-2">
-          Loại tổ chức <span className="text-red-500">*</span>
+          Type of organization <span className="text-red-500">*</span>
         </label>
         <div className="flex gap-6">
           <label className="flex items-center gap-2 cursor-pointer">
@@ -72,7 +76,7 @@ export const ApplyOrganizerForm: React.FC<ApplyOrganizerFormProps> = ({
               onChange={() => setType("personal")}
               className="accent-blue-500"
             />
-            Cá nhân
+            Personal
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
@@ -83,32 +87,32 @@ export const ApplyOrganizerForm: React.FC<ApplyOrganizerFormProps> = ({
               onChange={() => setType("business")}
               className="accent-blue-500"
             />
-            Doanh nghiệp
+            Business
           </label>
         </div>
       </div>
       <DocumentUploader
-        label="Ảnh CCCD mặt trước"
+        label="Front of your Identity Card"
         required
-        value={cccdFront}
-        onChange={setCccdFront}
+        value={identityCardFront}
+        onChange={setIdentityCardFront}
       />
       <DocumentUploader
-        label="Ảnh CCCD mặt sau"
+        label="Back of your Identity Card"
         required
-        value={cccdBack}
-        onChange={setCccdBack}
+        value={identityCardBack}
+        onChange={setIdentityCardBack}
       />
       {type === "business" && (
         <DocumentUploader
-          label="Giấy phép Kinh doanh"
+          label="Business License"
           required
           value={businessLicense}
           onChange={setBusinessLicense}
         />
       )}
       <DocumentUploader
-        label="Giấy phép tổ chức sự kiện (không bắt buộc)"
+        label="Event organization permit (optional)"
         value={eventLicense}
         onChange={setEventLicense}
       />
@@ -119,7 +123,7 @@ export const ApplyOrganizerForm: React.FC<ApplyOrganizerFormProps> = ({
         className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-60"
       >
         {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-        Gửi đăng ký
+        Submit
       </button>
     </motion.form>
   );

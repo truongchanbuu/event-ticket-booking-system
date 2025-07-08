@@ -3,9 +3,10 @@ import {
     APPLY_STATUS,
     ERROR_CODE,
     ORGANIZER_STATUS,
+    db,
+    FieldValue,
 } from "@event_ticket_booking_system/shared";
 import { USER_STATUS } from "../enums/user_status.enum.js";
-import { db, serverTimestamp } from "../firebase-emulator.js";
 
 const ORG_APPLICATION_COLLECTION = "orgApplications";
 const USER_COLLECTION = "users";
@@ -305,7 +306,7 @@ export default class UserService {
                 : APPLY_STATUS.PENDING,
             requiresAdminApproval: adminApprovalCheck.requiresAdminApproval,
             rejectCount: adminApprovalCheck.rejectCount || 0,
-            createdAt: serverTimestamp,
+            createdAt: FieldValue.serverTimestamp(),
         };
 
         const batch = db.batch();
@@ -313,7 +314,7 @@ export default class UserService {
         batch.set(this.orgCollection.doc(applicationID), newApplication);
         batch.update(this.userCollection.doc(userID), {
             organizerStatus: ORGANIZER_STATUS.PENDING,
-            updatedAt: serverTimestamp,
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         await batch.commit();
@@ -376,7 +377,7 @@ export default class UserService {
                     ...updateData.kycInfo?.business,
                 },
             },
-            updatedAt: serverTimestamp,
+            updatedAt: FieldValue.serverTimestamp(),
         };
 
         if (!isAdmin) {
@@ -422,8 +423,11 @@ export default class UserService {
     ) {
         const updateData = {
             status,
-            updatedAt: serverTimestamp,
-            ...(reviewedBy && { reviewedBy, reviewedAt: serverTimestamp }),
+            updatedAt: FieldValue.serverTimestamp(),
+            ...(reviewedBy && {
+                reviewedBy,
+                reviewedAt: FieldValue.serverTimestamp(),
+            }),
             ...(rejectionReason && { rejectionReason }),
         };
 
@@ -451,7 +455,7 @@ export default class UserService {
 
         await this.userCollection.doc(userID).update({
             organizerStatus: userOrganizerStatus,
-            updatedAt: serverTimestamp,
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return { success: true, applicationID, status };

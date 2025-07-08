@@ -2,9 +2,9 @@ import {
     APPLICATION_EVENT,
     EVENT_TYPES,
 } from "@event_ticket_booking_system/shared";
-import { createTopicSender } from "@event_ticket_booking_system/shared/kafka/kafka.js";
+import { KafkaManager } from "@event_ticket_booking_system/shared/kafka/kafka.js";
 
-const sendApplicationEvent = createTopicSender(
+const sendApplicationEvent = KafkaManager.createTopicSender(
     APPLICATION_EVENT,
     "APPLICATION_EVENT",
     "user-service",

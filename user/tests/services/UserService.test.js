@@ -1,4 +1,3 @@
-import { db } from "../../src/firebase-emulator.js";
 import request from "supertest";
 import createApp from "../../src/app.js";
 import { seedUsers } from "../../scripts/seeds.js";

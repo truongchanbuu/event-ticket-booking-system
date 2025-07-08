@@ -14,6 +14,7 @@ export * from "./kafka/index.js";
 export {
   admin,
   db,
+  auth,
   FieldValue,
   checkAdmin,
   checkOwnerOrAdmin,

@@ -1,4 +1,5 @@
 const APPLY_STATUS = {
+  NONE: "none",
   PENDING: "pending",
   PROCESSING: "processing",
   PENDING_ADMIN: "pending_admin",

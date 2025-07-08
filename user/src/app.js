@@ -16,14 +16,25 @@ export default async function createApp() {
     // Test Config: Custom when production
     if (ENV.NODE_ENV == "development") app.use(cors());
 
+    // Add logging middleware
+    app.use((req, res, next) => {
+        console.log(
+            `📨 ${req.method} ${req.url} - ${new Date().toISOString()}`,
+        );
+        next();
+    });
+
     app.use(express.json());
     app.use(checkJson);
 
     app.use(scopePerRequest(container));
 
     const userRoutes = container.resolve("userRoutes");
-    app.use("/", userRoutes.userRouter);
-    app.use("/health", healthRouter);
+    const organizerRoutes = container.resolve("organizerRoutes");
+
+    app.use("/api", userRoutes.userRouter);
+    app.use("/api/organizers", organizerRoutes.organizerRouter);
+    app.use("/api/health", healthRouter);
     app.use((req, res, next) => {
         next(new AppError("Not Found", 404, ERROR_CODE.NOT_FOUND));
     });

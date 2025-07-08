@@ -78,19 +78,28 @@ export async function signInWithGoogle(userData?: Partial<CreateUserData>) {
     const result = await signInWithPopup(auth, provider);
 
     // Nếu có userData được cung cấp, lưu thông tin bổ sung
-    if (userData && result.user) {
+    if (result.user) {
       try {
+        const username =
+          userData?.username || result.user.displayName || `user`;
+
         const userDataForAPI = {
           ...userData,
           userID: result.user.uid,
           email: result.user.email,
-          createdAt: new Date(),
+          username,
+          photoUrl: result.user.photoURL,
+          emailVerified: result.user.emailVerified,
+          provider: "google.com",
         };
+
+        if (result.user.phoneNumber) {
+          userDataForAPI.phoneNumber = result.user.phoneNumber;
+        }
 
         await createUserAPI(userDataForAPI);
       } catch (error) {
         console.error("Failed to save additional user data:", error);
-        // Không throw error vì user đã đăng nhập thành công
       }
     }
 

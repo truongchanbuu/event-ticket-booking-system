@@ -1,58 +1,48 @@
-import { useState } from "react";
-import { UserService, UpdateUserData } from "@/services/user.service";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/app/providers/AuthProvider";
+import { UserService, UpdateUserData } from "@/services/user.service";
 
 export const useUser = () => {
-  const { userProfile, refreshUserProfile } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
+
+  const {
+    data: userProfile,
+    isLoading,
+    error,
+    refetch,
+    isFetching,
+  } = useQuery({
+    queryKey: ["userProfile", user?.uid],
+    queryFn: async () => {
+      if (!user) return null;
+      const profile = await UserService.getCurrentUserProfile();
+      return profile.data;
+    },
+    enabled: Boolean(user),
+    staleTime: 1000 * 60 * 5,
+    retry: 1,
+  });
 
   const updateProfile = async (userData: UpdateUserData) => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const result = await UserService.updateUserProfile(userData);
-      await refreshUserProfile();
-      return result;
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Failed to update profile";
-      setError(errorMessage);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
+    const result = await UserService.updateUserProfile(userData);
+    await refetch();
+    return result;
   };
 
   const deleteAccount = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const result = await UserService.deleteUserAccount();
-      return result;
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Failed to delete account";
-      setError(errorMessage);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
+    const result = await UserService.deleteUserAccount();
+    return result;
   };
 
-  const clearError = () => {
-    setError(null);
-  };
+  const clearError = () => {};
 
   return {
     userProfile,
-    loading,
+    loading: isLoading || isFetching,
     error,
     updateProfile,
     deleteAccount,
     clearError,
-    refreshUserProfile,
+    refreshUserProfile: refetch,
   };
 };

@@ -1,5 +1,3 @@
-import { db } from "../src/firebase-emulator";
-
 export async function seedUsers() {
     const now = new Date();
 

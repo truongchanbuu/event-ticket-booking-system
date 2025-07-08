@@ -6,6 +6,7 @@ import UserController from "../src/controllers/user.controller.js";
 import OrganizerController from "../src/controllers/organizer.controller.js";
 import OrganizerService from "../src/services/organizer.service.js";
 import UserRoutes from "../src/routes/user.routes.js";
+import OrganizerRoutes from "./routes/organizer.routes.js";
 
 const container = createContainer();
 
@@ -19,6 +20,7 @@ container.register({
     userController: asClass(UserController).singleton(),
     organizerController: asClass(OrganizerController).singleton(),
     userRoutes: asClass(UserRoutes).singleton(),
+    organizerRoutes: asClass(OrganizerRoutes).singleton(),
 });
 
 export default container;

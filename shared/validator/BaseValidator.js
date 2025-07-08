@@ -1,10 +1,10 @@
-import { validationResult } from "express-validator";
+import { validationResult, param, body } from "express-validator";
 import ERROR_CODE from "../error/error_code.js";
 import AppError from "../error/app_error.js";
 
 export default class BaseValidator {
   // Common
-  static validateEmail({ fieldName = "email", required = true }) {
+  static validateEmail({ fieldName = "email", required = true } = {}) {
     const chain = body(fieldName)
       .isString()
       .trim()
@@ -16,7 +16,7 @@ export default class BaseValidator {
       : [chain.optional()];
   }
 
-  static validateName({ fieldName = "username", required = true }) {
+  static validateName({ fieldName = "username", required = true } = {}) {
     const chain = body(fieldName)
       .isString()
       .notEmpty()
@@ -32,14 +32,14 @@ export default class BaseValidator {
 
   static validatePhoneNumber({
     fieldName = "phoneNumber",
-    optional = true,
+    required = false,
     locale = "vi-VN",
-  }) {
+  } = {}) {
     const chain = body(fieldName)
       .matches(/^(\+84|0)[3|5|7|8|9]\d{8}$/)
       .isMobilePhone(locale)
       .withMessage("Invalid phone number");
-    return optional ? [chain.optional()] : [chain];
+    return required ? [chain] : [chain.optional()];
   }
 
   static validateURL({
@@ -47,7 +47,7 @@ export default class BaseValidator {
     required = false,
     patterns = [], // e.g., ["facebook.com", "instagram.com"]
     label = null, // optional custom label for messages
-  }) {
+  } = {}) {
     const fieldLabel = label || fieldName;
 
     let chain = body(fieldName)
@@ -78,7 +78,7 @@ export default class BaseValidator {
     }
   }
 
-  static validateISODate({ fieldName, required = false }) {
+  static validateISODate({ fieldName, required = false } = {}) {
     const chain = body(fieldName)
       .isISO8601()
       .withMessage(`${fieldName} must be a valid ISO 8601 date`);
@@ -90,7 +90,7 @@ export default class BaseValidator {
       : [chain.optional()];
   }
 
-  static validateIDParam({ paramName = "id", label = "ID" }) {
+  static validateIDParam({ paramName = "id", label = "ID" } = {}) {
     return [
       param(paramName)
         .exists()
@@ -103,7 +103,7 @@ export default class BaseValidator {
     ];
   }
 
-  static validateIDBody({ fieldName = "id", label = "ID" }) {
+  static validateIDBody({ fieldName = "id", label = "ID" } = {}) {
     return [
       body(fieldName)
         .exists()
@@ -116,7 +116,11 @@ export default class BaseValidator {
     ];
   }
 
-  static validateBirthday({ field = "birthday", minAge = 16, maxAge = 100 }) {
+  static validateBirthday({
+    field = "birthday",
+    minAge = 16,
+    maxAge = 100,
+  } = {}) {
     return [
       body(field)
         .optional()

@@ -28,7 +28,8 @@ const Footer = () => {
     "/profile",
     "/unauthorized",
     "/auth",
-    "/organizers", // Chỉ cần để prefix là đủ
+    "/organizers",
+    "/payment",
   ];
 
   const shouldShowFooter = !hideFooterPrefixes.some((prefix) =>

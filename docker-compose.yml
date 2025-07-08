@@ -10,7 +10,7 @@ services:
       - KAFKA_CFG_NODE_ID=${KAFKA_NODE_ID}
       - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=${KAFKA_NODE_ID}@kafka:9093
       - KAFKA_CFG_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092
       - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
       - ALLOW_PLAINTEXT_LISTENER=yes
       - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
@@ -69,6 +69,29 @@ services:
       - ./auth/.env
     ports:
       - "${AUTH_PORT}:3000"
+    volumes:
+      - ${FIREBASE_KEY_PATH}:${FIREBASE_CREDENTIALS}:ro
+    environment:
+      - FIREBASE_CREDENTIALS=${FIREBASE_CREDENTIALS}
+      - KAFKA_BROKER=${KAFKA_BROKER}
+      - REDIS_HOST=${REDIS_HOST}
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - event-ticket-booking-system-network
+
+  user-service:
+    build:
+      context: .
+      dockerfile: user/Dockerfile.dev
+    env_file:
+      - .env
+      - ./user/.env
+    ports:
+      - "${USER_PORT}:3000"
     volumes:
       - ${FIREBASE_KEY_PATH}:${FIREBASE_CREDENTIALS}:ro
     environment:

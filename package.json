@@ -1,13 +1,13 @@
 {
   "name": "event_ticket_booking_system",
   "workspaces": [
-    "user",
+    "user-service",
+    "auth-service",
+    "event-service",
+    "payment-service",
+    "notification-service",
+    "ticket-service",
     "shared",
-    "auth",
-    "event",
-    "payment",
-    "notification",
-    "ticket",
     "frontend"
   ],
   "dependencies": {
@@ -25,7 +25,6 @@
     "lint-staged": "^16.1.0"
   },
   "scripts": {
-    "prepare": "husky",
     "test": "echo \"No tests yet\" && exit 0"
   },
   "lint-staged": {

@@ -4,7 +4,7 @@ import {
     NOTIFICATION_STATUS,
     ROLE,
 } from "@event_ticket_booking_system/shared";
-import { db, serverTimestamp, increment, auth } from "../firebase-emulator.js"; // TODO: Test only
+import { db, FieldValue, auth } from "@event_ticket_booking_system/shared";
 import { sendUserDeleted } from "../kafka/user.event.js";
 import { USER_STATUS } from "../enums/user_status.enum.js";
 import { sanitizeUserData } from "../utils/sanitize.js";
@@ -80,12 +80,46 @@ export default class UserService {
         };
     }
 
+    async findOrCreateUser(userID, userData) {
+        const doc = await this.userCollection.doc(userID).get();
+
+        if (doc.exists) {
+            const existingUser = { id: doc.id, ...doc.data() };
+            if (existingUser.isDeleted) {
+                throw new AppError({
+                    message: "User is deleted",
+                    errorCode: ERROR_CODE.USER_DELETED,
+                    statusCode: 403,
+                });
+            }
+            return { user: existingUser, isNew: false };
+        }
+
+        const newUser = {
+            userID,
+            email: userData.email,
+            createdAt: new Date(),
+            isDeleted: false,
+            emailVerified: false,
+            phoneVerified: false,
+            ...userData,
+        };
+
+        await this.userCollection.doc(userID).set(newUser);
+        return { user: { id: userID, ...newUser }, isNew: true };
+    }
+
+    async checkUserExists(userID) {
+        const doc = await this.userCollection.doc(userID).get();
+        return doc.exists && !doc.data()?.isDeleted;
+    }
+
     async getUserByID(userID) {
         const doc = await this.userCollection.doc(userID).get();
 
         if (!doc.exists) {
             throw new AppError({
-                message: "User not found",
+                message: `User ${userID} not found`,
                 errorCode: ERROR_CODE.NOT_FOUND,
                 statusCode: 404,
             });
@@ -131,7 +165,7 @@ export default class UserService {
             if (user.birthday) {
                 user.birthday = Timestamp.fromDate(user.birthday);
             }
-            user.createdAt = serverTimestamp;
+            user.createdAt = FieldValue.serverTimestamp();
 
             user.followedOrganizersCount = 0;
             user.unreadNotificationCount = 0;
@@ -151,7 +185,7 @@ export default class UserService {
     async updateUser(user) {
         try {
             const userRef = this.userCollection.doc(user.userID);
-            user.updatedAt = serverTimestamp;
+            user.updatedAt = FieldValue.serverTimestamp();
 
             await userRef.update(user);
             return { success: true, data: user };
@@ -174,7 +208,7 @@ export default class UserService {
                     orgRef,
                     {
                         ...org,
-                        followedAt: serverTimestamp,
+                        followedAt: FieldValue.serverTimestamp(),
                     },
                     { merge: true },
                 );
@@ -188,7 +222,7 @@ export default class UserService {
 
         batch.update(userRef, {
             followedOrganizersCount: increment(countDelta),
-            updatedAt: serverTimestamp,
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         await batch.commit();
@@ -224,7 +258,7 @@ export default class UserService {
             };
 
             if (action === "create") {
-                notifData.createdAt = serverTimestamp;
+                notifData.createdAt = FieldValue.serverTimestamp();
                 if (status === NOTIFICATION_STATUS.UNREAD) unreadCount++;
                 batch.set(notifRef, notifData);
             } else if (action === "update") {
@@ -237,7 +271,7 @@ export default class UserService {
         if (unreadCount !== 0) {
             batch.update(userRef, {
                 unreadNotificationCount: increment(unreadCount),
-                updatedAt: serverTimestamp,
+                updatedAt: FieldValue.serverTimestamp(),
             });
         }
 
@@ -260,7 +294,7 @@ export default class UserService {
         if (status === NOTIFICATION_STATUS.READ) {
             await this.userCollection.doc(userID).update({
                 unreadNotificationCount: increment(-1),
-                updatedAt: serverTimestamp,
+                updatedAt: FieldValue.serverTimestamp(),
             });
         }
 
@@ -270,7 +304,7 @@ export default class UserService {
     async softDeleteUser(userID) {
         await this.userCollection.doc(userID).update({
             isDeleted: true,
-            deletedAt: serverTimestamp,
+            deletedAt: FieldValue.serverTimestamp(),
         });
 
         await auth.updateUser(userID, { disabled: true });

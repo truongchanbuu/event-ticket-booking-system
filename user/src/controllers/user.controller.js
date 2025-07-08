@@ -1,11 +1,11 @@
-import { catchAsync } from "@event_ticket_booking_system/shared";
-import { serverTimestamp } from "../firebase-emulator.js";
+import { catchAsync, FieldValue } from "@event_ticket_booking_system/shared";
 
 export default class UserController {
     constructor({ userService }) {
         this.userService = userService;
 
         this.getUsers = catchAsync(this.getUsers.bind(this));
+        this.getProfile = catchAsync(this.getProfile.bind(this));
         this.registerUser = catchAsync(this.registerUser.bind(this));
         this.updateUser = catchAsync(this.updateUser.bind(this));
         this.updateFollowedOrganizers = catchAsync(
@@ -29,16 +29,15 @@ export default class UserController {
     }
 
     async registerUser(req, res) {
-        const { success, user } = await this.userService.createUser(req.body);
+        const uid = req.body.userID;
+        const { user, isNew } = await this.userService.findOrCreateUser(
+            uid,
+            req.body,
+        );
 
-        if (!success) {
-            return res
-                .status(400)
-                .json({ success, message: "Failed to create user" });
-        }
-
-        return res.status(201).json({
-            success,
+        return res.status(isNew ? 201 : 200).json({
+            success: true,
+            isNew,
             data: user,
         });
     }
@@ -109,7 +108,11 @@ export default class UserController {
 
         return res.status(200).json({
             success: true,
-            data: { userID, deletedAt: serverTimestamp, deletedBy: req.user },
+            data: {
+                userID,
+                deletedAt: FieldValue.serverTimestamp(),
+                deletedBy: req.user,
+            },
         });
     }
 
@@ -124,12 +127,16 @@ export default class UserController {
         }
         return res.status(200).json({
             success: true,
-            data: { userID, deletedAt: serverTimestamp, deletedBy: req.user },
+            data: {
+                userID,
+                deletedAt: FieldValue.serverTimestamp(),
+                deletedBy: req.user,
+            },
         });
     }
 
     async getProfile(req, res) {
-        const user = this.userService.getUserByID(req.user.uid);
+        const user = await this.userService.getUserByID(req.user.uid);
 
         return res.status(200).json({
             success: true,

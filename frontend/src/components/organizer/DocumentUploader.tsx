@@ -42,7 +42,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
           className="flex items-center gap-2 px-4 py-2 border rounded bg-gray-50 hover:bg-gray-100 transition"
         >
           <Upload className="w-4 h-4" />
-          <span>{value ? "Đổi ảnh" : "Tải lên ảnh"}</span>
+          <span>{value ? "Change picture" : "Upload picutre"}</span>
         </button>
         {preview && (
           <motion.div

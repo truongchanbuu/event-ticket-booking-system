@@ -1,16 +1,34 @@
-const API_BASE_URL = "http://localhost:5000";
+const API_BASE_URL = "http://localhost:3000";
 
 export async function fetchAPI<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, options);
-  if (!res.ok) {
-    throw new Error(`Failed to fetch: ${path}`);
+  const url = `${API_BASE_URL}${path}`;
+
+  const res = await fetch(url, {
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    ...options,
+  });
+
+  let data: any = {};
+  try {
+    const text = await res.text();
+    data = text ? JSON.parse(text) : {};
+  } catch (e) {
+    console.error("Failed to parse response:", e);
   }
 
-  const data = (await res.json()) as T;
-  return data;
+  if (!res.ok) {
+    console.error("API error:", {
+      status: res.status,
+      statusText: res.statusText,
+      data,
+    });
+    throw new Error(data.message || res.statusText || "Unknown error");
+  }
+
+  return data as T;
 }
 
 // Event
@@ -41,7 +59,7 @@ export async function updateUserAPI(
   userData: any,
   token: string
 ): Promise<any> {
-  return fetchAPI<any>("/api/users/me", {
+  return fetchAPI<any>("/api/me", {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -52,7 +70,7 @@ export async function updateUserAPI(
 }
 
 export async function deleteUserAPI(token: string): Promise<any> {
-  return fetchAPI<any>("/api/users/me", {
+  return fetchAPI<any>("/api/me", {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,

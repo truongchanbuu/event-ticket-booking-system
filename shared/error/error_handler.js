@@ -11,6 +11,7 @@ export const errorHandler = (err, req, res, next) => {
       success: false,
       message: err.message,
       errorCode: err.errorCode,
+      statusCode: err.statusCode,
       errors: err.errors,
     });
   }
@@ -18,6 +19,7 @@ export const errorHandler = (err, req, res, next) => {
   res.status(500).json({
     success: false,
     message: err.message || "Internal Server Error",
+    statusCode: err.statusCode,
     errorCode: error_code.INTERNAL_ERROR,
   });
 };

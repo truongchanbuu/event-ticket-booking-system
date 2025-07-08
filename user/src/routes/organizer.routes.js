@@ -104,4 +104,8 @@ export default class OrganizerRoutes {
             this.organizerController.checkApplication,
         );
     }
+
+    get organizerRouter() {
+        return this.router;
+    }
 }

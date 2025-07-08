@@ -125,7 +125,9 @@ export default class UserValidator extends BaseValidator {
             body("followedOrganizers")
                 .isArray({ min: 1 })
                 .withMessage("Following organizers must be an array"),
-            ...this.validateIDBody({ fieldName: "followedOrganizers.*.orgID" }),
+            ...this.validateIDBody({
+                fieldName: "followedOrganizers.*.orgID",
+            }),
             ...this.validateName({
                 fieldName: "followedOrganizers.*.orgName",
             }),
@@ -137,7 +139,7 @@ export default class UserValidator extends BaseValidator {
 
     static validateNotification() {
         return [
-            ...this.validateUserIDParam(),
+            ...this.validateIDParam(),
             body("action")
                 .exists()
                 .withMessage("Action is required")
@@ -311,7 +313,7 @@ export default class UserValidator extends BaseValidator {
             }),
 
             ...this.validatePhoneNumber(),
-            ...this.validateEmail("optionalInfo.email"),
+            ...this.validateEmail({ fieldName: "optionalInfo.email" }),
         ];
     }
 
@@ -520,7 +522,7 @@ export default class UserValidator extends BaseValidator {
                 .optional()
                 .isISO8601()
                 .withMessage("Invalid date of birth")
-                .custom(this.validateBirthdayDate()),
+                .custom(this.validateBirthday()),
 
             body("kycInfo.individual.idIssueDate")
                 .optional()
@@ -580,7 +582,9 @@ export default class UserValidator extends BaseValidator {
                 .withMessage("Invalid business license URL"),
 
             // OPTIONAL URLS
-            ...this.validateURL({ fieldName: "optionalInfo.websiteUrl" }),
+            ...this.validateURL({
+                fieldName: "optionalInfo.websiteUrl",
+            }),
             ...this.validateURL({
                 fieldName: "optionalInfo.facebookUrl",
                 patterns: ["facebook.com"],
@@ -652,7 +656,6 @@ export default class UserValidator extends BaseValidator {
     static _sharedUserValidationRules() {
         return [
             ...this.validatePhoneNumber(),
-            ,
             body("role")
                 .optional()
                 .isIn(ROLE)

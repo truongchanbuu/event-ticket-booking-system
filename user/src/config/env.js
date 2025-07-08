@@ -5,4 +5,9 @@ export const ENV = {
     NODE_ENV: process.env.NODE_ENV || "development",
     SERVICE_NAME: process.env.SERVICE_NAME || "",
     PORT: process.env.PORT ? +process.env.PORT : 3000,
+    // Kafka configuration
+    KAFKA_CLIENT_ID: process.env.KAFKA_CLIENT_ID || "user-service",
+    KAFKA_BROKERS: process.env.KAFKA_BROKERS || "localhost:9092",
+    KAFKA_CONNECTION_TIMEOUT: process.env.KAFKA_CONNECTION_TIMEOUT || "3000",
+    KAFKA_AUTH_TIMEOUT: process.env.KAFKA_AUTH_TIMEOUT || "1000",
 };

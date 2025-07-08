@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export enum APPLY_STATUS {
+  NONE = "none",
   PENDING = "pending",
   PROCESSING = "processing",
   PENDING_ADMIN = "pending_admin",

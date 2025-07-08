@@ -1,2 +1,2 @@
-export { default as KafkaManager } from "./kafka.js";
+export { default as kafkaManager, KafkaManager } from "./kafka.js";
 export * from "./topics.js";
