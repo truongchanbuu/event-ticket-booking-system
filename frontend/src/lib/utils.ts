@@ -101,3 +101,9 @@ export function getStatusColor(status: string) {
   };
   return colors[status as keyof typeof colors] || "text-gray-600";
 }
+
+export function cleanEmptyFields(obj: Record<string, any>) {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([_, value]) => value !== "" && value !== null)
+  );
+}

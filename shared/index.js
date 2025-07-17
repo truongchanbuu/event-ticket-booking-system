@@ -29,7 +29,7 @@ export { default as PAYMENT_METHODS } from "./enums/payment-method.enum.js";
 export { default as PAYMENT_STATUS } from "./enums/payment-status.enum.js";
 export { EVENT_TYPES } from "./enums/event_types.enum.js";
 export { default as APPLY_STATUS } from "./enums/apply_status.enum.js";
-export { default as ORGANIZER_STATUS } from "./enums/organizer_status.enum.js";
+export { default as ORGANIZER_STATUS } from "./enums/organizer-status.enum.js";
 export { default as EnumHelper } from "./enums/helpers/enum.helper.js";
 
 export * from "./types/category.js";

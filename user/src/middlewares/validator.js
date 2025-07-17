@@ -7,7 +7,7 @@ import {
     NOTIFICATION_STATUS,
     ROLE,
 } from "@event_ticket_booking_system/shared";
-import { USER_STATUS } from "../enums/user_status.enum.js";
+import { USER_STATUS } from "../enums/user-status.enum.js";
 
 const FOLLOW_ACTION_ENUM = ["follow", "unfollow"];
 const NOTIFICATION_ACTION_ENUM = ["create", "delete", "update"];
@@ -658,7 +658,7 @@ export default class UserValidator extends BaseValidator {
             ...this.validatePhoneNumber(),
             body("role")
                 .optional()
-                .isIn(ROLE)
+                .isIn(Object.values(ROLE))
                 .withMessage(
                     `Role must include on: ${EnumHelper.enumToString(ROLE)}`,
                 )
@@ -683,7 +683,7 @@ export default class UserValidator extends BaseValidator {
 
             body("status")
                 .optional()
-                .isIn(USER_STATUS)
+                .isIn(Object.values(USER_STATUS))
                 .withMessage(
                     `Status must be one of: ${EnumHelper.enumToString(USER_STATUS)}`,
                 )

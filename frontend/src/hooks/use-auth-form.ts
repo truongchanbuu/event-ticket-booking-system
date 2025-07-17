@@ -5,7 +5,6 @@ import {
   usernameSchema,
   signUpPasswordSchema,
 } from "@/schema/auth/signup.schema";
-import { z } from "zod";
 
 interface UseAuthFormProps {
   initialData?: Record<string, any>;
@@ -21,12 +20,22 @@ export const useAuthForm = ({ initialData = {} }: UseAuthFormProps = {}) => {
       const { name, value, type, checked } = e.target;
       const newValue = type === "checkbox" ? checked : value;
 
-      setFormData((prev) => ({
-        ...prev,
-        [name]: newValue,
-      }));
+      setFormData((prev) => ({ ...prev, [name]: newValue }));
 
-      // Clear field error when user starts typing
+      // Validate realtime
+      const schema = signInSchema[name];
+      if (schema) {
+        const result = schema.safeParse(newValue);
+        if (!result.success) {
+          setErrors((prev) => ({
+            ...prev,
+            [name]: result.error.errors[0]?.message || "Invalid input",
+          }));
+          return;
+        }
+      }
+
+      // Clear error nếu hợp lệ
       setErrors((prev) => {
         if (prev[name]) {
           const newErrors = { ...prev };
@@ -41,48 +50,40 @@ export const useAuthForm = ({ initialData = {} }: UseAuthFormProps = {}) => {
 
   const handleInputBlur = useCallback(
     (e: React.FocusEvent<HTMLInputElement>) => {
-      const { name, value } = e.target;
+      const { name, value, type, checked } = e.target;
+      const fieldValue = type === "checkbox" ? checked : value;
 
-      // Validate single field on blur using individual schemas
-      try {
-        if (name === "email") {
-          emailSchema.parse(value);
-        } else if (name === "password") {
-          // Use signUpPasswordSchema for signup form, passwordSchema for signin
-          const currentPasswordSchema = formData.username
-            ? signUpPasswordSchema
-            : passwordSchema;
-          currentPasswordSchema.parse(value);
-        } else if (name === "username") {
-          usernameSchema.parse(value);
-        } else if (name === "confirmPassword") {
-          // Check if passwords match
-          if (formData.password && value && formData.password !== value) {
-            setErrors((prev) => ({
-              ...prev,
-              [name]: "Passwords do not match",
-            }));
-            return;
-          }
+      // Lấy schema gốc để validate từng field
+      const fieldSchema = signUpFormSchema[name];
+      if (fieldSchema) {
+        const result = fieldSchema.safeParse(fieldValue);
+        if (!result.success) {
+          setErrors((prev) => ({
+            ...prev,
+            [name]: result.error.errors[0]?.message || "Invalid input",
+          }));
+          return;
         }
+      }
 
-        // Clear error if validation passes
-        setErrors((prev) => {
-          if (prev[name]) {
-            const newErrors = { ...prev };
-            delete newErrors[name];
-            return newErrors;
-          }
-          return prev;
-        });
-      } catch (error: any) {
-        // Set field error
-        const errorMessage = error.errors?.[0]?.message || "Invalid input";
+      // Special case: confirmPassword check
+      if (name === "confirmPassword" && formData.password !== value) {
         setErrors((prev) => ({
           ...prev,
-          [name]: errorMessage,
+          confirmPassword: "Passwords do not match",
         }));
+        return;
       }
+
+      // Xóa lỗi nếu hợp lệ
+      setErrors((prev) => {
+        if (prev[name]) {
+          const newErrors = { ...prev };
+          delete newErrors[name];
+          return newErrors;
+        }
+        return prev;
+      });
     },
     [formData]
   );

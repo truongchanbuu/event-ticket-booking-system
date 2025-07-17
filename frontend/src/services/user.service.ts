@@ -1,23 +1,47 @@
-import { updateUserAPI, deleteUserAPI, getUserProfileAPI } from "@/lib/api";
+import {
+  updateUserAPI,
+  deleteUserAPI,
+  getUserProfileAPI,
+  createUserAPI,
+} from "@/lib/api";
 import { getAuthToken } from "./auth.service";
-
-export interface UpdateUserData {
-  username?: string;
-  firstName?: string;
-  lastName?: string;
-  phone?: string;
-  birthday?: Date;
-  avatar?: string;
-}
+import { UpdateUserData, AppUser, fromFirebaseUser } from "@/schema/user";
+import { ApiResponseError } from "@/schema/api-error";
+import { onAuthStateChanged, User } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import { cleanEmptyFields } from "@/lib/utils";
 
 export class UserService {
   static async getCurrentUserProfile() {
     const token = await getAuthToken();
-    if (!token) {
-      throw new Error("User not authenticated");
-    }
+    try {
+      if (!token) {
+        throw new Error("User not authenticated");
+      }
 
-    return await getUserProfileAPI(token);
+      return await getUserProfileAPI(token);
+    } catch (e) {
+      const error = e as ApiResponseError;
+
+      console.error("Error in getUserProfileAPI:", error);
+
+      if (error.statusCode === 404 && error.errorCode === "NOT_FOUND") {
+        try {
+          const firebaseUser = await this.getFirebaseUser();
+
+          if (firebaseUser) {
+            const userData = fromFirebaseUser(firebaseUser);
+            await createUserAPI(cleanEmptyFields(userData));
+            return await getUserProfileAPI(token);
+          }
+        } catch (createErr) {
+          console.error("Failed to create user profile:", createErr);
+          throw createErr;
+        }
+      }
+
+      throw error;
+    }
   }
 
   static async updateUserProfile(userData: UpdateUserData) {
@@ -36,6 +60,22 @@ export class UserService {
     }
 
     return await deleteUserAPI(token);
+  }
+
+  static async getFirebaseUser(): Promise<User | null> {
+    return new Promise((resolve, reject) => {
+      const unsubscribe = onAuthStateChanged(
+        auth,
+        (user) => {
+          unsubscribe();
+          resolve(user);
+        },
+        (error) => {
+          unsubscribe();
+          reject(error);
+        }
+      );
+    });
   }
 
   static async getUserById(userId: string) {

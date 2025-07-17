@@ -4,16 +4,10 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
-  User as FirebaseUser,
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { createUserAPI, getUserProfileAPI } from "@/lib/api";
-import { type User } from "@/schema/user/user.schema";
-
-// Type cho việc đăng ký user (dựa trên UserSchema nhưng không có các field tự động)
-type CreateUserData = Pick<User, "email" | "username" | "phoneNumber"> & {
-  photoUrl?: string;
-};
+import { AppUser } from "@/schema/user";
 
 export interface AuthError {
   code: string;
@@ -23,7 +17,7 @@ export interface AuthError {
 export async function signUp(
   email: string,
   password: string,
-  userData: CreateUserData
+  userData: AppUser
 ) {
   try {
     // 1. Tạo user trong Firebase Auth
@@ -72,12 +66,11 @@ export async function signIn(email: string, password: string) {
   }
 }
 
-export async function signInWithGoogle(userData?: Partial<CreateUserData>) {
+export async function signInWithGoogle(userData?: Partial<AppUser>) {
   try {
     const provider = new GoogleAuthProvider();
     const result = await signInWithPopup(auth, provider);
 
-    // Nếu có userData được cung cấp, lưu thông tin bổ sung
     if (result.user) {
       try {
         const username =
@@ -123,10 +116,6 @@ export async function logout() {
     };
     throw authError;
   }
-}
-
-export async function getCurrentUserProfile(token: string) {
-  return await getUserProfileAPI(token);
 }
 
 export async function getAuthToken(): Promise<string | null> {

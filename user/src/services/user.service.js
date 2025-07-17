@@ -6,7 +6,7 @@ import {
 } from "@event_ticket_booking_system/shared";
 import { db, FieldValue, auth } from "@event_ticket_booking_system/shared";
 import { sendUserDeleted } from "../kafka/user.event.js";
-import { USER_STATUS } from "../enums/user_status.enum.js";
+import { USER_STATUS } from "../enums/user-status.enum.js";
 import { sanitizeUserData } from "../utils/sanitize.js";
 
 const NOTIFICATIONS_COLLECTION = "notifcations";

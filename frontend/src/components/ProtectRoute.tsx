@@ -11,16 +11,16 @@ export default function ProtectedRoute({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, loading } = useAuth();
+  const { user, isAuthLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!isAuthLoading && !user) {
       router.replace("/auth");
     }
-  }, [user, loading, router]);
+  }, [user, isAuthLoading, router]);
 
-  if (loading) {
+  if (isAuthLoading) {
     return <LoadingPage />;
   }
 

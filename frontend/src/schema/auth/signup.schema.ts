@@ -24,15 +24,14 @@ export const signUpPasswordSchema = z
     "Password must contain at least one special character"
   );
 
-// Schema cho form đăng ký (bao gồm password và validation)
 export const signUpFormSchema = z
   .object({
     username: usernameSchema,
     email: emailSchema,
     password: signUpPasswordSchema,
     confirmPassword: z.string(),
-    phone: z.string().optional(),
-    birthday: z.string().optional(),
+    phone: z.string().optional().or(z.literal("")),
+    birthday: z.string().optional().or(z.literal("")),
     agreeToTerms: z.boolean().refine((val) => val, {
       message: "You must agree to the terms and conditions",
     }),

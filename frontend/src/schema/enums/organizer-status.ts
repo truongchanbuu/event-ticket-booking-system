@@ -5,6 +5,7 @@ export enum ORGANIZER_STATUS {
   PENDING = "pending",
   APPROVED = "approved",
   REJECTED = "rejected",
+  PERMANENTLY_REJECTED = "permanently_rejected",
 }
 
 export const OrganizerStatusEnum = z.nativeEnum(ORGANIZER_STATUS);

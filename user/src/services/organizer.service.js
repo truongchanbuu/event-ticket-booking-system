@@ -6,7 +6,7 @@ import {
     db,
     FieldValue,
 } from "@event_ticket_booking_system/shared";
-import { USER_STATUS } from "../enums/user_status.enum.js";
+import { USER_STATUS } from "../enums/user-status.enum.js";
 
 const ORG_APPLICATION_COLLECTION = "orgApplications";
 const USER_COLLECTION = "users";

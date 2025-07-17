@@ -1,3 +1,6 @@
+import { ApiResponseError } from "@/schema/api-error";
+import { AppUser } from "@/schema/user";
+
 const API_BASE_URL = "http://localhost:3000";
 
 export async function fetchAPI<T>(
@@ -25,7 +28,15 @@ export async function fetchAPI<T>(
       statusText: res.statusText,
       data,
     });
-    throw new Error(data.message || res.statusText || "Unknown error");
+
+    const error: ApiResponseError = {
+      statusCode: data?.statusCode ?? res.status,
+      errorCode: data?.errorCode ?? "UNKNOWN_ERROR",
+      message: data?.message ?? res.statusText ?? "Unknown error",
+      errors: data?.errors ?? [],
+    };
+
+    throw error;
   }
 
   return data as T;
@@ -37,7 +48,7 @@ export async function fetchEventById<T>(eventId: string): Promise<T> {
 }
 
 // User API endpoints
-export async function createUserAPI(userData: any): Promise<any> {
+export async function createUserAPI(userData: AppUser): Promise<any> {
   return fetchAPI<any>("/api/users", {
     method: "POST",
     headers: {
