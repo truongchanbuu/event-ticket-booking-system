@@ -440,3 +440,15 @@ export function sanitizeUserDataOwner(user) {
 export function sanitizeUserDataAdmin(user) {
     return sanitizeUserData(user, { isAdmin: true });
 }
+
+export function normalizeFirebaseUser(decodedToken) {
+    return {
+        userID: decodedToken.uid,
+        email: decodedToken.email || null,
+        emailVerified: decodedToken.email_verified || false,
+        phoneNumber: decodedToken.phone_number || null,
+        username: decodedToken.name || null,
+        photoUrl: decodedToken.picture || null,
+        provider: decodedToken.firebase?.sign_in_provider || "unknown",
+    };
+}

@@ -14,7 +14,7 @@ import { SignUpForm } from "@/components/auth/signup-form";
 const EventHubAuth = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { userProfile } = useUser({ needFetchProfile: false });
+  const { isLoggedIn } = useUser({ needFetchProfile: false });
 
   const initialMode =
     searchParams?.get("mode") === "signup" ? "signup" : "signin";
@@ -32,10 +32,10 @@ const EventHubAuth = () => {
   } = useAuthHandler();
 
   useEffect(() => {
-    if (userProfile) {
+    if (isLoggedIn) {
       router.push("/");
     }
-  }, [userProfile, router]);
+  }, [isLoggedIn, router]);
 
   useEffect(() => {
     setError(null);
@@ -88,7 +88,7 @@ const EventHubAuth = () => {
     );
   }
 
-  if (userProfile) {
+  if (isLoggedIn) {
     return (
       <LoadingPage
         message="Redirecting..."

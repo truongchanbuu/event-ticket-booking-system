@@ -1,4 +1,5 @@
 import { catchAsync, FieldValue } from "@event_ticket_booking_system/shared";
+import { normalizeFirebaseUser } from "../utils/sanitize.js";
 
 export default class UserController {
     constructor({ userService }) {
@@ -136,11 +137,16 @@ export default class UserController {
     }
 
     async getProfile(req, res) {
-        const user = await this.userService.getUserByID(req.user.uid);
+        const normalizedUser = normalizeFirebaseUser(req.user);
+        const { user, isNew } = await this.userService.findOrCreateUser(
+            normalizedUser.userID,
+            normalizedUser,
+        );
 
         return res.status(200).json({
             success: true,
             data: user,
+            isNew,
         });
     }
 }

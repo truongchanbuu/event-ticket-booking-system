@@ -6,7 +6,7 @@ import {
   signOut,
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { createUserAPI, getUserProfileAPI } from "@/lib/api";
+import { createUserAPI } from "@/lib/api";
 import { AppUser } from "@/schema/user";
 
 export interface AuthError {

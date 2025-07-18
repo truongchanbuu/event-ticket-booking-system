@@ -1,29 +1,47 @@
 "use client";
 
-import { APP_NAME } from "@/constants/app";
-import { useState } from "react";
-import { User, LogOut, Settings, Bell, Ticket } from "lucide-react";
-import { usePathname } from "next/navigation";
-import { useAuth } from "@/app/providers/AuthProvider";
-import { signOut } from "firebase/auth";
-import { auth } from "@/lib/firebase";
-import { useUser } from "@/hooks/use-user";
+import * as React from "react";
 import Link from "next/link";
+
+import { APP_NAME } from "@/constants/app";
 import ROLE from "@/schema/enums/role";
-import { Input } from "./ui/input";
-import { Button } from "./ui/button";
-import Image from "next/image";
 
-type HeaderProps = {
-  showTabs?: boolean;
-  customTabs?: React.ReactNode;
-  variant?: "default" | "dark" | "gradient";
-  sticky?: boolean;
-  showSearch?: boolean;
-  notifications?: number;
-};
+import { useUser } from "@/hooks/use-user";
 
-export default function Header({
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
+import {
+  User as UserIcon,
+  LogOut,
+  Settings,
+  Bell,
+  Ticket,
+  X,
+  Menu,
+} from "lucide-react";
+import { usePathname } from "next/navigation";
+import { auth } from "@/lib/firebase";
+import { HeaderProps } from "@/types/app-header/type";
+import {
+  dropdownItemCls,
+  headerCls,
+  linkCls,
+  logoCls,
+  primaryBtnCls,
+  secondaryBtnCls,
+  textCls,
+} from "@/styles/app-header/style";
+import AppHeaderNav from "./app-header/app-header-nav";
+import UserMenu from "./app-header/user-menu";
+import HeaderSkeleton from "./app-header/header-skeleton";
+import NavigationLinks from "./navigation-links";
+
+/* ------------------------------------------------------------------ */
+/* Component                                                           */
+/* ------------------------------------------------------------------ */
+export default function AppHeader({
   showTabs = true,
   customTabs,
   variant = "default",
@@ -31,171 +49,244 @@ export default function Header({
   showSearch = false,
   notifications = 0,
 }: HeaderProps) {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const pathname = usePathname();
-  const { user, isAuthLoading } = useAuth();
-  const { userProfile } = useUser();
+  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState("");
+
+  const { userProfile, isLoggedIn, isAuthLoading } = useUser({
+    needFetchProfile: true,
+  });
+
+  // ----- derived user display fields -----
+  const getDisplayName = () =>
+    userProfile?.username ||
+    (userProfile?.email ? userProfile.email.split("@")[0] : "User");
+
+  const getAvatarSrc = () => userProfile?.photoUrl || "";
+
+  const effectiveRole = userProfile?.role;
+
+  // ----- handlers -----
+  const closeMenus = () => {
+    setIsMenuOpen(false);
+    setIsUserMenuOpen(false);
+  };
 
   const handleSignOut = async () => {
     try {
+      const { signOut } = await import("firebase/auth");
       await signOut(auth);
-      setIsUserMenuOpen(false);
-    } catch (error) {
-      console.error("Error signing out:", error);
+    } catch (err) {
+      console.error("Sign out error:", err);
+    } finally {
+      closeMenus();
     }
   };
 
-  const getUserDisplayName = () => {
-    if (!user) return "";
-    return user.displayName || user.email?.split("@")[0] || "User";
-  };
-
-  const getUserAvatar = () => {
-    if (!user) return null;
-    return user.photoURL;
-  };
-
-  const getHeaderStyles = () => {
-    const baseStyles =
-      "border-b px-4 sm:px-6 lg:px-10 py-4 mb-5 transition-all duration-200 print:hidden";
-    const stickyStyles = sticky ? "sticky top-0 z-50 backdrop-blur-sm" : "";
-
-    switch (variant) {
-      case "dark":
-        return `${baseStyles} ${stickyStyles} bg-gray-900 border-gray-700 shadow-lg`;
-      case "gradient":
-        return `${baseStyles} ${stickyStyles} bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 border-transparent shadow-xl`;
-      default:
-        return `${baseStyles} ${stickyStyles} bg-white/95 border-gray-200 shadow-sm`;
-    }
-  };
-
-  const getTextStyles = () => {
-    switch (variant) {
-      case "dark":
-        return "text-white";
-      case "gradient":
-        return "text-white";
-      default:
-        return "text-gray-900";
-    }
-  };
-
-  const getLinkStyles = (isActive = false) => {
-    const base =
-      "text-md font-medium transition-all duration-200 hover:scale-105";
-
-    if (isActive) {
-      switch (variant) {
-        case "dark":
-          return `${base} text-white font-semibold border-b-2 border-blue-400`;
-        case "gradient":
-          return `${base} text-white font-semibold border-b-2 border-yellow-300`;
-        default:
-          return `${base} text-blue-600 font-semibold border-b-2 border-blue-600`;
-      }
-    }
-
-    switch (variant) {
-      case "dark":
-        return `${base} text-gray-300 hover:text-white hover:shadow-lg`;
-      case "gradient":
-        return `${base} text-white/90 hover:text-white hover:shadow-lg`;
-      default:
-        return `${base} text-gray-600 hover:text-blue-600 hover:shadow-md`;
-    }
-  };
-
-  const getButtonStyles = () => {
-    const base =
-      "px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:scale-105";
-    switch (variant) {
-      case "dark":
-        return `${base} bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg`;
-      case "gradient":
-        return `${base} bg-white/20 text-white border border-white/30 hover:bg-white/30 hover:shadow-lg backdrop-blur-sm`;
-      default:
-        return `${base} bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md`;
-    }
-  };
-
-  const getSecondaryButtonStyles = () => {
-    const base =
-      "px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:scale-105 border";
-    switch (variant) {
-      case "dark":
-        return `${base} border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white hover:border-gray-500`;
-      case "gradient":
-        return `${base} border-white/30 text-white hover:bg-white/20 hover:shadow-lg backdrop-blur-sm`;
-      default:
-        return `${base} border-blue-600 text-blue-600 hover:bg-blue-50 hover:shadow-md`;
-    }
-  };
-
-  const getLogoStyles = () => {
-    const base =
-      "text-xl sm:text-xl font-bold transition-all duration-300 hover:scale-105";
-    switch (variant) {
-      case "dark":
-        return `${base} text-blue-400 hover:text-blue-300`;
-      case "gradient":
-        return `${base} text-white hover:text-yellow-200 drop-shadow-lg`;
-      default:
-        return `${base} text-blue-600 hover:text-blue-700`;
-    }
-  };
-
-  const getDropdownStyles = () => {
-    const base = "absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 z-50";
-    switch (variant) {
-      case "dark":
-        return `${base} bg-gray-800 border border-gray-700`;
-      case "gradient":
-        return `${base} bg-white/95 backdrop-blur-sm border border-white/20`;
-      default:
-        return `${base} bg-white border border-gray-200`;
-    }
-  };
-
-  const getDropdownItemStyles = () => {
-    const base = "block px-4 py-2 text-sm transition-colors duration-200";
-    switch (variant) {
-      case "dark":
-        return `${base} text-gray-300 hover:bg-gray-700 hover:text-white`;
-      case "gradient":
-        return `${base} text-gray-700 hover:bg-gray-100`;
-      default:
-        return `${base} text-gray-700 hover:bg-gray-100`;
-    }
-  };
-
-  // Show loading skeleton if auth is still isAuthLoading
+  /* ------------------------------------------------------------------ */
+  /* Loading states                                                     */
+  /* ------------------------------------------------------------------ */
   if (isAuthLoading) {
-    return (
-      <header className={getHeaderStyles()}>
-        <div className="mx-auto flex justify-between items-center">
-          <div className={getLogoStyles()}>{APP_NAME}</div>
-          <div className="hidden md:flex items-center space-x-6">
-            <div className="h-6 w-16 bg-gray-200 rounded animate-pulse"></div>
-            <div className="h-6 w-16 bg-gray-200 rounded animate-pulse"></div>
-            <div className="h-8 w-8 bg-gray-200 rounded-full animate-pulse"></div>
-          </div>
-        </div>
-      </header>
-    );
+    return <HeaderSkeleton variant={variant} />;
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Desktop Tabs                                                       */
+  /* ------------------------------------------------------------------ */
+  const desktopTabs = customTabs ? (
+    customTabs
+  ) : isLoggedIn ? (
+    <>
+      <NavigationLinks
+        pathname={pathname}
+        variant={variant}
+        isLoggedIn={isLoggedIn}
+        userRole={effectiveRole}
+      />
+
+      {effectiveRole === ROLE.EVENT_ORGANIZER && (
+        <AppHeaderNav
+          pathname={pathname}
+          href="/profile/my-events"
+          variant={variant}
+        >
+          Event Management
+        </AppHeaderNav>
+      )}
+
+      {/* Notifications */}
+      {notifications > 0 && (
+        <div className="relative">
+          <Button
+            type="button"
+            className={`${linkCls(variant)} relative`}
+            onClick={() => console.log("TODO: notifications panel")}
+          >
+            <Bell className="w-6 h-6" />
+            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+              {notifications > 9 ? "9+" : notifications}
+            </span>
+          </Button>
+        </div>
+      )}
+
+      {/* User menu trigger */}
+      <UserMenu
+        variant={variant}
+        onSignOut={handleSignOut}
+        userProfile={userProfile}
+      />
+    </>
+  ) : (
+    <>
+      <AppHeaderNav pathname={pathname} href="/events" variant={variant}>
+        Events
+      </AppHeaderNav>
+      <div className="flex items-center space-x-3">
+        <Link href="/auth?mode=signup" className={secondaryBtnCls(variant)}>
+          Sign Up
+        </Link>
+        <Link href="/auth?mode=signin" className={primaryBtnCls(variant)}>
+          Login
+        </Link>
+      </div>
+    </>
+  );
+
+  /* ------------------------------------------------------------------ */
+  /* Mobile Tabs                                                        */
+  /* ------------------------------------------------------------------ */
+  const mobileTabs = customTabs ? (
+    <div className="flex flex-col space-y-3">{customTabs}</div>
+  ) : isLoggedIn ? (
+    <>
+      <NavigationLinks
+        pathname={pathname}
+        variant={variant}
+        isLoggedIn={isLoggedIn}
+        userRole={effectiveRole}
+        onLinkClick={closeMenus}
+      />
+
+      {effectiveRole === ROLE.EVENT_ORGANIZER && (
+        <AppHeaderNav
+          pathname={pathname}
+          href="/profile/my-events"
+          variant={variant}
+          onClick={closeMenus}
+        >
+          Event Management
+        </AppHeaderNav>
+      )}
+
+      {/* Mobile user summary */}
+      <div className="px-2 py-2 border-t border-gray-200/20">
+        <div className="flex items-center space-x-3 mb-3">
+          <Avatar className="w-10 h-10 border-2 border-gray-300">
+            <AvatarImage src={getAvatarSrc()} alt="User Avatar" />
+            <AvatarFallback>
+              <UserIcon className="w-5 h-5 text-gray-600" />
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <div className={`font-medium ${textCls(variant)}`}>
+              {getDisplayName()}
+            </div>
+            <div className="text-sm text-gray-500">{userProfile?.email}</div>
+          </div>
+        </div>
+
+        <div className="flex flex-col space-y-2">
+          <Link
+            href="/profile"
+            className={`${dropdownItemCls(variant)} rounded-md`}
+            onClick={closeMenus}
+          >
+            <div className="flex items-center space-x-2">
+              <UserIcon className="w-4 h-4" />
+              <span>Profile</span>
+            </div>
+          </Link>
+          {effectiveRole === ROLE.EVENT_ORGANIZER && (
+            <Link
+              href="/profile/my-events"
+              className={`${dropdownItemCls(variant)} rounded-md`}
+              onClick={closeMenus}
+            >
+              <div className="flex items-center space-x-2">
+                <Settings className="w-4 h-4" />
+                <span>Event Management</span>
+              </div>
+            </Link>
+          )}
+          <Button
+            variant="ghost"
+            onClick={handleSignOut}
+            className={`${dropdownItemCls(variant)} rounded-md`}
+          >
+            <div className="flex items-center space-x-2">
+              <LogOut className="w-4 h-4" />
+              <span>Sign Out</span>
+            </div>
+          </Button>
+        </div>
+      </div>
+
+      {/* Mobile Notifications */}
+      {notifications > 0 && (
+        <div className="flex items-center justify-between px-2 pt-3 border-t border-gray-200/20">
+          <div className="flex items-center space-x-2">
+            <Bell className="w-4 h-4" />
+            <span className={`text-sm ${textCls(variant)}`}>Notifications</span>
+            <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+              {notifications > 9 ? "9+" : notifications}
+            </span>
+          </div>
+        </div>
+      )}
+    </>
+  ) : (
+    <>
+      <AppHeaderNav
+        pathname={pathname}
+        href="/events"
+        variant={variant}
+        onClick={closeMenus}
+      >
+        Events
+      </AppHeaderNav>
+      <div className="flex flex-col space-y-3 pt-3 border-t border-gray-200/20">
+        <Link
+          href="/auth?mode=signup"
+          className={`${secondaryBtnCls(variant)} text-center`}
+          onClick={closeMenus}
+        >
+          Sign Up
+        </Link>
+        <Link
+          href="/auth?mode=signin"
+          className={`${primaryBtnCls(variant)} text-center`}
+          onClick={closeMenus}
+        >
+          Login
+        </Link>
+      </div>
+    </>
+  );
+
+  /* ------------------------------------------------------------------ */
+  /* Render                                                             */
+  /* ------------------------------------------------------------------ */
   return (
-    <header className={getHeaderStyles()}>
+    <header className={headerCls(variant, sticky)}>
       <div className="mx-auto flex justify-between items-center">
         {/* Logo */}
-        <Link href="/" className={getLogoStyles()}>
+        <Link href="/" className={logoCls(variant)}>
           {APP_NAME}
         </Link>
 
-        {/* Search Bar */}
+        {/* Search (desktop) */}
         {showSearch && (
           <div className="hidden md:flex flex-1 max-w-md mx-8">
             <div className="relative w-full">
@@ -217,7 +308,7 @@ export default function Header({
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 1 1 14 0z"
                   />
                 </svg>
               </div>
@@ -225,178 +316,39 @@ export default function Header({
           </div>
         )}
 
-        {/* Desktop Navigation */}
+        {/* Desktop nav */}
         {showTabs && (
           <nav className="hidden md:flex items-center space-x-6">
-            {customTabs ? (
-              customTabs
-            ) : user ? (
-              <>
-                <Link
-                  className={getLinkStyles(pathname === "/events")}
-                  href="/events"
-                >
-                  Events
-                </Link>
-                <Link
-                  className={getLinkStyles(pathname === "/profile/events")}
-                  href="/profile/events"
-                >
-                  My Events & Tickets
-                </Link>
-                <Link
-                  className={getLinkStyles(pathname === "/payment/history")}
-                  href="/payment/history"
-                >
-                  Payment History
-                </Link>
-                {userProfile?.role === ROLE.EVENT_ORGANIZER && (
-                  <Link
-                    className={getLinkStyles(pathname === "/profile/my-events")}
-                    href="/profile/my-events"
-                  >
-                    Event Management
-                  </Link>
-                )}
-
-                {/* Notifications */}
-                {notifications > 0 && (
-                  <div className="relative">
-                    <Button className={`${getLinkStyles()} relative`}>
-                      <Bell className="w-6 h-6" />
-                      <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                        {notifications > 9 ? "9+" : notifications}
-                      </span>
-                    </Button>
-                  </div>
-                )}
-
-                {/* User Profile Dropdown */}
-                <div className="relative">
-                  <Button
-                    variant="ghost"
-                    onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                    className={`${getLinkStyles()} flex items-center space-x-2`}
-                  >
-                    {getUserAvatar() ? (
-                      <Image
-                        src={getUserAvatar()!}
-                        alt="User Avatar"
-                        className="w-8 h-8 rounded-full border-2 border-gray-300 hover:border-blue-500 transition-colors"
-                      />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center hover:bg-gray-300 transition-colors">
-                        <User className="w-4 h-4 text-gray-600" />
-                      </div>
-                    )}
-                    <span className="max-w-24 truncate">
-                      {getUserDisplayName()}
-                    </span>
-                  </Button>
-
-                  {/* User Dropdown Menu */}
-                  {isUserMenuOpen && (
-                    <div className={getDropdownStyles()}>
-                      <Link
-                        href="/profile"
-                        className={getDropdownItemStyles()}
-                        onClick={() => setIsUserMenuOpen(false)}
-                      >
-                        <div className="flex items-center space-x-2">
-                          <User className="w-4 h-4" />
-                          <span>Profile</span>
-                        </div>
-                      </Link>
-                      {userProfile.role === ROLE.EVENT_ORGANIZER && (
-                        <Link
-                          href="/profile/my-events"
-                          className={getDropdownItemStyles()}
-                          onClick={() => setIsUserMenuOpen(false)}
-                        >
-                          <div className="flex items-center space-x-2">
-                            <Ticket className="w-4 h-4" />
-                            <span>Event Management</span>
-                          </div>
-                        </Link>
-                      )}
-                      <hr className="my-1 border-gray-200" />
-                      <Button
-                        variant="ghost"
-                        onClick={handleSignOut}
-                        className={`${getDropdownItemStyles()} w-full text-left hover:text-black`}
-                      >
-                        <div className="flex items-center space-x-2">
-                          <LogOut className="w-4 h-4" />
-                          <span>Sign Out</span>
-                        </div>
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : (
-              <>
-                <Link
-                  className={getLinkStyles(pathname === "/events")}
-                  href="/events"
-                >
-                  Events
-                </Link>
-                <div className="flex items-center space-x-3">
-                  <Link
-                    href="/auth?mode=signup"
-                    className={getSecondaryButtonStyles()}
-                  >
-                    Sign Up
-                  </Link>
-                  <Link href="/auth?mode=signin" className={getButtonStyles()}>
-                    Login
-                  </Link>
-                </div>
-              </>
-            )}
+            {desktopTabs}
           </nav>
         )}
 
-        {/* Mobile Menu Button */}
+        {/* Mobile burger */}
         {showTabs && (
-          <button
-            className={`md:hidden ${getTextStyles()} p-2 rounded-md hover:bg-gray-100/10 transition-colors`}
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
+          <Button
+            variant="ghost"
+            type="button"
+            className={`md:hidden ${textCls(
+              variant
+            )} p-2 rounded-md hover:bg-gray hover:text-black transition-colors`}
+            onClick={() => setIsMenuOpen((v) => !v)}
           >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              {isMenuOpen ? (
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              ) : (
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
-              )}
-            </svg>
-          </button>
+            {isMenuOpen ? (
+              <X className="w-6 h-6" />
+            ) : (
+              <Menu className="w-6 h-6" />
+            )}
+          </Button>
         )}
       </div>
 
-      {/* Mobile Menu */}
+      {/* Mobile nav */}
       {showTabs && isMenuOpen && (
         <div className="md:hidden mt-4 pb-4 border-t border-gray-200/20">
           <nav className="flex flex-col space-y-3 pt-4">
             {showSearch && (
               <div className="px-2 mb-4">
-                <input
+                <Input
                   type="text"
                   placeholder="Search events..."
                   value={searchQuery}
@@ -405,144 +357,12 @@ export default function Header({
                 />
               </div>
             )}
-
-            {customTabs ? (
-              <div className="flex flex-col space-y-3">{customTabs}</div>
-            ) : user ? (
-              <>
-                <Link
-                  className={`${getLinkStyles(pathname === "/events")} px-2 py-1`}
-                  href="/events"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Events
-                </Link>
-                <Link
-                  className={`${getLinkStyles(pathname === "/profile/events")} px-2 py-1`}
-                  href="/profile/events"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  My Events & Tickets
-                </Link>
-                <Link
-                  className={`${getLinkStyles(pathname === "/payment/history")} px-2 py-1`}
-                  href="/payment/history"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Payment History
-                </Link>
-                {userProfile?.role === ROLE.EVENT_ORGANIZER && (
-                  <Link
-                    className={`${getLinkStyles(pathname === "/profile/my-events")} px-2 py-1`}
-                    href="/profile/my-events"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Event Management
-                  </Link>
-                )}
-
-                {/* Mobile User Profile Section */}
-                <div className="px-2 py-2 border-t border-gray-200/20">
-                  <div className="flex items-center space-x-3 mb-3">
-                    {getUserAvatar() ? (
-                      <img
-                        src={getUserAvatar()!}
-                        alt="User Avatar"
-                        className="w-10 h-10 rounded-full border-2 border-gray-300"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-                        <User className="w-5 h-5 text-gray-600" />
-                      </div>
-                    )}
-                    <div>
-                      <div className={`font-medium ${getTextStyles()}`}>
-                        {getUserDisplayName()}
-                      </div>
-                      <div className="text-sm text-gray-500">{user.email}</div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col space-y-2">
-                    <Link
-                      href="/profile"
-                      className={`${getDropdownItemStyles()} rounded-md`}
-                      onClick={() => setIsMenuOpen(false)}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <User className="w-4 h-4" />
-                        <span>Profile</span>
-                      </div>
-                    </Link>
-                    <Link
-                      href="/profile/events"
-                      className={`${getDropdownItemStyles()} rounded-md`}
-                      onClick={() => setIsMenuOpen(false)}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <Settings className="w-4 h-4" />
-                        <span>My Events & Tickets</span>
-                      </div>
-                    </Link>
-                    <button
-                      onClick={() => {
-                        handleSignOut();
-                        setIsMenuOpen(false);
-                      }}
-                      className={`${getDropdownItemStyles()} rounded-md w-full text-left`}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <LogOut className="w-4 h-4" />
-                        <span>Sign Out</span>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Mobile Notifications */}
-                {notifications > 0 && (
-                  <div className="flex items-center justify-between px-2 pt-3 border-t border-gray-200/20">
-                    <div className="flex items-center space-x-2">
-                      <Bell className="w-4 h-4" />
-                      <span className={`text-sm ${getTextStyles()}`}>
-                        Notifications
-                      </span>
-                      <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                        {notifications > 9 ? "9+" : notifications}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <Link
-                  className={`${getLinkStyles(pathname === "/events")} px-2 py-1`}
-                  href="/events"
-                >
-                  Events
-                </Link>
-                <div className="flex flex-col space-y-3 pt-3 border-t border-gray-200/20">
-                  <Link
-                    href="/auth?mode=signup"
-                    className={`${getSecondaryButtonStyles()} text-center`}
-                  >
-                    Sign Up
-                  </Link>
-                  <Link
-                    href="/auth?mode=signin"
-                    className={`${getButtonStyles()} text-center`}
-                  >
-                    Login
-                  </Link>
-                </div>
-              </>
-            )}
+            {mobileTabs}
           </nav>
         </div>
       )}
 
-      {/* Click outside to close dropdown */}
+      {/* Backdrop to close user dropdown */}
       {isUserMenuOpen && (
         <div
           className="fixed inset-0 z-40"
