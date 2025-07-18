@@ -13,7 +13,7 @@ import { useRouter } from "next/navigation";
 export default function OrganizerEventsPage() {
   const router = useRouter();
   const { organizerId } = useParams<{ organizerId: string }>();
-  const { userProfile, loading: authLoading } = useAuth();
+  const { user, role, isAuthLoading } = useAuth();
 
   // Fetch organizer data
   const { data: organizer, isLoading: organizerLoading } = useQuery<Organizer>({
@@ -31,12 +31,12 @@ export default function OrganizerEventsPage() {
     }
   );
 
-  if (authLoading || organizerLoading) {
+  if (isAuthLoading || organizerLoading) {
     return <LoadingPage />;
   }
 
   // Check if user is organizer (from custom claims)
-  const isOrganizer = userProfile?.role === "event_organizer";
+  const isOrganizer = role === "event_organizer";
 
   // If user is organizer and this is their own organizer page, show management interface
   if (!isOrganizer) {
@@ -45,9 +45,6 @@ export default function OrganizerEventsPage() {
   }
 
   return (
-    <OrganizerEventsManager
-      organizerId={organizerId as string}
-      user={userProfile}
-    />
+    <OrganizerEventsManager organizerId={organizerId as string} user={user} />
   );
 }

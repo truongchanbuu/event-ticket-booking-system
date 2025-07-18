@@ -41,7 +41,6 @@ export async function signUp(
 
       return userCredential;
     } catch (error) {
-      // Nếu lưu vào Firestore thất bại, xóa user khỏi Firebase Auth
       await user.delete();
       throw error;
     }

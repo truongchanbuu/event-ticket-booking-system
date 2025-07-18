@@ -86,7 +86,7 @@ export default class AuthController {
     }
 
     async setClaims(req, res) {
-        const uid = req.params.uid;
+        const uid = req.user.uid;
         const { claims, merge = true } = req.body;
 
         const finalClaims = await this.authService.setClaims(

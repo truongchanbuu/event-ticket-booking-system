@@ -98,7 +98,8 @@ export default class UserService {
         const newUser = {
             userID,
             email: userData.email,
-            createdAt: new Date(),
+            createdAt: new Date().toISOString(),
+            role: ROLE.CUSTOMER,
             isDeleted: false,
             emailVerified: false,
             phoneVerified: false,
@@ -106,6 +107,9 @@ export default class UserService {
         };
 
         await this.userCollection.doc(userID).set(newUser);
+        await auth().setCustomUserClaims(userID, {
+            role: newUser.role,
+        });
         return { user: { id: userID, ...newUser }, isNew: true };
     }
 

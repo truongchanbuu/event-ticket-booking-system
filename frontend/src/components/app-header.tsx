@@ -1,6 +1,6 @@
 "use client";
+
 import { APP_NAME } from "@/constants/app";
-import Link from "next/link";
 import { useState } from "react";
 import { User, LogOut, Settings, Bell, Ticket } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -8,6 +8,11 @@ import { useAuth } from "@/app/providers/AuthProvider";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useUser } from "@/hooks/use-user";
+import Link from "next/link";
+import ROLE from "@/schema/enums/role";
+import { Input } from "./ui/input";
+import { Button } from "./ui/button";
+import Image from "next/image";
 
 type HeaderProps = {
   showTabs?: boolean;
@@ -30,7 +35,7 @@ export default function Header({
   const [searchQuery, setSearchQuery] = useState("");
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const pathname = usePathname();
-  const { user, loading } = useAuth();
+  const { user, isAuthLoading } = useAuth();
   const { userProfile } = useUser();
 
   const handleSignOut = async () => {
@@ -166,8 +171,8 @@ export default function Header({
     }
   };
 
-  // Show loading skeleton if auth is still loading
-  if (loading) {
+  // Show loading skeleton if auth is still isAuthLoading
+  if (isAuthLoading) {
     return (
       <header className={getHeaderStyles()}>
         <div className="mx-auto flex justify-between items-center">
@@ -194,7 +199,7 @@ export default function Header({
         {showSearch && (
           <div className="hidden md:flex flex-1 max-w-md mx-8">
             <div className="relative w-full">
-              <input
+              <Input
                 type="text"
                 placeholder="Search events..."
                 value={searchQuery}
@@ -234,10 +239,10 @@ export default function Header({
                   Events
                 </Link>
                 <Link
-                  className={getLinkStyles(pathname === "/profile/my-events")}
-                  href="/profile/my-events"
+                  className={getLinkStyles(pathname === "/profile/events")}
+                  href="/profile/events"
                 >
-                  My Tickets
+                  My Events & Tickets
                 </Link>
                 <Link
                   className={getLinkStyles(pathname === "/payment/history")}
@@ -245,35 +250,36 @@ export default function Header({
                 >
                   Payment History
                 </Link>
-                {userProfile?.role === "organizer" && (
+                {userProfile?.role === ROLE.EVENT_ORGANIZER && (
                   <Link
                     className={getLinkStyles(pathname === "/profile/my-events")}
                     href="/profile/my-events"
                   >
-                    My Events
+                    Event Management
                   </Link>
                 )}
 
                 {/* Notifications */}
                 {notifications > 0 && (
                   <div className="relative">
-                    <button className={`${getLinkStyles()} relative`}>
+                    <Button className={`${getLinkStyles()} relative`}>
                       <Bell className="w-6 h-6" />
                       <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
                         {notifications > 9 ? "9+" : notifications}
                       </span>
-                    </button>
+                    </Button>
                   </div>
                 )}
 
                 {/* User Profile Dropdown */}
                 <div className="relative">
-                  <button
+                  <Button
+                    variant="ghost"
                     onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                     className={`${getLinkStyles()} flex items-center space-x-2`}
                   >
                     {getUserAvatar() ? (
-                      <img
+                      <Image
                         src={getUserAvatar()!}
                         alt="User Avatar"
                         className="w-8 h-8 rounded-full border-2 border-gray-300 hover:border-blue-500 transition-colors"
@@ -286,7 +292,7 @@ export default function Header({
                     <span className="max-w-24 truncate">
                       {getUserDisplayName()}
                     </span>
-                  </button>
+                  </Button>
 
                   {/* User Dropdown Menu */}
                   {isUserMenuOpen && (
@@ -301,26 +307,29 @@ export default function Header({
                           <span>Profile</span>
                         </div>
                       </Link>
-                      <Link
-                        href="/profile/my-events"
-                        className={getDropdownItemStyles()}
-                        onClick={() => setIsUserMenuOpen(false)}
-                      >
-                        <div className="flex items-center space-x-2">
-                          <Ticket className="w-4 h-4" />
-                          <span>My Events</span>
-                        </div>
-                      </Link>
+                      {userProfile.role === ROLE.EVENT_ORGANIZER && (
+                        <Link
+                          href="/profile/my-events"
+                          className={getDropdownItemStyles()}
+                          onClick={() => setIsUserMenuOpen(false)}
+                        >
+                          <div className="flex items-center space-x-2">
+                            <Ticket className="w-4 h-4" />
+                            <span>Event Management</span>
+                          </div>
+                        </Link>
+                      )}
                       <hr className="my-1 border-gray-200" />
-                      <button
+                      <Button
+                        variant="ghost"
                         onClick={handleSignOut}
-                        className={`${getDropdownItemStyles()} w-full text-left`}
+                        className={`${getDropdownItemStyles()} w-full text-left hover:text-black`}
                       >
                         <div className="flex items-center space-x-2">
                           <LogOut className="w-4 h-4" />
                           <span>Sign Out</span>
                         </div>
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -409,11 +418,11 @@ export default function Header({
                   Events
                 </Link>
                 <Link
-                  className={`${getLinkStyles(pathname === "/profile/my-events")} px-2 py-1`}
-                  href="/profile/my-events"
+                  className={`${getLinkStyles(pathname === "/profile/events")} px-2 py-1`}
+                  href="/profile/events"
                   onClick={() => setIsMenuOpen(false)}
                 >
-                  My Tickets
+                  My Events & Tickets
                 </Link>
                 <Link
                   className={`${getLinkStyles(pathname === "/payment/history")} px-2 py-1`}
@@ -422,13 +431,13 @@ export default function Header({
                 >
                   Payment History
                 </Link>
-                {userProfile?.role === "organizer" && (
+                {userProfile?.role === ROLE.EVENT_ORGANIZER && (
                   <Link
                     className={`${getLinkStyles(pathname === "/profile/my-events")} px-2 py-1`}
                     href="/profile/my-events"
                     onClick={() => setIsMenuOpen(false)}
                   >
-                    My Events
+                    Event Management
                   </Link>
                 )}
 
@@ -472,7 +481,7 @@ export default function Header({
                     >
                       <div className="flex items-center space-x-2">
                         <Settings className="w-4 h-4" />
-                        <span>My Events</span>
+                        <span>My Events & Tickets</span>
                       </div>
                     </Link>
                     <button
