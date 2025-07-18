@@ -1,4 +1,5 @@
 import React from "react";
+import { motion } from "framer-motion";
 
 interface LoadingPageProps {
   message?: string;
@@ -10,8 +11,16 @@ const LoadingPage = ({
   subMessage = "Loading your journey...",
 }: LoadingPageProps) => {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
-      <div className="text-center">
+    <motion.div
+      role="status"
+      aria-live="polite"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+      /* FIX: fixed overlay, lock viewport, hide overflow */
+      className="fixed inset-0 z-[9999] bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center overflow-hidden overscroll-none select-none"
+    >
+      <div className="text-center z-10 px-4">
         {/* Main Logo/Brand Area */}
         <div className="mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl mb-4 shadow-lg">
@@ -41,27 +50,27 @@ const LoadingPage = ({
               {[...Array(3)].map((_, i) => (
                 <div
                   key={i}
-                  className="w-16 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg shadow-md transform transition-all duration-1000 ease-in-out"
+                  className="w-16 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg shadow-md transform-gpu"
                   style={{
                     animation: `ticketFloat 2s ease-in-out infinite ${i * 0.2}s`,
                   }}
                 >
                   <div className="w-full h-full bg-white/20 rounded-lg flex items-center justify-center">
-                    <div className="w-2 h-2 bg-white rounded-full opacity-60"></div>
+                    <div className="w-2 h-2 bg-white rounded-full opacity-60" />
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Progress Bar */}
+          {/* Progress Bar (scaleX instead of width anim) */}
           <div className="w-64 h-2 bg-gray-200 rounded-full mx-auto mb-4 overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full transition-all duration-1000 ease-out"
+              className="h-full origin-left bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"
               style={{
-                animation: "progressFill 3s ease-in-out infinite",
+                animation: "progressScale 3s ease-in-out infinite",
               }}
-            ></div>
+            />
           </div>
 
           {/* Loading Dots */}
@@ -73,7 +82,7 @@ const LoadingPage = ({
                 style={{
                   animation: `bounce 1.4s ease-in-out infinite both ${i * 0.16}s`,
                 }}
-              ></div>
+              />
             ))}
           </div>
         </div>
@@ -92,16 +101,17 @@ const LoadingPage = ({
       </div>
 
       {/* Background Elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-32 h-32 bg-blue-100 rounded-full opacity-20 animate-pulse"></div>
+      <div className="absolute inset-0 pointer-events-none z-0">
+        {/* NOTE: dùng translate thay vì scale để không tràn */}
+        <div className="absolute top-20 left-10 w-32 h-32 rounded-full bg-blue-100 opacity-20 animate-pulse" />
         <div
-          className="absolute bottom-20 right-10 w-24 h-24 bg-purple-100 rounded-full opacity-20 animate-pulse"
+          className="absolute bottom-20 right-10 w-24 h-24 rounded-full bg-purple-100 opacity-20 animate-pulse"
           style={{ animationDelay: "1s" }}
-        ></div>
+        />
         <div
-          className="absolute top-1/2 left-5 w-16 h-16 bg-pink-100 rounded-full opacity-20 animate-pulse"
+          className="absolute top-1/2 left-5 w-16 h-16 rounded-full bg-pink-100 opacity-20 animate-pulse"
           style={{ animationDelay: "0.5s" }}
-        ></div>
+        />
       </div>
 
       {/* Custom Styles */}
@@ -109,22 +119,23 @@ const LoadingPage = ({
         @keyframes ticketFloat {
           0%,
           100% {
-            transform: translateY(0px) rotate(0deg);
+            transform: translateY(0) rotate(0deg);
           }
           50% {
             transform: translateY(-10px) rotate(2deg);
           }
         }
 
-        @keyframes progressFill {
+        /* CHANGED: use scaleX instead of width to avoid layout overflow */
+        @keyframes progressScale {
           0% {
-            width: 0%;
+            transform: scaleX(0);
           }
           50% {
-            width: 70%;
+            transform: scaleX(0.7);
           }
           100% {
-            width: 100%;
+            transform: scaleX(1);
           }
         }
 
@@ -153,7 +164,16 @@ const LoadingPage = ({
           animation: fade-in-out 2s ease-in-out infinite;
         }
       `}</style>
-    </div>
+
+      <style jsx global>{`
+        html,
+        body {
+          height: 100%;
+          width: 100%;
+          overflow: hidden !important;
+        }
+      `}</style>
+    </motion.div>
   );
 };
 

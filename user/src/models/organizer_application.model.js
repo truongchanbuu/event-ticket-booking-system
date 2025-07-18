@@ -15,7 +15,12 @@ const OrganizerApplicationSchema = {
         websiteUrl: "...",
         facebookUrl: "...",
     },
-    status: "pending" | "approved" | "rejected" | "permanent_rejected",
+    status:
+        "pending" |
+        "approved" |
+        "rejected" |
+        "permanent_rejected" |
+        "pending_admin",
     rejectionReason: "Giấy tờ không hợp lệ",
     requiresAdminApproval: false,
     rejectCount: 0, // Số lần bị reject

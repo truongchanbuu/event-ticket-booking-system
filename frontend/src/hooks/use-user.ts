@@ -9,7 +9,8 @@ import { useEffect } from "react";
 import { QUERY_KEYS } from "@/constants/user";
 
 const REFETCH_TIME = 1000 * 60 * 5;
-export const useUser = () => {
+export const useUser = (options?: { needFetchProfile?: boolean }) => {
+  const { needFetchProfile = true } = options || {};
   const { user, isAuthLoading } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -24,7 +25,7 @@ export const useUser = () => {
   } = useQuery<AppUser | null>({
     queryKey,
     queryFn: () => UserService.getCurrentUserProfile().then((res) => res.data),
-    enabled: Boolean(user),
+    enabled: Boolean(user && needFetchProfile),
     staleTime: REFETCH_TIME,
     retry: 1,
     retryOnMount: false,

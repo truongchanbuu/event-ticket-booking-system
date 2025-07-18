@@ -5,3 +5,4 @@ export * from "./helper";
 export * from "./notification";
 export * from "./relationship.schema";
 export * from "./enums";
+export * from "./organizer";

@@ -3,8 +3,12 @@ import { OrganizerStatusEnum } from "../enums/organizer-status";
 import { UserSchema } from "./user.schema";
 import { CategorySchema } from "../events/category.schema";
 
+export const OrganizerTypeSchema = z.enum(["personal", "business"]);
+export type OrganizerType = z.infer<typeof OrganizerTypeSchema>;
+
 export const OrganizerUserSchema = UserSchema.extend({
   organizerId: z.string(),
+  organizerType: OrganizerTypeSchema,
   bio: z.string().optional(),
   websiteUrl: z.string().url().optional(),
   facebookUrl: z.string().url().optional(),
