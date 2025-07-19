@@ -7,12 +7,9 @@ import ApplicationStatus from "@/components/organizer/ApplicationStatus";
 import LoadingPage from "@/components/app-loading";
 import ProtectedRoute from "@/components/ProtectRoute";
 import { useUser } from "@/hooks/use-user";
-import { APP_EMAIL } from "@/constants/app";
 
 export default function ApplyOrganizerPage() {
-  const [status, setStatus] = React.useState<APPLY_STATUS>(
-    APPLY_STATUS.PROCESSING
-  );
+  const [status, setStatus] = React.useState<APPLY_STATUS>(APPLY_STATUS.NONE);
   const [reason, setReason] = React.useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = React.useState(false);
 
