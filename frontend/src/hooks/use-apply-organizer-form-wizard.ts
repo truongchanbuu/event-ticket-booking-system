@@ -23,8 +23,6 @@ export function useApplyOrganizerWizard() {
   };
 
   return useWizardForm<ApplyOrganizerFormData>({
-    // Cung cấp một đối tượng cấu hình duy nhất
-
     stepSchemas: [
       ApplyOrganizerStep1Schema,
       (getValues) => {
@@ -32,9 +30,7 @@ export function useApplyOrganizerWizard() {
         return createApplyOrganizerStep2Schema(currentType);
       },
     ],
-
     fullSchema: ApplyOrganizerFormSchema,
-
     defaultValues: defaultValues,
   });
 }

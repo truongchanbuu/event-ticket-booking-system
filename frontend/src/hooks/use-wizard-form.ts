@@ -47,36 +47,27 @@ export function useWizardForm<TValues extends FieldValues>({
 }: UseWizardFormOptions<TValues>): WizardReturn<TValues> {
   const [currentStep, setCurrentStep] = React.useState(0);
 
-  // --- GIẢI PHÁP NẰM Ở ĐÂY ---
-  // Tạo một hàm resolver tùy chỉnh bằng useCallback.
-  // Hàm này sẽ không thay đổi trừ khi stepSchemas thay đổi, nhưng logic bên trong
-  // sẽ luôn sử dụng giá trị `currentStep` mới nhất.
   const resolver = React.useCallback(
     async (data: TValues, context: any, options: any) => {
-      // 1. Xác định schema cho bước hiện tại
       const schemaOrFn = stepSchemas[currentStep];
       const currentSchema =
-        typeof schemaOrFn === "function"
-          ? // Chúng ta không thể dùng getValues() ở đây vì nó sẽ tạo vòng lặp.
-            // Thay vào đó, chúng ta có thể truyền `data` hiện tại mà resolver nhận được.
-            schemaOrFn(() => data)
-          : schemaOrFn;
+        typeof schemaOrFn === "function" ? schemaOrFn(() => data) : schemaOrFn;
 
-      // 2. Sử dụng zodResolver của thư viện với schema đã được xác định
       return zodResolver(currentSchema)(data, context, options);
     },
     [currentStep, stepSchemas]
   );
 
-  // `methods` bây giờ được khai báo TRƯỚC khi cần dùng đến.
-  // Nó nhận vào một hàm resolver ổn định.
   const methods = useForm<TValues>({
     resolver,
     mode,
     defaultValues,
   });
 
-  // `currentSchema` giờ đây có thể được tính toán một cách an toàn SAU KHI `methods` đã tồn tại.
+  React.useEffect(() => {
+    methods.trigger();
+  }, [currentStep, methods]);
+
   const currentSchema = React.useMemo(() => {
     const schemaOrFn = stepSchemas[currentStep];
     return typeof schemaOrFn === "function"
