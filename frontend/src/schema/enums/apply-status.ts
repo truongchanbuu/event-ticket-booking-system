@@ -9,7 +9,6 @@ export enum APPLY_STATUS {
   REJECTED = "rejected",
   PERMANENT_REJECTED = "permanent_rejected",
   CANCELLED = "cancelled",
-  DEACTIVATED = "deactivated",
 }
 
 export const ApplyStatusEnum = z.nativeEnum(APPLY_STATUS);

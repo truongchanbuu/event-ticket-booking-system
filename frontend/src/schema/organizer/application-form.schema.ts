@@ -1,4 +1,7 @@
+import { MAX_BIO_TEXT, MIN_BIO_TEXT } from "@/constants/application";
 import { z } from "zod";
+import { OrganizerType } from "../events";
+import { urlOrDomainField } from "@/lib/helpers/schema-helper";
 
 // === SCHEMA CHO CÁC THÀNH PHẦN CƠ BẢN ===
 const FILE_REQUIRED_ERROR = "This document is required.";
@@ -17,12 +20,12 @@ export const ApplyOrganizerStep1Schema = z.object({
   }),
   bio: z
     .string()
-    .min(10, "Bio must be at least 10 characters.")
-    .max(500, "Bio must be under 500 characters."),
-  websiteUrl: z.string().url("Invalid URL").optional().or(z.literal("")),
-  facebookUrl: z.string().url("Invalid URL").optional().or(z.literal("")),
-  instagramUrl: z.string().url("Invalid URL").optional().or(z.literal("")),
-  xUrl: z.string().url("Invalid URL").optional().or(z.literal("")),
+    .min(MIN_BIO_TEXT, `Bio must be at least ${MIN_BIO_TEXT} characters.`)
+    .max(MAX_BIO_TEXT, `Bio must be under ${MAX_BIO_TEXT} characters.`),
+  websiteUrl: urlOrDomainField("Website URL"),
+  facebookUrl: urlOrDomainField("Facebook URL"),
+  instagramUrl: urlOrDomainField("Instagram URL"),
+  xUrl: urlOrDomainField("X Url"),
 });
 
 // === STEP 2: FACTORY FUNCTION CHO SCHEMA GIẤY TỜ ===
@@ -32,7 +35,7 @@ export const ApplyOrganizerStep1Schema = z.object({
  * @returns Schema Zod cho dữ liệu của Step 2.
  */
 export const createApplyOrganizerStep2Schema = (
-  organizationType: "personal" | "business"
+  organizationType: OrganizerType
 ) => {
   return z.object({
     // CMND/CCCD luôn luôn là bắt buộc cho cả hai loại.

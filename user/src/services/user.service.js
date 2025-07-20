@@ -2,6 +2,7 @@ import {
     AppError,
     ERROR_CODE,
     NOTIFICATION_STATUS,
+    ORGANIZER_STATUS,
     ROLE,
 } from "@event_ticket_booking_system/shared";
 import { db, FieldValue, auth } from "@event_ticket_booking_system/shared";
@@ -103,6 +104,10 @@ export default class UserService {
             isDeleted: false,
             emailVerified: false,
             phoneVerified: false,
+            organizerStatus: ORGANIZER_STATUS.NONE,
+            reportCount: 0,
+            riskScore: 0,
+            preferenceCategories: [],
             ...userData,
         };
 

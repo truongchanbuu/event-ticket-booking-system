@@ -7,7 +7,6 @@ const APPLY_STATUS = {
   REJECTED: "rejected",
   PERMANENT_REJECTED: "permanent_rejected",
   CANCELLED: "cancelled",
-  DEACTIVATED: "deactivated",
 };
 
 export default APPLY_STATUS;

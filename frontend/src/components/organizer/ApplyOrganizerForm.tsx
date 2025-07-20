@@ -17,12 +17,9 @@ import { Button } from "../ui/button";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
 import DocumentUploader from "./DocumentUploader";
-
-// Component con để hiển thị lỗi gọn gàng, có thể tái sử dụng
-const FieldError = ({ message }: { message?: string }) => {
-  if (!message) return null;
-  return <p className="mt-1.5 text-sm font-medium text-red-600">{message}</p>;
-};
+import { FieldError } from "../ui/field-error";
+import { MAX_BIO_TEXT, MIN_BIO_TEXT } from "@/constants/application";
+import { Input } from "../ui/input";
 
 interface ApplyOrganizerFormProps {
   onSubmit: (data: any) => void | Promise<void>;
@@ -47,7 +44,7 @@ export const ApplyOrganizerForm: React.FC<ApplyOrganizerFormProps> = ({
   const {
     control,
     watch,
-    formState: { errors, isValid },
+    formState: { errors, isValid, touchedFields },
   } = methods;
   const selectedType = watch("type");
   const stepLabels = ["Information", "Documents"];
@@ -221,16 +218,18 @@ export const ApplyOrganizerForm: React.FC<ApplyOrganizerFormProps> = ({
                                 {...field}
                                 id="bio"
                                 rows={4}
-                                maxLength={500}
-                                className={`w-full resize-none ${errors.bio ? "border-red-500 focus:ring-red-500" : "border-gray-300 focus:ring-blue-500"}`}
+                                minLength={MIN_BIO_TEXT}
+                                maxLength={MAX_BIO_TEXT}
+                                className={`w-full resize-none ${errors.bio && touchedFields.bio ? "border-red-500 focus:ring-red-500" : "border-gray-300 focus:ring-blue-500"}`}
                                 placeholder="Tell us about yourself or your organization..."
                               />
                               <div className="absolute bottom-2 right-2 text-xs text-gray-400">
-                                {field.value?.length || 0}/500
+                                {field.value?.length || 0}/{MAX_BIO_TEXT}
                               </div>
                             </div>
                             <FieldError
                               message={errors.bio?.message?.toString()}
+                              isTouched={touchedFields.bio}
                             />
                           </>
                         )}
@@ -261,17 +260,22 @@ export const ApplyOrganizerForm: React.FC<ApplyOrganizerFormProps> = ({
                             control={control}
                             render={({ field }) => (
                               <>
-                                <input
+                                <Input
                                   {...field}
                                   id={urlField}
                                   type="url"
                                   placeholder={`https://your${urlField.replace("Url", "")}.com`}
-                                  className={`w-full mt-2 border rounded-lg px-4 py-2 ${errors[urlField] ? "border-red-500" : "border-gray-300"}`}
+                                  className={`w-full mt-2 rounded-lg border px-4 py-2 transition-colors ${
+                                    errors[urlField] && touchedFields[urlField]
+                                      ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+                                      : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                                  }`}
                                 />
                                 <FieldError
                                   message={errors[
                                     urlField
                                   ]?.message?.toString()}
+                                  isTouched={touchedFields[urlField]}
                                 />
                               </>
                             )}
@@ -304,7 +308,10 @@ export const ApplyOrganizerForm: React.FC<ApplyOrganizerFormProps> = ({
                             required
                             value={field.value || null}
                             onChange={field.onChange}
-                            error={errors.identityCardFront?.message?.toString()}
+                            error={
+                              touchedFields.identityCardFront &&
+                              errors.identityCardFront?.message?.toString()
+                            }
                           />
                         )}
                       />
@@ -317,7 +324,10 @@ export const ApplyOrganizerForm: React.FC<ApplyOrganizerFormProps> = ({
                             required
                             value={field.value || null}
                             onChange={field.onChange}
-                            error={errors.identityCardBack?.message?.toString()}
+                            error={
+                              touchedFields.identityCardBack &&
+                              errors.identityCardBack?.message?.toString()
+                            }
                           />
                         )}
                       />
@@ -338,7 +348,10 @@ export const ApplyOrganizerForm: React.FC<ApplyOrganizerFormProps> = ({
                               required
                               value={field.value || null}
                               onChange={field.onChange}
-                              error={errors.businessLicense?.message?.toString()}
+                              error={
+                                touchedFields.businessLicense &&
+                                errors.businessLicense?.message?.toString()
+                              }
                             />
                           )}
                         />
@@ -352,7 +365,10 @@ export const ApplyOrganizerForm: React.FC<ApplyOrganizerFormProps> = ({
                           label="Event Organization Permit (Optional)"
                           value={field.value || null}
                           onChange={field.onChange}
-                          error={errors.eventLicense?.message?.toString()}
+                          error={
+                            touchedFields.eventLicense &&
+                            errors.eventLicense?.message?.toString()
+                          }
                         />
                       )}
                     />

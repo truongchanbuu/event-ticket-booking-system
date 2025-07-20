@@ -98,15 +98,6 @@ const statusConfig = {
     iconBg: "bg-gray-100",
     category: "neutral",
   },
-  [APPLY_STATUS.DEACTIVATED]: {
-    icon: <Ban className="w-12 h-12 text-gray-500" />,
-    title: "Account Deactivated",
-    description: "Your event organizer account has been deactivated.",
-    bgGradient: "from-gray-50 to-slate-50",
-    borderColor: "border-gray-200",
-    iconBg: "bg-gray-100",
-    category: "neutral",
-  },
 };
 
 const ProcessingIndicator = () => (
