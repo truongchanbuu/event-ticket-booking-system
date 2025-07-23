@@ -8,9 +8,10 @@ export function getChangedFields<T extends object>(
   const result: Partial<T> = {};
 
   for (const change of changes) {
-    if (change.type === "CHANGE" || change.type === "CREATE") {
-      const key = change.path[0] as keyof T;
-      result[key] = change.value;
+    const key = change.path[0] as keyof T;
+
+    if (!result.hasOwnProperty(key)) {
+      result[key] = edited[key];
     }
   }
 

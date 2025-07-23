@@ -1,24 +1,40 @@
 "use client";
 
+import { useState } from "react";
 import { Plus, User } from "lucide-react";
 import { ProfileSection } from "./profile-section";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import CategoryDialog from "../ui/category-modal";
 import { categories } from "@/constants/categories";
-import { AppUser } from "@/schema/user";
-import { useState } from "react";
+import { AppUser, UpdateUserData } from "@/schema/user";
 
 interface Props {
   user: AppUser;
-  updateProfile: (data: Partial<AppUser>) => void;
+  isEditing: boolean;
+  onPreferencesChange: (selections: string[]) => void;
+  updateProfile: (data: Partial<UpdateUserData>) => void;
 }
 
-const PreferencesSection: React.FC<Props> = ({ user, updateProfile }) => {
+const PreferencesSection: React.FC<Props> = ({
+  user,
+  isEditing,
+  onPreferencesChange,
+  updateProfile,
+}) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const openModal = () => setIsModalOpen(true);
   const closeModal = () => setIsModalOpen(false);
+
+  const handleSavePreferences = (selections: string[]) => {
+    if (isEditing) {
+      onPreferencesChange(selections);
+    } else {
+      updateProfile({ preferenceCategories: selections });
+    }
+    closeModal();
+  };
 
   return (
     <ProfileSection
@@ -51,12 +67,10 @@ const PreferencesSection: React.FC<Props> = ({ user, updateProfile }) => {
       </div>
 
       <CategoryDialog
-        tempSelectedCategories={user.preferenceCategories}
+        initialCategories={user.preferenceCategories}
         closeModal={closeModal}
         isModalOpen={isModalOpen}
-        onSave={(selections) => {
-          updateProfile({ preferenceCategories: selections });
-        }}
+        onSave={handleSavePreferences}
       />
     </ProfileSection>
   );

@@ -3,6 +3,7 @@ import { categories } from "@/constants/categories";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -15,7 +16,7 @@ import { Category } from "@/schema";
 interface CategoryDialogProps {
   isModalOpen: boolean;
   closeModal: () => void;
-  tempSelectedCategories: string[];
+  initialCategories: string[];
   onSave?: (selected: string[]) => Promise<void> | void;
   maxSelected?: number;
   title?: string;
@@ -24,33 +25,24 @@ interface CategoryDialogProps {
 export default function CategoryDialog({
   isModalOpen,
   closeModal,
-  tempSelectedCategories,
+  initialCategories,
   onSave,
   maxSelected,
   title = "Select Your Preferences",
 }: CategoryDialogProps) {
-  /** Local working copy để user chọn trong dialog */
   const [localSelected, setLocalSelected] = React.useState<string[]>([]);
-  /** ô search */
   const [searchTerm, setSearchTerm] = React.useState("");
-  /** saving spinner */
   const [isSaving, setIsSaving] = React.useState(false);
-  /** lỗi khi save */
   const [error, setError] = React.useState<string | null>(null);
 
-  /**
-   * Khi modal mở lại, đồng bộ localSelected theo tempSelectedCategories từ parent.
-   * Giúp user thấy trạng thái mới nhất của selections bên ngoài.
-   */
   React.useEffect(() => {
     if (isModalOpen) {
-      setLocalSelected(tempSelectedCategories ?? []);
+      setLocalSelected(initialCategories ?? []);
       setSearchTerm("");
       setError(null);
     }
-  }, [isModalOpen, tempSelectedCategories]);
+  }, [isModalOpen, initialCategories]);
 
-  /** Lọc categories theo search */
   const filteredCategories = React.useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     if (!term) return categories;
@@ -61,20 +53,18 @@ export default function CategoryDialog({
     });
   }, [searchTerm]);
 
-  /** Xoá khỏi localSelected */
   const removeCategory = (id: string) => {
+    setError(null);
     setLocalSelected((prev) => prev.filter((x) => x !== id));
   };
 
-  /** Toggle chọn/bỏ */
   const toggleCategory = (id: string) => {
+    setError(null);
     setLocalSelected((prev) => {
       const exists = prev.includes(id);
       if (exists) return prev.filter((x) => x !== id);
 
-      // enforce maxSelected nếu có
       if (maxSelected && prev.length >= maxSelected) {
-        // Có thể hiện toast, hoặc flash lỗi cục bộ
         setError(`You can select up to ${maxSelected} categories.`);
         return prev;
       }
@@ -83,7 +73,6 @@ export default function CategoryDialog({
     });
   };
 
-  /** Save handler */
   const savePreferences = async () => {
     setIsSaving(true);
     setError(null);
@@ -97,7 +86,6 @@ export default function CategoryDialog({
     }
   };
 
-  /** count hiển thị (dùng local để người dùng thấy số lượng khi đang chỉnh sửa) */
   const count = localSelected.length;
 
   return (
@@ -108,7 +96,6 @@ export default function CategoryDialog({
       }}
     >
       <DialogContent className="max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Dialog Header */}
         <DialogHeader>
           <DialogTitle>
             {title}
@@ -116,6 +103,7 @@ export default function CategoryDialog({
               {count}
             </span>
           </DialogTitle>
+          <DialogDescription>Select preferred categories.</DialogDescription>
           {maxSelected ? (
             <p className="text-xs text-muted-foreground mt-1">
               You can select up to {maxSelected} categories.
@@ -123,9 +111,7 @@ export default function CategoryDialog({
           ) : null}
         </DialogHeader>
 
-        {/* Dialog Content */}
         <div className="flex-1 overflow-y-auto space-y-6 px-1">
-          {/* Selected Categories Preview */}
           <div>
             <div className="min-h-[60px] p-4 bg-muted/50 rounded-lg border-2 border-dashed border-border">
               {count ? (
@@ -165,7 +151,6 @@ export default function CategoryDialog({
             </div>
           </div>
 
-          {/* Search */}
           <div className="relative">
             <Search
               className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
@@ -180,7 +165,6 @@ export default function CategoryDialog({
             />
           </div>
 
-          {/* Categories Grid */}
           <div>
             <h3 className="font-medium mb-3">Available Categories</h3>
             <div className="m-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -228,14 +212,12 @@ export default function CategoryDialog({
           </div>
         </div>
 
-        {/* Error (nếu có) */}
         {error && (
           <div className="px-1 text-sm text-destructive text-center">
             {error}
           </div>
         )}
 
-        {/* Dialog Footer */}
         <DialogFooter className="border-t pt-4">
           <Button
             type="button"

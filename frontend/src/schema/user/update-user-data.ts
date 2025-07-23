@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { RoleEnum } from "../enums";
 
 export const UpdateUserSchema = z.object({
   email: z.string().email().optional(),
@@ -7,8 +6,24 @@ export const UpdateUserSchema = z.object({
   phoneNumber: z
     .string()
     .transform((val) => (val.trim() === "" ? undefined : val))
-    .optional(),
-  birthday: z.string().datetime().optional(),
+    .optional()
+    .refine(
+      (val) =>
+        !val ||
+        /^(?:\+84|0)(?:3[2-9]|5[2689]|7[06-9]|8[1-9]|9[0-9])[0-9]{7}$/.test(
+          val
+        ),
+      {
+        message: "Invalid phone number.",
+      }
+    ),
+  birthday: z
+    .string()
+    .transform((val) => (val.trim() === "" ? undefined : val))
+    .optional()
+    .refine((val) => !val || !isNaN(new Date(val).getTime()), {
+      message: "Invalid date.",
+    }),
   photoUrl: z.string().url().optional(),
   followedOrganizers: z.array(z.string()).optional(),
   preferenceCategories: z.array(z.string()).optional(),

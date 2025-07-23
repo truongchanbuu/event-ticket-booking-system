@@ -22,6 +22,7 @@ const mockRedis = {
     del: async () => 0,
     mget: async () => [],
     multiDelAndSet: async () => true,
+    pipelineOps: async () => true,
 };
 
 container.register({
