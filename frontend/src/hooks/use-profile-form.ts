@@ -63,38 +63,25 @@ export const useProfileForm = ({
 
   const handleSave = useCallback(
     (formData: UpdateUserData) => {
-      console.log("[HANDLE_SAVE] START");
-      console.log("[FORM DATA]:", formData);
-
       if (!userProfile) {
-        console.warn("[HANDLE_SAVE] No userProfile, aborting.");
         return;
       }
 
       const initialData = formatUserForForm(userProfile);
-      console.log("[INITIAL DATA]:", initialData);
-
       let changedFields = getChangedFields(initialData, formData);
-      console.log("[CHANGED FIELDS BEFORE BIRTHDAY FIX]:", changedFields);
 
-      // Chuyển đổi birthday nếu thay đổi
       if (changedFields.birthday) {
         changedFields = {
           ...changedFields,
           birthday: new Date(changedFields.birthday).toISOString(),
         };
-        console.log("[CHANGED FIELDS AFTER BIRTHDAY FIX]:", changedFields);
       }
 
       if (Object.keys(changedFields).length > 0) {
-        console.log("[UPDATE PROFILE CALLED WITH]:", changedFields);
         updateProfile(changedFields);
-      } else {
-        console.log("[NO CHANGES] Nothing to update.");
       }
 
       setIsEditing(false);
-      console.log("[HANDLE_SAVE] DONE");
     },
     [userProfile, updateProfile]
   );

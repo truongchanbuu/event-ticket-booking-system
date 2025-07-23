@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const urlOrDomainField = (label: string) =>
+export const urlOrDomainField = (label: string, optional = true) =>
   z
     .preprocess(
       (val) => {
@@ -12,6 +12,6 @@ export const urlOrDomainField = (label: string) =>
         }
         return trimmed;
       },
-      z.string().url(`Invalid ${label}`)
+      z.string().url(`Invalid ${label}`).optional()
     )
     .optional();

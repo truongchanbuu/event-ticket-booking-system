@@ -1,6 +1,5 @@
 import { MAX_BIO_TEXT, MIN_BIO_TEXT } from "@/constants/application";
 import { z } from "zod";
-import { OrganizerType } from "../events";
 import { urlOrDomainField } from "@/lib/helpers/schema-helper";
 
 // === SCHEMA CHO CÁC THÀNH PHẦN CƠ BẢN ===
@@ -13,11 +12,14 @@ const OptionalFileSchema = z
   .custom<File>((val) => val instanceof File)
   .optional();
 
+export const OrganizerTypeSchema = z.enum(["personal", "business"], {
+  required_error: "You must be an organizer type",
+});
+export type OrganizerType = z.infer<typeof OrganizerTypeSchema>;
+
 // === STEP 1: THÔNG TIN TỔ CHỨC === (Không thay đổi)
 export const ApplyOrganizerStep1Schema = z.object({
-  type: z.enum(["personal", "business"], {
-    required_error: "Please select a type of organization.",
-  }),
+  type: OrganizerTypeSchema,
   bio: z
     .string()
     .min(MIN_BIO_TEXT, `Bio must be at least ${MIN_BIO_TEXT} characters.`)

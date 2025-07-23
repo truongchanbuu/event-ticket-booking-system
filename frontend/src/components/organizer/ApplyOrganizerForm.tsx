@@ -30,7 +30,6 @@ export const ApplyOrganizerForm: React.FC<ApplyOrganizerFormProps> = ({
   onSubmit,
   loading,
 }) => {
-  // 1. TOÀN BỘ LOGIC FORM ĐẾN TỪ MỘT HOOK DUY NHẤT
   const {
     methods,
     currentStep,
