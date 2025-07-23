@@ -32,7 +32,12 @@ export class UserService {
       throw new Error("User not authenticated");
     }
 
-    return await updateUserAPI(userData, token);
+    const user = await updateUserAPI(userData, token);
+    if (user) {
+      await auth.currentUser.reload();
+    }
+
+    return user;
   }
 
   static async deleteUserAccount() {

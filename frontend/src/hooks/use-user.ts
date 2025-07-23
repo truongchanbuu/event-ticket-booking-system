@@ -5,7 +5,7 @@ import { auth } from "@/lib/firebase";
 import { UserService } from "@/services/user.service";
 import { useToast } from "@/hooks/use-toast";
 import { UpdateUserData, AppUser, fromFirebaseUser } from "@/schema/user";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useCallback } from "react";
 import { QUERY_KEYS } from "@/constants/user";
 
 type UserProfileResponse = {
@@ -13,7 +13,7 @@ type UserProfileResponse = {
   meta: { isNew: boolean };
 };
 
-const REFETCH_TIME = 1000 * 60 * 5;
+const REFETCH_TIME = 0;
 const EMPTY_PROFILE: UserProfileResponse = {
   data: null,
   meta: { isNew: false },
@@ -28,45 +28,52 @@ function mergeProfile(
   backendUser: AppUser | null | undefined,
   firebaseUser: FirebaseUser | null
 ): AppUser | null {
-  if (!firebaseUser && !backendUser) return null;
-  if (!firebaseUser) return backendUser ?? null;
+  if (!firebaseUser && !backendUser) {
+    return null;
+  }
 
-  const fbPartial = fromFirebaseUser(firebaseUser); // Partial<AppUser>
+  if (!firebaseUser) {
+    return backendUser ?? null;
+  }
+
+  const fbPartial = fromFirebaseUser(firebaseUser);
   if (!backendUser) {
-    // cast: chúng ta dựng "giả" AppUser; chấp nhận thiếu dữ liệu chưa fetch
     return fbPartial as unknown as AppUser;
   }
-  return { ...fbPartial, ...backendUser }; // backend override
+
+  const merged = { ...fbPartial, ...backendUser };
+  return merged;
 }
 
 export const useUser = (options?: { needFetchProfile?: boolean }) => {
-  const { needFetchProfile = true } = options || {};
+  const { needFetchProfile = false } = options || {};
   const { user: firebaseUser, isAuthLoading } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const queryKey = QUERY_KEYS.userProfile(firebaseUser?.uid);
+  const queryKey = useMemo(
+    () => QUERY_KEYS.userProfile(firebaseUser?.uid),
+    [firebaseUser?.uid]
+  );
 
-  // cache trước để dùng nếu không fetch
   const cached =
     queryClient.getQueryData<UserProfileResponse>(queryKey) || EMPTY_PROFILE;
 
-  // Nếu đã login mà chưa có profile (hoặc thiếu role) -> nên fetch
-  const shouldFetch =
-    Boolean(firebaseUser) && (needFetchProfile || !cached.data?.role);
+  const shouldFetch = Boolean(firebaseUser) && !cached.data?.role;
 
   const {
     data: fetched = cached,
     isLoading: isProfileLoading,
     error: profileError,
     isFetching,
+    refetch,
   } = useQuery<UserProfileResponse>({
     queryKey,
     queryFn: async () => {
       const res = await UserService.getCurrentUserProfile();
       const full = res.data;
       return {
-        data: full.data,
+        data: full,
         meta: { isNew: full.isNew },
       };
     },
@@ -76,32 +83,33 @@ export const useUser = (options?: { needFetchProfile?: boolean }) => {
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     initialData: cached,
+    placeholderData: cached,
   });
+
+  useEffect(() => {
+    if (needFetchProfile && firebaseUser) refetch();
+  }, [needFetchProfile, firebaseUser, refetch]);
 
   const isLoggedIn = Boolean(firebaseUser);
   const isNewUser = fetched.meta?.isNew;
 
-  // Fallback hợp nhất: BE (nếu có) + Firebase
-  const userProfile: AppUser | null = useMemo(
+  const userProfile = useMemo(
     () => mergeProfile(fetched.data, firebaseUser ?? null),
     [fetched.data, firebaseUser]
   );
 
-  // Các flag tiện dụng
-  const hasDBProfile = Boolean(fetched.data); // đã fetch DB?
+  const hasDBProfile = Boolean(fetched.data);
   const hasRole = Boolean(userProfile?.role);
   const isProfileReady = isLoggedIn && hasRole;
 
-  // Nếu user mới tạo -> refresh token & refetch
   useEffect(() => {
     if (isNewUser && firebaseUser) {
       firebaseUser.getIdToken(true).then(() => {
         queryClient.invalidateQueries({ queryKey });
       });
     }
-  }, [isNewUser, firebaseUser]);
+  }, [isNewUser, firebaseUser, queryClient, queryKey]);
 
-  // Thông báo lỗi (chỉ khi đã login)
   useEffect(() => {
     if (profileError && isLoggedIn) {
       toast({
@@ -110,7 +118,7 @@ export const useUser = (options?: { needFetchProfile?: boolean }) => {
         description: "Cannot load your profile. Please try again later.",
       });
     }
-  }, [profileError, isLoggedIn]);
+  }, [profileError, isLoggedIn, toast]);
 
   /* ---------------- Mutations ---------------- */
   const updateProfileMutation = useMutation({
@@ -130,13 +138,20 @@ export const useUser = (options?: { needFetchProfile?: boolean }) => {
     },
     onError: (_err, _vars, ctx) => {
       if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev);
+      console.error(_err);
       toast({
         variant: "destructive",
         title: "Failed to update",
         description: "Cannot save your updates. Please try again later.",
       });
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey });
+      toast({
+        title: "Save Successfully",
+        description: "Your account has been changed",
+      });
+    },
   });
 
   const deleteAccountMutation = useMutation({
@@ -159,31 +174,54 @@ export const useUser = (options?: { needFetchProfile?: boolean }) => {
     },
   });
 
-  return {
-    // Auth-derived
-    firebaseUser,
-    isAuthLoading,
-    isLoggedIn,
+  const refreshUserProfile = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey });
+  }, [queryClient, queryKey]);
 
-    // Profile (merged)
-    userProfile,
-    hasDBProfile,
-    hasRole,
-    isProfileReady,
+  return useMemo(
+    () => ({
+      // Auth-derived
+      firebaseUser,
+      isAuthLoading,
+      isLoggedIn,
 
-    // Query state
-    isProfileLoading,
-    isFetching,
-    profileError,
+      // Profile (merged)
+      userProfile,
+      hasDBProfile,
+      hasRole,
+      isProfileReady,
 
-    // Mutations
-    updateProfile: updateProfileMutation.mutate,
-    isUpdatingProfile: updateProfileMutation.isPending,
+      // Query state
+      isProfileLoading,
+      isFetching,
+      profileError,
 
-    deleteAccount: deleteAccountMutation.mutate,
-    isDeletingAccount: deleteAccountMutation.isPending,
+      // Mutations
+      updateProfile: updateProfileMutation.mutate,
+      isUpdatingProfile: updateProfileMutation.isPending,
 
-    // Manual refresh
-    refreshUserProfile: () => queryClient.invalidateQueries({ queryKey }),
-  };
+      deleteAccount: deleteAccountMutation.mutate,
+      isDeletingAccount: deleteAccountMutation.isPending,
+
+      // Manual refresh
+      refreshUserProfile,
+    }),
+    [
+      firebaseUser,
+      isAuthLoading,
+      isLoggedIn,
+      userProfile,
+      hasDBProfile,
+      hasRole,
+      isProfileReady,
+      isProfileLoading,
+      isFetching,
+      profileError,
+      updateProfileMutation.mutate,
+      updateProfileMutation.isPending,
+      deleteAccountMutation.mutate,
+      deleteAccountMutation.isPending,
+      refreshUserProfile,
+    ]
+  );
 };

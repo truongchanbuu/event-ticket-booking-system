@@ -8,10 +8,10 @@ import EventCard from "@/components/events/event-card";
 import EventFilterBar from "@/components/events/event-filter-bar";
 import EventLoadingSkeleton from "@/components/events/event-loading-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { EventType, Organizer, EventFilters } from "@/schema";
+import type { EventType, EventFilters } from "@/schema";
 import { mockEvents } from "@/schema/events/events.mock";
-import { mockOrganizers } from "@/schema/user/organizer.mock";
 import { useDebounce } from "@/hooks/use-debounce";
+import { AppUser } from "@/schema/user";
 
 const MAX_SUGGEST_ORGANIZER = 6;
 const DEBOUNCE_DELAY = 300;
@@ -28,9 +28,9 @@ export default function EventsPage() {
   const [error, setError] = useState<string | null>(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  const { data: organizers = [] } = useQuery<Organizer[]>({
+  const { data: organizers = [] } = useQuery<AppUser[]>({
     queryKey: ["/api/organizers"],
-    queryFn: () => Promise.resolve(mockOrganizers),
+    queryFn: () => Promise.resolve([]),
   });
 
   const suggestedOrganizers = organizers.slice(0, MAX_SUGGEST_ORGANIZER);
@@ -220,7 +220,7 @@ export default function EventsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {suggestedOrganizers.map((organizer) => (
               <div
-                key={organizer.organizerId}
+                key={organizer.userID}
                 className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg"
               >
                 <Avatar className="h-12 w-12">

@@ -20,11 +20,13 @@ export default function ProtectedRoute({
     }
   }, [user, isAuthLoading, router]);
 
-  if (isAuthLoading) {
+  if (isAuthLoading && !user) {
     return <LoadingPage />;
   }
 
-  if (!user) return null;
+  if (!user) {
+    return null;
+  }
 
   return <>{children}</>;
 }

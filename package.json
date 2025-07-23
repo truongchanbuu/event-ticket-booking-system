@@ -11,8 +11,10 @@
     "frontend"
   ],
   "dependencies": {
+    "@upstash/redis": "^1.35.1",
     "awilix": "^12.0.5",
     "awilix-express": "^9.0.2",
+    "dotenv": "^17.2.0",
     "express": "^5.1.0",
     "express-validator": "^7.2.1",
     "firebase": "^11.9.0",

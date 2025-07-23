@@ -49,8 +49,11 @@ export function formatDateTime(
   if (input == null) return "";
 
   let dateObj: Date;
-  if ((input as Timestamp).seconds !== undefined) {
-    dateObj = (input as Timestamp).toDate();
+  if (typeof (input as any).toDate === "function") {
+    dateObj = (input as any).toDate();
+  } else if ((input as any)._seconds !== undefined) {
+    const ts = input as any;
+    dateObj = new Date(ts._seconds * 1000 + Math.floor(ts._nanoseconds / 1e6));
   } else {
     dateObj = new Date(input as string | number | Date);
   }
@@ -65,6 +68,13 @@ export function formatDateTime(
     minute: "2-digit",
     hour12: false,
   }).format(dateObj);
+}
+
+export function formatE164PhoneNumber(phone: string) {
+  if (!phone.startsWith("+")) {
+    return `+84${phone.replace(/^0/, "")}`;
+  }
+  return phone;
 }
 
 export function safeToDate(value: any): Date {
@@ -100,10 +110,4 @@ export function getStatusColor(status: string) {
     cancelled: "text-red-600",
   };
   return colors[status as keyof typeof colors] || "text-gray-600";
-}
-
-export function cleanEmptyFields(obj: Record<string, any>) {
-  return Object.fromEntries(
-    Object.entries(obj).filter(([_, value]) => value !== "" && value !== null)
-  );
 }

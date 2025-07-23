@@ -1,10 +1,7 @@
 import express from "express";
-import UserValidator from "../middlewares/validator.js";
-import {
-    checkAdmin,
-    checkOwnerOrAdmin,
-    verifyToken,
-} from "@event_ticket_booking_system/shared";
+import OrganizerValidator from "../middlewares/organizer.validator.js";
+import UserValidator from "../middlewares/user.validator.js";
+import { checkAdmin, verifyToken } from "@event_ticket_booking_system/shared";
 
 export default class OrganizerRoutes {
     constructor({ organizerController }) {
@@ -28,8 +25,8 @@ export default class OrganizerRoutes {
         this.router.post(
             "/organizers/apply",
             verifyToken,
-            UserValidator.validateEventOrgApplication(),
-            UserValidator.handleValidationErrors,
+            OrganizerValidator.validateEventOrgApplication(),
+            OrganizerValidator.handleValidationErrors,
             this.organizerController.applyOrganizer,
         );
         this.router.get(
@@ -50,8 +47,8 @@ export default class OrganizerRoutes {
         this.router.delete(
             "/me/applications/:applicationID",
             verifyToken,
-            UserValidator.validateDeleteApplication(),
-            UserValidator.handleValidationErrors,
+            OrganizerValidator.validateDeleteApplication(),
+            OrganizerValidator.handleValidationErrors,
             this.organizerController.cancelMyApplication,
         );
         this.router.post(
@@ -85,16 +82,16 @@ export default class OrganizerRoutes {
             "/organizers/applications/:applicationID",
             verifyToken,
             checkAdmin,
-            UserValidator.validateUpdateApplication(),
-            UserValidator.handleValidationErrors,
+            OrganizerValidator.validateUpdateApplication(),
+            OrganizerValidator.handleValidationErrors,
             this.organizerController.updateApplication,
         );
         this.router.delete(
             "/organizers/applications/:applicationID",
             verifyToken,
             checkAdmin,
-            UserValidator.validateDeleteApplication(),
-            UserValidator.handleValidationErrors,
+            OrganizerValidator.validateDeleteApplication(),
+            OrganizerValidator.handleValidationErrors,
             this.organizerController.deleteApplication,
         );
         this.router.patch(

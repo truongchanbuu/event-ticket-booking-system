@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
-import type { Organizer, EventType } from "@/schema";
+import type { EventType } from "@/schema";
 import OrganizerEventsManager from "@/components/events/OrganizerEventsManager";
 import LoadingPage from "@/components/app-loading";
 import { mockEvents } from "@/schema/events/events.mock";

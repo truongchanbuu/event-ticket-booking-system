@@ -1,10 +1,6 @@
 import express from "express";
-import UserValidator from "../middlewares/validator.js";
-import {
-    checkAdmin,
-    checkOwnerOrAdmin,
-    verifyToken,
-} from "@event_ticket_booking_system/shared";
+import UserValidator from "../middlewares/user.validator.js";
+import { checkAdmin, verifyToken } from "@event_ticket_booking_system/shared";
 
 export default class UserRoutes {
     constructor({ userController }) {
@@ -19,7 +15,7 @@ export default class UserRoutes {
         this.router.put(
             "/me",
             verifyToken,
-            UserValidator.validateUpdateUser(),
+            UserValidator.validateSelfUpdate(),
             UserValidator.handleValidationErrors,
             this.userController.updateUser,
         );
