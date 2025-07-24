@@ -32,7 +32,6 @@ export const useAuthHandler = () => {
         description: messages.SUCCESS,
         variant: "default",
       });
-      setIsLoading(false);
       return result;
     } catch (err: any) {
       const authError = err as AuthError;
@@ -42,8 +41,9 @@ export const useAuthHandler = () => {
         description: authError.message || messages.FAILED,
         variant: "destructive",
       });
-      setIsLoading(false);
       return null;
+    } finally {
+      setIsLoading(false);
     }
   };
 

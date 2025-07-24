@@ -1,23 +1,41 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import LoadingPage from "@/components/app-loading";
 import { useUser } from "@/hooks/use-user";
 import { Sparkles } from "lucide-react";
 import { APP_NAME } from "@/constants/app";
+import { AUTH_MESSAGES } from "@/constants/auth";
+import { useRouter } from "next/navigation";
 
 export default function AuthLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { isProfileLoading, isAuthLoading } = useUser();
+  const router = useRouter();
+  const { isAuthLoading, isLoggedIn } = useUser({ needFetchProfile: false });
 
-  if (isProfileLoading || isAuthLoading) {
+  useEffect(() => {
+    if (isLoggedIn) {
+      router.replace("/");
+    }
+  }, [isLoggedIn, router]);
+
+  if (isAuthLoading) {
     return (
       <LoadingPage
-        message="Checking your profile..."
-        subMessage="Please wait a moment"
+        message={AUTH_MESSAGES.CHECK_PROFILE.LOADING}
+        subMessage={AUTH_MESSAGES.CHECK_PROFILE.SUB_LOADING}
+      />
+    );
+  }
+
+  if (isLoggedIn) {
+    return (
+      <LoadingPage
+        message={AUTH_MESSAGES.REDIRECTING.LOADING}
+        subMessage={AUTH_MESSAGES.REDIRECTING.SUB_LOADING}
       />
     );
   }

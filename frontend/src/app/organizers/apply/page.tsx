@@ -35,7 +35,7 @@ export default function ApplyOrganizerPage() {
     setReason(undefined);
   };
 
-  if (isProfileLoading) {
+  if (isProfileLoading || !userProfile) {
     return <LoadingPage message="Please wait" />;
   }
 

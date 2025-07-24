@@ -20,6 +20,7 @@ import DocumentUploader from "./DocumentUploader";
 import { FieldError } from "../ui/field-error";
 import { MAX_BIO_TEXT, MIN_BIO_TEXT } from "@/constants/application";
 import { Input } from "../ui/input";
+import { isFileValue } from "@/lib/helpers/file.helper";
 
 interface ApplyOrganizerFormProps {
   onSubmit: (data: any) => void | Promise<void>;
@@ -46,7 +47,7 @@ export const ApplyOrganizerForm: React.FC<ApplyOrganizerFormProps> = ({
     formState: { errors, isValid, touchedFields },
   } = methods;
   const selectedType = watch("type");
-  const stepLabels = ["Information", "Documents"];
+  const stepLabels = ["Information", "Documents", "Document Validation"];
 
   return (
     // 2. FormProvider truyền context của form xuống các component con
@@ -137,7 +138,7 @@ export const ApplyOrganizerForm: React.FC<ApplyOrganizerFormProps> = ({
                               whileTap={{ scale: 0.98 }}
                               className={`relative flex items-center p-6 rounded-xl border-2 cursor-pointer transition-all ${field.value === "personal" ? "border-blue-500 bg-blue-50 shadow-md ring-2 ring-blue-100" : "border-gray-200 hover:border-gray-300 hover:shadow-sm"}`}
                             >
-                              <input
+                              <Input
                                 type="radio"
                                 onBlur={field.onBlur}
                                 onChange={() => field.onChange("personal")}
@@ -169,7 +170,7 @@ export const ApplyOrganizerForm: React.FC<ApplyOrganizerFormProps> = ({
                               whileTap={{ scale: 0.98 }}
                               className={`relative flex items-center p-6 rounded-xl border-2 cursor-pointer transition-all ${field.value === "business" ? "border-blue-500 bg-blue-50 shadow-md ring-2 ring-blue-100" : "border-gray-200 hover:border-gray-300 hover:shadow-sm"}`}
                             >
-                              <input
+                              <Input
                                 type="radio"
                                 onBlur={field.onBlur}
                                 onChange={() => field.onChange("business")}
@@ -202,6 +203,32 @@ export const ApplyOrganizerForm: React.FC<ApplyOrganizerFormProps> = ({
                         </div>
                       )}
                     />
+
+                    <div>
+                      <Label htmlFor="orgName" className="font-medium">
+                        Organizer Name <span className="text-red-500">*</span>
+                      </Label>
+                      <Controller
+                        name="orgName"
+                        control={control}
+                        render={({ field }) => (
+                          <>
+                            <div className="relative mt-2">
+                              <Input
+                                {...field}
+                                id="orgName"
+                                className={`w-full resize-none ${errors.orgName && touchedFields.orgName ? "border-red-500 focus:ring-red-500" : "border-gray-300 focus:ring-blue-500"}`}
+                                placeholder="Your Organizer Name"
+                              />
+                            </div>
+                            <FieldError
+                              message={errors.orgName?.message?.toString()}
+                              isTouched={touchedFields.orgName}
+                            />
+                          </>
+                        )}
+                      />
+                    </div>
 
                     <div>
                       <Label htmlFor="bio" className="font-medium">
@@ -301,34 +328,46 @@ export const ApplyOrganizerForm: React.FC<ApplyOrganizerFormProps> = ({
                       <Controller
                         name="identityCardFront"
                         control={control}
-                        render={({ field }) => (
-                          <DocumentUploader
-                            label="Front of Identity Card"
-                            required
-                            value={field.value || null}
-                            onChange={field.onChange}
-                            error={
-                              touchedFields.identityCardFront &&
-                              errors.identityCardFront?.message?.toString()
-                            }
-                          />
-                        )}
+                        render={({ field }) => {
+                          const safeValue = isFileValue(field.value)
+                            ? field.value
+                            : null;
+
+                          return (
+                            <DocumentUploader
+                              label="Front of Identity Card"
+                              required
+                              value={safeValue}
+                              onChange={field.onChange}
+                              error={
+                                touchedFields.identityCardFront &&
+                                errors.identityCardFront?.message?.toString()
+                              }
+                            />
+                          );
+                        }}
                       />
                       <Controller
                         name="identityCardBack"
                         control={control}
-                        render={({ field }) => (
-                          <DocumentUploader
-                            label="Back of Identity Card"
-                            required
-                            value={field.value || null}
-                            onChange={field.onChange}
-                            error={
-                              touchedFields.identityCardBack &&
-                              errors.identityCardBack?.message?.toString()
-                            }
-                          />
-                        )}
+                        render={({ field }) => {
+                          const safeValue = isFileValue(field.value)
+                            ? field.value
+                            : null;
+
+                          return (
+                            <DocumentUploader
+                              label="Back of Identity Card"
+                              required
+                              value={safeValue}
+                              onChange={field.onChange}
+                              error={
+                                touchedFields.identityCardBack &&
+                                errors.identityCardBack?.message?.toString()
+                              }
+                            />
+                          );
+                        }}
                       />
                     </div>
                     {selectedType === "business" && (
@@ -341,35 +380,164 @@ export const ApplyOrganizerForm: React.FC<ApplyOrganizerFormProps> = ({
                         <Controller
                           name="businessLicense"
                           control={control}
-                          render={({ field }) => (
-                            <DocumentUploader
-                              label="Business License"
-                              required
-                              value={field.value || null}
-                              onChange={field.onChange}
-                              error={
-                                touchedFields.businessLicense &&
-                                errors.businessLicense?.message?.toString()
-                              }
-                            />
-                          )}
+                          render={({ field }) => {
+                            const safeValue = isFileValue(field.value)
+                              ? field.value
+                              : null;
+
+                            return (
+                              <DocumentUploader
+                                label="Business License"
+                                required
+                                value={safeValue}
+                                onChange={field.onChange}
+                                error={
+                                  touchedFields.businessLicense &&
+                                  errors.businessLicense?.message?.toString()
+                                }
+                              />
+                            );
+                          }}
                         />
                       </motion.div>
                     )}
                     <Controller
                       name="eventLicense"
                       control={control}
-                      render={({ field }) => (
-                        <DocumentUploader
-                          label="Event Organization Permit (Optional)"
-                          value={field.value || null}
-                          onChange={field.onChange}
-                          error={
-                            touchedFields.eventLicense &&
-                            errors.eventLicense?.message?.toString()
-                          }
+                      render={({ field }) => {
+                        const safeValue = isFileValue(field.value)
+                          ? field.value
+                          : null;
+
+                        return (
+                          <DocumentUploader
+                            label="Event Organization Permit (Optional)"
+                            value={safeValue}
+                            onChange={field.onChange}
+                            error={
+                              touchedFields.eventLicense &&
+                              errors.eventLicense?.message?.toString()
+                            }
+                          />
+                        );
+                      }}
+                    />
+                  </motion.div>
+                )}
+
+                {currentStep === 2 && (
+                  <motion.div
+                    key="step2"
+                    initial={{ opacity: 0, x: 30 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -30 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-8"
+                  >
+                    <h3 className="text-xl font-semibold text-gray-900">
+                      Document Validation
+                    </h3>
+                    <p className="text-gray-600 mb-6">
+                      Please re-check your document information and fill out
+                      required empty fields (if any).
+                    </p>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <Controller
+                        name="identityCardFront"
+                        control={control}
+                        render={({ field }) => {
+                          const safeValue = isFileValue(field.value)
+                            ? field.value
+                            : null;
+
+                          return (
+                            <DocumentUploader
+                              label="Front of Identity Card"
+                              required
+                              value={safeValue}
+                              onChange={field.onChange}
+                              error={
+                                touchedFields.identityCardFront &&
+                                errors.identityCardFront?.message?.toString()
+                              }
+                            />
+                          );
+                        }}
+                      />
+                      <Controller
+                        name="identityCardBack"
+                        control={control}
+                        render={({ field }) => {
+                          const safeValue = isFileValue(field.value)
+                            ? field.value
+                            : null;
+
+                          return (
+                            <DocumentUploader
+                              label="Back of Identity Card"
+                              required
+                              value={safeValue}
+                              onChange={field.onChange}
+                              error={
+                                touchedFields.identityCardBack &&
+                                errors.identityCardBack?.message?.toString()
+                              }
+                            />
+                          );
+                        }}
+                      />
+                    </div>
+                    {selectedType === "business" && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <Controller
+                          name="businessLicense"
+                          control={control}
+                          render={({ field }) => {
+                            const safeValue = isFileValue(field.value)
+                              ? field.value
+                              : null;
+
+                            return (
+                              <DocumentUploader
+                                label="Business License"
+                                required
+                                value={safeValue}
+                                onChange={field.onChange}
+                                error={
+                                  touchedFields.businessLicense &&
+                                  errors.businessLicense?.message?.toString()
+                                }
+                              />
+                            );
+                          }}
                         />
-                      )}
+                      </motion.div>
+                    )}
+                    <Controller
+                      name="eventLicense"
+                      control={control}
+                      render={({ field }) => {
+                        const safeValue = isFileValue(field.value)
+                          ? field.value
+                          : null;
+
+                        return (
+                          <DocumentUploader
+                            label="Event Organization Permit (Optional)"
+                            value={safeValue}
+                            onChange={field.onChange}
+                            error={
+                              touchedFields.eventLicense &&
+                              errors.eventLicense?.message?.toString()
+                            }
+                          />
+                        );
+                      }}
                     />
                   </motion.div>
                 )}

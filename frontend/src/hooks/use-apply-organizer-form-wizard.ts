@@ -9,6 +9,7 @@ import { useWizardForm } from "./use-wizard-form";
 export function useApplyOrganizerWizard() {
   const defaultValues: ApplyOrganizerFormData = {
     // Step 1 defaults
+    orgName: "",
     type: "personal",
     bio: "",
     websiteUrl: "",

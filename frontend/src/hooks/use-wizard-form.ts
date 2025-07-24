@@ -62,6 +62,7 @@ export function useWizardForm<TValues extends FieldValues>({
     resolver,
     mode,
     defaultValues,
+    shouldUnregister: false,
   });
 
   React.useEffect(() => {

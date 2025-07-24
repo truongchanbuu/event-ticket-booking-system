@@ -1,5 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
+import { APP_NAME } from "@/constants/app";
 
 interface LoadingPageProps {
   message?: string;
@@ -38,7 +39,7 @@ const LoadingPage = ({
               />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">TicketHub</h1>
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">{APP_NAME}</h1>
           <p className="text-gray-600">Your gateway to amazing events</p>
         </div>
 
@@ -99,7 +100,6 @@ const LoadingPage = ({
           </div>
         </div>
       </div>
-
       {/* Background Elements */}
       <div className="absolute inset-0 pointer-events-none z-0">
         {/* NOTE: dùng translate thay vì scale để không tràn */}
@@ -113,8 +113,8 @@ const LoadingPage = ({
           style={{ animationDelay: "0.5s" }}
         />
       </div>
-
       {/* Custom Styles */}
+      {/* @ts-ignore */}
       <style jsx>{`
         @keyframes ticketFloat {
           0%,
@@ -164,7 +164,7 @@ const LoadingPage = ({
           animation: fade-in-out 2s ease-in-out infinite;
         }
       `}</style>
-
+      {/* @ts-ignore */}
       <style jsx global>{`
         html,
         body {

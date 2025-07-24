@@ -32,6 +32,6 @@
     "../shared/schema/helper.ts",
     "../shared/schema/index.ts",
     "../shared/schema/relationship.schema.ts"
-  ],
+, "src/components/app-loading.tsx"  ],
   "exclude": ["node_modules"]
 }

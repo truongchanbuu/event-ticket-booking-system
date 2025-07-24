@@ -3,7 +3,6 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn, signUp, signInWithGoogle } from "@/services/auth.service";
-import { useUser } from "@/hooks/use-user";
 import { useAuthHandler } from "@/hooks/use-auth-handler";
 
 import LoadingPage from "@/components/app-loading";
@@ -11,16 +10,14 @@ import { AUTH_MESSAGES } from "@/constants/auth";
 import { SignInForm } from "@/components/auth/signin-form";
 import { SignUpForm } from "@/components/auth/signup-form";
 
+type Mode = "signin" | "signup";
 const EventHubAuth = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { isLoggedIn } = useUser({ needFetchProfile: false });
 
   const initialMode =
     searchParams?.get("mode") === "signup" ? "signup" : "signin";
-  const [currentView, setCurrentView] = useState<"signin" | "signup">(
-    initialMode
-  );
+  const [currentView, setCurrentView] = useState<Mode>(initialMode);
 
   const {
     isLoading,
@@ -30,12 +27,6 @@ const EventHubAuth = () => {
     executeAuthAction,
     setError,
   } = useAuthHandler();
-
-  useEffect(() => {
-    if (isLoggedIn) {
-      router.push("/");
-    }
-  }, [isLoggedIn, router]);
 
   useEffect(() => {
     setError(null);
@@ -64,6 +55,7 @@ const EventHubAuth = () => {
         () => signIn(formData.email, formData.password),
         AUTH_MESSAGES.SIGN_IN
       );
+
       if (result) {
         router.push("/");
       }
@@ -85,15 +77,6 @@ const EventHubAuth = () => {
   if (isLoading) {
     return (
       <LoadingPage message={loadingMessage} subMessage={loadingSubMessage} />
-    );
-  }
-
-  if (isLoggedIn) {
-    return (
-      <LoadingPage
-        message="Redirecting..."
-        subMessage="You are already logged in."
-      />
     );
   }
 
