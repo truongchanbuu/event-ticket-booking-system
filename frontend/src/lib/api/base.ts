@@ -1,42 +1,65 @@
 import { ApiResponseError } from "@/schema/api-error";
-import { AppUser } from "@/schema/user";
+import { auth } from "../firebase";
 
-const API_BASE_URL = "http://localhost:3000";
-
+export interface FetchAPIOptions extends RequestInit {
+  skipAuth?: boolean;
+}
 export async function fetchAPI<T>(
-  path: string,
-  options: RequestInit = {}
+  url: string,
+  options: FetchAPIOptions = {}
 ): Promise<T> {
-  const url = `${API_BASE_URL}${path}`;
+  const { skipAuth, headers, body, ...rest } = options;
+  const finalHeaders = new Headers(headers);
+
+  if (!(body instanceof FormData) && !finalHeaders.has("Content-Type")) {
+    finalHeaders.set("Content-Type", "application/json");
+  }
+
+  const user = auth.currentUser;
+
+  if (!skipAuth) {
+    if (!user) {
+      throw {
+        statusCode: 401,
+        message: "User is not authenticated",
+        errorCode: "UNAUTHENTICATED",
+      };
+    }
+    try {
+      const token = await user.getIdToken();
+      finalHeaders.set("Authorization", `Bearer ${token}`);
+    } catch (error) {
+      console.error("Không thể lấy token Firebase:", error);
+      throw {
+        statusCode: 401,
+        message: "Failed to retrieve authentication token",
+        errorCode: "TOKEN_ERROR",
+      };
+    }
+  }
 
   const res = await fetch(url, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    ...options,
+    ...rest,
+    body,
+    headers: finalHeaders,
   });
 
-  let data: any = {};
+  let data: any;
   try {
-    const text = await res.text();
-    data = text ? JSON.parse(text) : {};
-  } catch (e) {
-    console.error("Failed to parse response:", e);
+    data = await res.json(); // ✅ KHÔNG parse lại lần nữa
+  } catch (err) {
+    console.error("❌ Parse JSON:", err);
+    data = {};
   }
 
   if (!res.ok) {
-    console.error("API error:", {
-      status: res.status,
-      statusText: res.statusText,
-      data,
-    });
-
-    const error: ApiResponseError = {
+    console.error("❌ API Error:", res.status, res.statusText, data);
+    throw {
       statusCode: data?.statusCode ?? res.status,
       errorCode: data?.errorCode ?? "UNKNOWN_ERROR",
       message: data?.message ?? res.statusText ?? "Unknown error",
       errors: data?.errors ?? [],
-    };
-
-    throw error;
+    } as ApiResponseError;
   }
 
   return data as T;
@@ -45,48 +68,6 @@ export async function fetchAPI<T>(
 // Event
 export async function fetchEventById<T>(eventId: string): Promise<T> {
   return fetchAPI<T>(`/api/events/${eventId}`);
-}
-
-// User API endpoints
-export async function createUserAPI(userData: AppUser): Promise<any> {
-  return fetchAPI<any>("/api/users", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(userData),
-  });
-}
-
-export async function getUserProfileAPI(token: string): Promise<any> {
-  return fetchAPI<any>("/api/me", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-}
-
-export async function updateUserAPI(
-  userData: any,
-  token: string
-): Promise<any> {
-  return fetchAPI<any>("/api/me", {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(userData),
-  });
-}
-
-export async function deleteUserAPI(token: string): Promise<any> {
-  return fetchAPI<any>("/api/me", {
-    method: "DELETE",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
 }
 
 // Organizer Event Management API endpoints
@@ -227,27 +208,6 @@ export async function getEventAttendeesAPI(
   });
 }
 
-export async function exportEventAttendeesAPI(
-  eventId: string,
-  token: string,
-  format: "csv" | "excel" = "csv"
-): Promise<Blob> {
-  const res = await fetch(
-    `${API_BASE_URL}/api/events/${eventId}/attendees/export?format=${format}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  );
-
-  if (!res.ok) {
-    throw new Error(`Failed to export attendees: ${res.statusText}`);
-  }
-
-  return res.blob();
-}
-
 // Organizer Stats API
 export async function getOrganizerStatsAPI(token: string): Promise<any> {
   return fetchAPI<any>("/api/organizers/stats", {
@@ -310,23 +270,6 @@ export async function deleteTicketTypeAPI(
     headers: {
       Authorization: `Bearer ${token}`,
     },
-  });
-}
-
-// Image Upload API
-export async function uploadEventImageAPI(
-  imageFile: File,
-  token: string
-): Promise<any> {
-  const formData = new FormData();
-  formData.append("image", imageFile);
-
-  return fetchAPI<any>("/api/upload", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    body: formData,
   });
 }
 

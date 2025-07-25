@@ -1,5 +1,6 @@
 import { body, query } from "express-validator";
 import { BaseValidator } from "@event_ticket_booking_system/shared";
+import { MAX_BIO_TEXT, MIN_BIO_TEXT } from "../config/constants.js";
 
 export default class OrganizerValidator extends BaseValidator {
     /**
@@ -8,62 +9,169 @@ export default class OrganizerValidator extends BaseValidator {
      */
     static validateEventOrgApplication() {
         return [
-            // 1. Validate the application type, which is required and must be one of the allowed values.
+            // --- 1. Validate top-level fields ---
             body("applyType")
                 .notEmpty()
-                .withMessage("Apply type is required")
-                .isIn(["individual", "business"])
+                .withMessage("Application type is required.")
+                .isIn(["personal", "business"])
                 .withMessage(
-                    "Invalid apply type. Must be 'individual' or 'business'.",
+                    "Invalid application type. Must be 'personal' or 'business'.",
                 ),
 
-            // 2. Validate common organization information.
-            ...this.validateName({
-                fieldName: "orgName",
-                optional: false,
-            }),
-
-            body("description")
+            // --- 2. Validate 'applicationData' object ---
+            body("applicationData")
+                .isObject()
+                .withMessage("applicationData must be an object."),
+            body("applicationData.orgName")
+                .trim()
                 .notEmpty()
-                .withMessage("Organization description is required")
-                .isLength({ min: 10, max: 1000 })
+                .withMessage("Organizer name is required.")
+                .isLength({ min: 2 })
+                .withMessage("Organizer name must be at least 2 characters."),
+            body("applicationData.description")
+                .trim()
+                .isLength({ min: MIN_BIO_TEXT, max: MAX_BIO_TEXT })
                 .withMessage(
-                    "Description must be between 10 and 1000 characters",
+                    `Description must be between ${MIN_BIO_TEXT} and ${MAX_BIO_TEXT} characters.`,
+                ),
+            body("applicationData.website")
+                .optional({ checkFalsy: true })
+                .isURL()
+                .withMessage("Invalid website URL."),
+            body("applicationData.facebook")
+                .optional({ checkFalsy: true })
+                .isURL()
+                .withMessage("Invalid Facebook URL."),
+            body("applicationData.instagram")
+                .optional({ checkFalsy: true })
+                .isURL()
+                .withMessage("Invalid Instagram URL."),
+            body("applicationData.x")
+                .optional({ checkFalsy: true })
+                .isURL()
+                .withMessage("Invalid X (Twitter) URL."),
+
+            // --- 3. Validate 'representativeInfo' (KYC - Always required) ---
+            body("representativeInfo")
+                .isObject()
+                .withMessage("representativeInfo must be an object."),
+            body("representativeInfo.fullName")
+                .notEmpty()
+                .withMessage("Full name of the representative is required."),
+            body("representativeInfo.idNumber")
+                .notEmpty()
+                .withMessage("National ID number is required."),
+            body("representativeInfo.dob")
+                .notEmpty()
+                .withMessage("Date of birth is required.")
+                .matches(/^\d{2}\/\d{2}\/\d{4}$/)
+                .withMessage("Date of birth must be in DD/MM/YYYY format."),
+            body("representativeInfo.gender")
+                .notEmpty()
+                .withMessage("Gender is required.")
+                .custom((value) => {
+                    const lowerCaseValue = String(value).toLowerCase();
+                    return ["male", "female", "other", "nam", "nữ"].includes(
+                        lowerCaseValue,
+                    );
+                })
+                .withMessage("Invalid gender."),
+            body("representativeInfo.nationality")
+                .notEmpty()
+                .withMessage("Nationality is required."),
+            body("representativeInfo.placeOfOrigin")
+                .notEmpty()
+                .withMessage("Place of origin is required."),
+            body("representativeInfo.permanentAddress")
+                .notEmpty()
+                .withMessage("Permanent address is required."),
+            body("representativeInfo.idIssueDate")
+                .notEmpty()
+                .withMessage("ID issue date is required.")
+                .matches(/^\d{2}\/\d{2}\/\d{4}$/)
+                .withMessage("ID issue date must be in DD/MM/YYYY format."),
+            body("representativeInfo.idIssuedBy")
+                .notEmpty()
+                .withMessage("Issuing authority is required."),
+
+            // --- 4. Validate 'businessInfo' (CONDITIONAL: only if applyType === 'business') ---
+            body("businessInfo")
+                .if(body("applyType").equals("business"))
+                .isObject()
+                .withMessage(
+                    "businessInfo is required for business applications.",
+                ),
+            body("businessInfo.legalName")
+                .if(body("applyType").equals("business"))
+                .notEmpty()
+                .withMessage("Legal name of the business is required."),
+            body("businessInfo.taxCode")
+                .if(body("applyType").equals("business"))
+                .notEmpty()
+                .withMessage("Tax code is required."),
+            body("businessInfo.address")
+                .if(body("applyType").equals("business"))
+                .notEmpty()
+                .withMessage("Business address is required."),
+
+            // --- 5. Validate 'documentUrls' object ---
+            body("documentUrls")
+                .isObject()
+                .withMessage("documentUrls must be an object."),
+            body("documentUrls.identityCardFrontUrl")
+                .isURL()
+                .withMessage(
+                    "Front side ID card URL is required and must be valid.",
+                ),
+            body("documentUrls.identityCardBackUrl")
+                .isURL()
+                .withMessage(
+                    "Back side ID card URL is required and must be valid.",
+                ),
+            body("documentUrls.businessLicenseUrl")
+                .if(body("applyType").equals("business"))
+                .isURL()
+                .withMessage(
+                    "Business license URL is required for business applications.",
                 ),
 
-            // 3. Apply conditional KYC/KYB rules.
-            // This helper encapsulates the complex logic of checking fields based on 'applyType'.
-            ...this._getKycRules({ optional: false }),
+            // --- 6. Validate 'eventPermitInfo' (CONDITIONAL: only if object is not empty) ---
+            body("eventPermitInfo.eventName")
+                .if(
+                    body("eventPermitInfo").custom(
+                        this.ifObjectExistsAndIsNotEmpty,
+                    ),
+                )
+                .notEmpty()
+                .withMessage(
+                    "Event name is required when event permit information is provided.",
+                ),
 
-            // 4. Validate optional contact and social media information.
-            // These fields are prefixed with 'optionalInfo.' as per the original structure.
-            ...this.validateURL({
-                fieldName: "optionalInfo.website",
-                optional: true,
-            }),
-            ...this.validateURL({
-                fieldName: "optionalInfo.facebook",
-                patterns: ["facebook.com"],
-                optional: true,
-            }),
-            ...this.validateURL({
-                fieldName: "optionalInfo.instagram",
-                patterns: ["instagram.com"],
-                optional: true,
-            }),
-            ...this.validateURL({
-                fieldName: "optionalInfo.x",
-                patterns: ["tiktok.com"],
-                optional: true,
-            }),
-            ...this.validatePhoneNumber({
-                fieldName: "optionalInfo.phoneNumber",
-                optional: true,
-            }),
-            ...this.validateEmail({
-                fieldName: "optionalInfo.email",
-                optional: true,
-            }),
+            body("eventPermitInfo.permitNumber")
+                .if(
+                    body("eventPermitInfo").custom(
+                        this.ifObjectExistsAndIsNotEmpty,
+                    ),
+                )
+                .notEmpty()
+                .withMessage(
+                    "Permit number is required when event permit information is provided.",
+                ),
+
+            body("eventPermitInfo.eventDate")
+                .if(
+                    body("eventPermitInfo").custom(
+                        this.ifObjectExistsAndIsNotEmpty,
+                    ),
+                )
+                .notEmpty()
+                .withMessage(
+                    "Event date is required when event permit information is provided.",
+                )
+                .isISO8601()
+                .withMessage(
+                    "Event date must be a valid ISO 8601 date string.",
+                ),
         ];
     }
 

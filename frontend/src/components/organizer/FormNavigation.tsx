@@ -6,6 +6,7 @@ import { ApplyOrganizerFormData } from "@/schema";
 import { WizardReturn } from "@/hooks/use-wizard-form";
 
 import { runOCRApi } from "@/services/ocr.service";
+import { useToast } from "@/hooks/use-toast";
 
 interface FormNavigationProps {
   wizard: WizardReturn<ApplyOrganizerFormData>;
@@ -18,6 +19,7 @@ export const FormNavigation: React.FC<FormNavigationProps> = ({
   loading,
   onSubmit,
 }) => {
+  const { toast } = useToast();
   const { currentStep, isLast, goNext, goPrev, submitAll } = wizard;
 
   const {
@@ -65,7 +67,12 @@ export const FormNavigation: React.FC<FormNavigationProps> = ({
           setValue(formKey, value, { shouldValidate: true });
         });
       } catch (e) {
-        alert("OCR failed. Please fill the form manually in the next step.");
+        toast({
+          variant: "destructive",
+          title: "Failed to extract OCR.",
+          description:
+            "OCR failed. Please fill the form manually in the next step.",
+        });
       } finally {
         setIsProcessing(false);
         goNext();

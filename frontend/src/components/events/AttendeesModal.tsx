@@ -32,7 +32,7 @@ import {
   DollarSign,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { getEventAttendeesAPI, exportEventAttendeesAPI } from "@/lib/api";
+import { getEventAttendeesAPI, exportEventAttendeesAPI } from "@/lib/api/base";
 import type { EventType } from "@/schema";
 import { formatDate } from "@/lib/utils";
 import { useAuth } from "@/app/providers/AuthProvider";

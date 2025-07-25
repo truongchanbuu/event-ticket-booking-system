@@ -211,6 +211,20 @@ export default class BaseValidator {
     ];
   }
 
+  /**
+   * Hàm điều kiện tùy chỉnh để kiểm tra xem một đối tượng có tồn tại và không rỗng hay không.
+   * Nó sẽ trả về `true` (kích hoạt validation) chỉ khi `value` là một đối tượng và có ít nhất một key.
+   * Nó sẽ trả về `false` (bỏ qua validation) cho `undefined`, `null`, và `{}`.
+   * @param {any} value - Giá trị của trường đang được kiểm tra (trong trường hợp này là object `eventPermitInfo`).
+   * @returns {boolean}
+   */
+  static ifObjectExistsAndIsNotEmpty = (value) => {
+    if (!value || typeof value !== "object") {
+      return false;
+    }
+    return Object.keys(value).length > 0;
+  };
+
   static handleValidationErrors(req, res, next) {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {

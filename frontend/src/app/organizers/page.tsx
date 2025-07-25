@@ -18,7 +18,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { categories } from "@/constants/categories";
-import { mockOrganizers } from "@/schema/user/organizer.mock";
 import { ORGANIZER_STATUS } from "@/schema/enums/organizer-status";
 import EventCategories from "@/components/events/event-categories";
 

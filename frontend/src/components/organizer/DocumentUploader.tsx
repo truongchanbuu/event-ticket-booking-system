@@ -50,7 +50,6 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   maxSizeInMB = MAX_FILE_SIZE_IN_MB,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
-  const previewUrlRef = useRef<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [validationError, setValidationError] = useState<string>("");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -399,6 +398,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
               />
             </motion.div>
             <motion.button
+              type="button"
               className="absolute top-4 right-4 p-2 bg-white/20 rounded-full hover:bg-white/40 transition-colors"
               onClick={() => setIsModalOpen(false)}
               aria-label="Đóng"

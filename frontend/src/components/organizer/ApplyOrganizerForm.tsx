@@ -35,9 +35,7 @@ export const ApplyOrganizerForm: React.FC<ApplyOrganizerFormProps> = ({
             totalSteps={wizard.totalSteps}
           />
 
-          <motion.form
-            className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden"
-          >
+          <motion.form className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
             <div className="p-6 sm:p-8 lg:p-10">
               <AnimatePresence mode="wait">
                 <motion.div

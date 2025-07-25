@@ -160,8 +160,7 @@ export default class UserService {
     async canApplyOrganizer(userID) {
         try {
             const userSnap = await this.userCollection.doc(userID).get();
-
-            if (!userSnap.exists()) {
+            if (!userSnap) {
                 return {
                     canApply: false,
                     reason: "User not found.",
@@ -170,7 +169,6 @@ export default class UserService {
             }
 
             const user = userSnap.data();
-
             if (user.isDeleted || user.deletedAt) {
                 return {
                     canApply: false,
@@ -301,9 +299,10 @@ export default class UserService {
         const newApplication = {
             applicationID,
             ...applicationData,
-            status: adminApprovalCheck.requiresAdminApproval
-                ? APPLY_STATUS.PENDING_ADMIN
-                : APPLY_STATUS.PENDING,
+            // status: adminApprovalCheck.requiresAdminApproval
+            //     ? APPLY_STATUS.PENDING_ADMIN
+            //     : APPLY_STATUS.PENDING,
+            status: APPLY_STATUS.PENDING_ADMIN, // TODO: ADMIN APPROVAL FOR SIMPLE
             requiresAdminApproval: adminApprovalCheck.requiresAdminApproval,
             rejectCount: adminApprovalCheck.rejectCount || 0,
             createdAt: FieldValue.serverTimestamp(),

@@ -43,6 +43,27 @@ export default class UserService {
         return `users:list:${hash}`;
     }
 
+    async _createUserDoc(userID, userData) {
+        try {
+            const userRef = this.userCollection.doc(userID);
+            await userRef.set(userData);
+            this.logger.info(
+                `[UserService] New user document created with ID: ${userID}`,
+            );
+            return userData;
+        } catch (error) {
+            this.logger.error(
+                `[UserService] _createUserDoc error for userID ${userID}: ${error.message}`,
+            );
+            throw new AppError({
+                message: "Failed to create user document in database.",
+                errorCode: ERROR_CODE.DATABASE_ERROR,
+                statusCode: 500,
+                cause: error,
+            });
+        }
+    }
+
     async _getUserDoc(userID) {
         try {
             const doc = await this.userCollection.doc(userID).get();
@@ -261,13 +282,17 @@ export default class UserService {
                             statusCode: 403,
                         });
                     }
-                    return existingUser; // user cũ
+                    return existingUser;
                 }
 
                 // Create new user
                 isNew = true;
                 const newUser = {
                     userID,
+                    status:
+                        userData.emailVerified || userData.phoneVerified
+                            ? USER_STATUS.ACTIVE
+                            : USER_STATUS.UNVERIFIED,
                     email: userData.email,
                     role: ROLE.CUSTOMER,
                     isDeleted: false,
@@ -636,9 +661,7 @@ export default class UserService {
         const result = await this.getUsers(enrichedQuery);
 
         const organizers = result.users
-            .filter((u) =>
-                [USER_STATUS.ACTIVE, USER_STATUS.VERIFIED].includes(u.status),
-            )
+            .filter((u) => [USER_STATUS.ACTIVE].includes(u.status))
             .map((u) => sanitizeUserData(u, false));
 
         return {

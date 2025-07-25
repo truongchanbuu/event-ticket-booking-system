@@ -45,7 +45,7 @@ import {
   updateEventAPI,
   getCategoriesAPI,
   uploadEventImageAPI,
-} from "@/lib/api";
+} from "@/lib/api/base";
 import type { EventType, Category } from "@/schema";
 import { EVENT_STATUS } from "@/schema/enums/event-status";
 import { format } from "date-fns";

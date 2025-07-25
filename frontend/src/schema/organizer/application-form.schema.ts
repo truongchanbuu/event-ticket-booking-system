@@ -96,3 +96,6 @@ export type ApplyOrganizerStep3Data = z.infer<
 >;
 
 export type ApplyOrganizerFormData = z.infer<typeof ApplyOrganizerFormSchema>;
+
+export type ApplicationWithEventPermit = ApplyOrganizerFormData &
+  z.infer<typeof ExtractedEventPermitSchema>;

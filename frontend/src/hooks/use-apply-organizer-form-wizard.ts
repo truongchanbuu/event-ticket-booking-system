@@ -50,7 +50,7 @@ export function useApplyOrganizerWizard() {
     typeOfBusiness: "",
     registeredCapital: "",
     businessSectors: [], // Default là mảng rỗng
-    // taxCode: "",
+    taxCode: "",
     // qrCodeData và scannedImageUrl đã được xử lý bằng tên duy nhất
 
     // -- Từ Schema Giấy phép sự kiện --

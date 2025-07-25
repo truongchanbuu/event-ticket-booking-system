@@ -39,7 +39,7 @@ import {
   createTicketTypeAPI,
   updateTicketTypeAPI,
   deleteTicketTypeAPI,
-} from "@/lib/api";
+} from "@/lib/api/base";
 import type { EventType } from "@/schema";
 import { useAuth } from "@/app/providers/AuthProvider";
 

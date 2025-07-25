@@ -73,17 +73,7 @@ export default class UserController {
 
         const applicationData = {
             userID,
-            applyType: req.body.applyType,
-            orgName: req.body.orgName.trim(),
-            description: req.body.description.trim(),
-            kycInfo: {
-                fullName: req.body.kycInfo.fullName.trim(),
-                idNumber: req.body.kycInfo.idNumber.trim(),
-                dob: req.body.kycInfo.dob,
-                idIssueDate: req.body.kycInfo.idIssueDate,
-                idIssuedBy: req.body.kycInfo.idIssuedBy.trim(),
-            },
-            optionalInfo: {},
+            ...req.body,
         };
 
         const result =

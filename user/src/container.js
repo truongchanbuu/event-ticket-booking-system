@@ -9,7 +9,7 @@ import OrganizerService from "../src/services/organizer.service.js";
 import UserRoutes from "../src/routes/user.routes.js";
 import OrganizerRoutes from "./routes/organizer.routes.js";
 import { RedisService } from "@event_ticket_booking_system/shared";
-import redisClient from "@event_ticket_booking_system/shared/redis/main.js";
+import Profileroutes from "./routes/profile.routes.js";
 
 const container = createContainer();
 
@@ -37,6 +37,7 @@ container.register({
     organizerController: asClass(OrganizerController).singleton(),
     userRoutes: asClass(UserRoutes).singleton(),
     organizerRoutes: asClass(OrganizerRoutes).singleton(),
+    profileRoutes: asClass(Profileroutes).singleton(),
 });
 
 export default container;

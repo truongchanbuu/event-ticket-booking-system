@@ -1,9 +1,4 @@
-import {
-  updateUserAPI,
-  deleteUserAPI,
-  getUserProfileAPI,
-  createUserAPI,
-} from "@/lib/api";
+import { updateUserAPI, deleteUserAPI, getUserProfileAPI } from "@/lib/api";
 import { getAuthToken } from "./auth.service";
 import { UpdateUserData, AppUser, fromFirebaseUser } from "@/schema/user";
 import { ApiResponseError } from "@/schema/api-error";
@@ -12,13 +7,8 @@ import { auth } from "@/lib/firebase";
 
 export class UserService {
   static async getCurrentUserProfile() {
-    const token = await getAuthToken();
     try {
-      if (!token) {
-        throw new Error("User not authenticated");
-      }
-
-      return await getUserProfileAPI(token);
+      return await getUserProfileAPI();
     } catch (e) {
       const error = e as ApiResponseError;
       console.error("Error in getUserProfileAPI:", error);
@@ -27,12 +17,7 @@ export class UserService {
   }
 
   static async updateUserProfile(userData: UpdateUserData) {
-    const token = await getAuthToken();
-    if (!token) {
-      throw new Error("User not authenticated");
-    }
-
-    const user = await updateUserAPI(userData, token);
+    const user = await updateUserAPI(userData);
     if (user) {
       await auth.currentUser.reload();
     }
@@ -41,12 +26,7 @@ export class UserService {
   }
 
   static async deleteUserAccount() {
-    const token = await getAuthToken();
-    if (!token) {
-      throw new Error("User not authenticated");
-    }
-
-    return await deleteUserAPI(token);
+    return await deleteUserAPI();
   }
 
   static async getFirebaseUser(): Promise<User | null> {

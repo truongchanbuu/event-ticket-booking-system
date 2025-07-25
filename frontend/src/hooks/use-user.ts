@@ -148,6 +148,7 @@ export const useUser = (options?: { needFetchProfile?: boolean }) => {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey });
       toast({
+        variant: "success",
         title: "Save Successfully",
         description: "Your account has been changed",
       });
@@ -158,6 +159,7 @@ export const useUser = (options?: { needFetchProfile?: boolean }) => {
     mutationFn: () => UserService.deleteUserAccount(),
     onSuccess: async () => {
       toast({
+        variant: "success",
         title: "Delete Successfully",
         description: "Your account has been deleted",
       });

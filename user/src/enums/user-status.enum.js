@@ -4,6 +4,5 @@ export const USER_STATUS = {
     BANNED: "banned",
     SUSPENDED: "suspended",
     PENDING: "pending",
-    VERIFIED: "verified",
     UNVERIFIED: "unverified",
 };

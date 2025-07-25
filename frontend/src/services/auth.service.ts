@@ -45,6 +45,7 @@ export async function signUp(
       throw error;
     }
   } catch (error: any) {
+    console.error(error);
     const authError: AuthError = {
       code: error.code || "unknown",
       message: getErrorMessage(error.code),

@@ -13,53 +13,26 @@ export default class OrganizerRoutes {
     initRoutes() {
         // public
         this.router.get(
-            "/organizers/public",
+            "/public",
             UserValidator.validateGetUsers(),
             UserValidator.handleValidationErrors,
             this.organizerController.getPublicOrganizers,
         );
         this.router.get(
-            "/organizers/:orgID",
+            "/:orgID",
             this.organizerController.getOrganizerProfile,
         );
         this.router.post(
-            "/organizers/apply",
+            "/apply",
             verifyToken,
             OrganizerValidator.validateEventOrgApplication(),
             OrganizerValidator.handleValidationErrors,
             this.organizerController.applyOrganizer,
         );
-        this.router.get(
-            "/me/applications",
-            verifyToken,
-            this.organizerController.getMyApplications,
-        );
-        this.router.get(
-            "/me/applications/:applicationID",
-            verifyToken,
-            this.organizerController.getMyApplicationDetail,
-        );
-        this.router.post(
-            "/me/applications/:applicationID",
-            verifyToken,
-            this.organizerController.updateMyApplication,
-        );
-        this.router.delete(
-            "/me/applications/:applicationID",
-            verifyToken,
-            OrganizerValidator.validateDeleteApplication(),
-            OrganizerValidator.handleValidationErrors,
-            this.organizerController.cancelMyApplication,
-        );
-        this.router.post(
-            "/me/:applicationID/deactivate",
-            verifyToken,
-            this.organizerController.deactivateOrganizer,
-        );
 
         // admin-access
         this.router.get(
-            "/organizers",
+            "/",
             verifyToken,
             checkAdmin,
             UserValidator.validateGetUsers(),
@@ -67,19 +40,19 @@ export default class OrganizerRoutes {
             this.organizerController.getOrganizers,
         );
         this.router.get(
-            "/organizers/applications",
+            "/applications",
             verifyToken,
             checkAdmin,
             this.organizerController.getAllApplications,
         );
         this.router.get(
-            "/organizers/applications/:applicationID",
+            "/applications/:applicationID",
             verifyToken,
             checkAdmin,
             this.organizerController.getApplicationByID,
         );
         this.router.put(
-            "/organizers/applications/:applicationID",
+            "/applications/:applicationID",
             verifyToken,
             checkAdmin,
             OrganizerValidator.validateUpdateApplication(),
@@ -87,7 +60,7 @@ export default class OrganizerRoutes {
             this.organizerController.updateApplication,
         );
         this.router.delete(
-            "/organizers/applications/:applicationID",
+            "/applications/:applicationID",
             verifyToken,
             checkAdmin,
             OrganizerValidator.validateDeleteApplication(),
@@ -95,7 +68,7 @@ export default class OrganizerRoutes {
             this.organizerController.deleteApplication,
         );
         this.router.patch(
-            "/organizers/:applicationID/status",
+            "/:applicationID/status",
             verifyToken,
             checkAdmin,
             this.organizerController.checkApplication,

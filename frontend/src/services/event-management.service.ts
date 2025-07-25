@@ -14,7 +14,7 @@ import {
   updateTicketTypeAPI,
   deleteTicketTypeAPI,
   uploadEventImageAPI,
-} from "@/lib/api";
+} from "@/lib/api/base";
 import { getAuthToken } from "./auth.service";
 import { EventType } from "@/schema";
 

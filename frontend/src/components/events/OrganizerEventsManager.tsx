@@ -65,7 +65,7 @@ import {
   duplicateEventAPI,
   exportEventAttendeesAPI,
   getEventStatsByIDAPI,
-} from "@/lib/api";
+} from "@/lib/api/base";
 import type { EventType } from "@/schema";
 import { formatDate } from "@/lib/utils";
 import { EVENT_STATUS } from "@/schema/enums/event-status";

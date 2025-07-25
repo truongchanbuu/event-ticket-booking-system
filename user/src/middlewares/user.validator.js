@@ -377,8 +377,6 @@ export default class UserValidator extends BaseValidator {
         ];
     }
 
-    // ... Các phương thức xác thực khác cho application, notification... không thay đổi ...
-
     //======================================================================
     //== PRIVATE REUSABLE HELPERS for UserValidator
     //======================================================================

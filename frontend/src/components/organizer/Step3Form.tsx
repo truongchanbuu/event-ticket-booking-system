@@ -13,7 +13,6 @@ export const Step3FormValidation = () => {
 
   return (
     <div className="space-y-8">
-      <div>{JSON.stringify(formState.errors)}</div>
       {/* === KHU VỰC 1: XÁC MINH DANH TÍNH (TỪ CCCD) === */}
       <FormSection
         title="Identity Verification"

@@ -10,46 +10,9 @@ export default class UserRoutes {
     }
 
     initRoutes() {
-        // profile
-        this.router.get("/me", verifyToken, this.userController.getProfile);
-        this.router.put(
-            "/me",
-            verifyToken,
-            UserValidator.validateSelfUpdate(),
-            UserValidator.handleValidationErrors,
-            this.userController.updateUser,
-        );
-        this.router.delete(
-            "/me",
-            UserValidator.validateDeleteUser(),
-            UserValidator.handleValidationErrors,
-            this.userController.softDeleteUser,
-        );
-        this.router.post(
-            "/me/followed-organizers",
-            verifyToken,
-            UserValidator.validateFollowedOrganizer(),
-            UserValidator.handleValidationErrors,
-            this.userController.updateUser,
-        );
-        this.router.post(
-            "/me/notifications",
-            verifyToken,
-            UserValidator.validateNotification(),
-            UserValidator.handleValidationErrors,
-            this.userController.updateNotifications,
-        );
-        this.router.put(
-            "/me/notifications/:notificationID/status",
-            verifyToken,
-            UserValidator.validateUpdateNotificationStatus(),
-            UserValidator.handleValidationErrors,
-            this.userController.updateNotificationStatus,
-        );
-
         // admin-access
         this.router.get(
-            "/users",
+            "/",
             verifyToken,
             checkAdmin,
             UserValidator.validateGetUsers(),
@@ -57,19 +20,19 @@ export default class UserRoutes {
             this.userController.getUsers,
         );
         this.router.get(
-            "/users/:userID",
+            "/:userID",
             verifyToken,
             checkAdmin,
             this.userController.getProfile,
         );
         this.router.post(
-            "/users",
+            "",
             UserValidator.validateCreateUser(),
             UserValidator.handleValidationErrors,
             this.userController.registerUser,
         );
         this.router.put(
-            "/users/:userID",
+            "/:userID",
             verifyToken,
             checkAdmin,
             UserValidator.validateUpdateUser(),
@@ -77,7 +40,7 @@ export default class UserRoutes {
             this.userController.updateUser,
         );
         this.router.delete(
-            "/users/:userID",
+            "/:userID",
             verifyToken,
             checkAdmin,
             UserValidator.validateDeleteUser(),
