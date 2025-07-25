@@ -2,11 +2,11 @@
 
 import React, { useEffect } from "react";
 import LoadingPage from "@/components/app-loading";
-import { useUser } from "@/hooks/use-user";
 import { Sparkles } from "lucide-react";
 import { APP_NAME } from "@/constants/app";
 import { AUTH_MESSAGES } from "@/constants/auth";
 import { useRouter } from "next/navigation";
+import { useAuthStatus } from "@/hooks/user-store-hooks";
 
 export default function AuthLayout({
   children,
@@ -14,7 +14,7 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { isAuthLoading, isLoggedIn } = useUser({ needFetchProfile: false });
+  const { isAuthLoading, isLoggedIn } = useAuthStatus();
 
   useEffect(() => {
     if (isLoggedIn) {

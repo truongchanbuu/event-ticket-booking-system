@@ -6,8 +6,6 @@ import Link from "next/link";
 import { APP_NAME } from "@/constants/app";
 import ROLE from "@/schema/enums/role";
 
-import { useUser } from "@/hooks/use-user";
-
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -37,6 +35,7 @@ import AppHeaderNav from "./app-header/app-header-nav";
 import UserMenu from "./app-header/user-menu";
 import HeaderSkeleton from "./app-header/header-skeleton";
 import NavigationLinks from "./navigation-links";
+import { useAuthStatus, useUserProfile } from "@/hooks/user-store-hooks";
 
 /* ------------------------------------------------------------------ */
 /* Component                                                           */
@@ -54,9 +53,8 @@ export default function AppHeader({
   const [isUserMenuOpen, setIsUserMenuOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
 
-  const { userProfile, isLoggedIn, isAuthLoading } = useUser({
-    needFetchProfile: false,
-  });
+  const { isLoggedIn, isAuthLoading } = useAuthStatus();
+  const userProfile = useUserProfile();
 
   // ----- derived user display fields -----
   const getDisplayName = () =>

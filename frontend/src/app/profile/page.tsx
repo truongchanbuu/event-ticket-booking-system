@@ -2,7 +2,6 @@
 
 import React from "react";
 
-import { useUser } from "@/hooks/use-user";
 import { useProfileForm } from "@/hooks/use-profile-form";
 
 import ProtectedRoute from "@/components/ProtectRoute";
@@ -13,9 +12,10 @@ import { BasicInfoSection } from "@/components/user/basic-info-section";
 import PreferencesSection from "@/components/user/preference-section";
 import ActivitySecuritySection from "@/components/user/activity-security-section";
 import TimelineSection from "@/components/user/timeline-section";
+import { useProfileManagement } from "@/hooks/user-store-hooks";
 
 const UserProfilePage: React.FC = () => {
-  const { userProfile, updateProfile } = useUser({ needFetchProfile: true });
+  const { userProfile, updateProfile } = useProfileManagement();
   const manager = useProfileForm({ userProfile, updateProfile });
 
   if (!manager.currentData) {

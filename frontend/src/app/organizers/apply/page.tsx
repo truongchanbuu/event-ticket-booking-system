@@ -8,22 +8,15 @@ import { ApplyOrganizerFormData, ORGANIZER_STATUS } from "@/schema";
 import { useToast } from "@/hooks/use-toast";
 import { hasEventPermitData } from "@/lib/helpers/type-guard.helper";
 import { applyOrganizer } from "@/lib/api";
-import { useUser } from "@/hooks/use-user";
+import { useProfileManagement } from "@/hooks/user-store-hooks";
 
 export default function ApplyOrganizerPage() {
-  const { userProfile } = useUser();
+  const { userProfile } = useProfileManagement();
   const { toast } = useToast();
   const [status, setStatus] = React.useState<ORGANIZER_STATUS>(
-    userProfile.organizerStatus
+    userProfile?.organizerStatus ?? ORGANIZER_STATUS.NONE
   );
   const [submitting, setSubmitting] = React.useState(false);
-
-  React.useEffect(() => {
-    // mockFetchStatus().then((res) => {
-    //   setStatus(res.status);
-    //   setReason(res.reason);
-    // });
-  }, []);
 
   const handleSubmit = async (data: ApplyOrganizerFormData) => {
     setSubmitting(true);

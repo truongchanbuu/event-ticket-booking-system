@@ -16,7 +16,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <RouteProgressBar height={10} />
+        <RouteProgressBar height={8} />
         <NavigationEvents />
 
         <AuthProvider>

@@ -8,13 +8,13 @@ import LoadingPage from "@/components/app-loading";
 import { mockEvents } from "@/schema/events/events.mock";
 import { mockOrganizer } from "@/schema/user/organizer.mock";
 import { useRouter } from "next/navigation";
-import { useUser } from "@/hooks/use-user";
 import ROLE from "@/schema/enums/role";
+import { useProfileManagement } from "@/hooks/user-store-hooks";
 
 export default function OrganizerEventsPage() {
   const router = useRouter();
   const { organizerId } = useParams<{ organizerId: string }>();
-  const { userProfile, isProfileLoading } = useUser();
+  const { userProfile, isProfileLoading } = useProfileManagement();
 
   // Fetch organizer data
   const { data: organizer, isLoading: organizerLoading } = useQuery<Organizer>({
