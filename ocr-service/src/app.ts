@@ -1,3 +1,4 @@
+import { visionClient, redisClient } from "./lib/clients";
 import express, { Express } from "express";
 import cors from "cors";
 import ocrRoutes from "./routes/ocr.routes";

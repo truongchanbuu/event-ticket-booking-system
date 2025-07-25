@@ -4,14 +4,12 @@ import {
   extractMultipleTextSchema,
   extractTextSchema,
 } from "../schema/ocr.schema";
-import {
-  extractMultipleController,
-  extractSingleController,
-} from "../controllers/ocr.controller";
+import { processOcrController } from "../controllers/ocr.controller";
 import {
   checkOcrQuota,
-  incrementOcrUsageMiddleware,
-} from "../middlewares/check-orc-usage";
+  trackOcrUsageMiddleware,
+} from "../middlewares/check-ocr-usage";
+import { checkOcrCache } from "../middlewares/check-ocr-cache";
 
 const router = Router();
 
@@ -19,16 +17,9 @@ router.post(
   "/extract-text",
   validateBody(extractTextSchema),
   checkOcrQuota,
-  extractSingleController,
-  incrementOcrUsageMiddleware
-);
-
-router.post(
-  "/extract-multiple",
-  validateBody(extractMultipleTextSchema),
-  checkOcrQuota,
-  extractMultipleController,
-  incrementOcrUsageMiddleware
+  checkOcrCache,
+  processOcrController,
+  trackOcrUsageMiddleware
 );
 
 export default router;

@@ -16,10 +16,10 @@ export const ApplyOrganizerStep1Schema = z.object({
     .string()
     .min(MIN_BIO_TEXT, `Bio must be at least ${MIN_BIO_TEXT} characters.`)
     .max(MAX_BIO_TEXT, `Bio must be under ${MAX_BIO_TEXT} characters.`),
-  websiteUrl: urlOrDomainField("Website URL"),
-  facebookUrl: urlOrDomainField("Facebook URL"),
-  instagramUrl: urlOrDomainField("Instagram URL"),
-  xUrl: urlOrDomainField("X Url"),
+  website: urlOrDomainField("Website URL"),
+  facebook: urlOrDomainField("Facebook URL"),
+  instagram: urlOrDomainField("Instagram URL"),
+  x: urlOrDomainField("X Url"),
 });
 
 // === STEP 2: FACTORY FUNCTION CHO SCHEMA GIẤY TỜ ===
@@ -32,7 +32,7 @@ export const createApplyOrganizerStep2Schema = (
     businessLicense:
       organizationType === "business"
         ? FileSchema.refine(
-            (file) => file?.file.name,
+            (file) => Boolean(file),
             "Business license is required."
           )
         : OptionalFileSchema,
@@ -42,34 +42,48 @@ export const createApplyOrganizerStep2Schema = (
 
 // === STEP 3: FACTORY FUNCTION CHO SCHEMA XÁC NHẬN ===
 export const createApplyOrganizerStep3Schema = (
-  organizationType: OrganizerType
+  organizationType: OrganizerType,
+  hasEventLicense: boolean
 ) => {
-  let schema = ExtractedIdCardSchema.merge(ExtractedEventPermitSchema);
-
+  let schema = ExtractedIdCardSchema;
   if (organizationType === "business") {
     schema = schema.merge(ExtractedBusinessLicenseSchema);
   }
-
+  if (hasEventLicense) {
+    schema = schema.merge(ExtractedEventPermitSchema);
+  }
   return schema;
 };
 
 // === SCHEMA TỔNG HỢP ĐỂ VALIDATE LẦN CUỐI ===
-export const ApplyOrganizerFormSchema = z.discriminatedUnion("type", [
-  // Trường hợp 1: type là 'personal'
-  z.object({
-    ...ApplyOrganizerStep1Schema.shape,
-    ...createApplyOrganizerStep2Schema("personal").shape,
-    ...createApplyOrganizerStep3Schema("personal").shape,
-    type: z.literal("personal"),
-  }),
-  // Trường hợp 2: type là 'business'
-  z.object({
-    ...ApplyOrganizerStep1Schema.shape,
-    ...createApplyOrganizerStep2Schema("business").shape,
-    ...createApplyOrganizerStep3Schema("business").shape,
-    type: z.literal("business"),
-  }),
-]);
+const PersonalApplicationSchema = ApplyOrganizerStep1Schema.merge(
+  createApplyOrganizerStep2Schema("personal")
+)
+  .merge(ExtractedIdCardSchema) // Luôn yêu cầu thông tin CCCD
+  .extend({ type: z.literal("personal") }); // Ghi đè type để discriminatedUnion hoạt động
+
+// 2. Tạo schema cho trường hợp 'business'
+const BusinessApplicationSchema = ApplyOrganizerStep1Schema.merge(
+  createApplyOrganizerStep2Schema("business")
+)
+  .merge(ExtractedIdCardSchema) // Luôn yêu cầu thông tin CCCD
+  .merge(ExtractedBusinessLicenseSchema) // Thêm các trường GPKD
+  .extend({ type: z.literal("business") }); // Ghi đè type
+
+// 3. Sử dụng discriminatedUnion với các schema đã được xây dựng hoàn chỉnh
+export const ApplyOrganizerFormSchema = z
+  .discriminatedUnion("type", [
+    PersonalApplicationSchema,
+    BusinessApplicationSchema,
+  ])
+  .superRefine((data, ctx) => {
+    if (data.eventLicense) {
+      const result = ExtractedEventPermitSchema.safeParse(data);
+      if (!result.success) {
+        result.error.issues.forEach((issue) => ctx.addIssue(issue));
+      }
+    }
+  });
 
 export type ApplyOrganizerStep1Data = z.infer<typeof ApplyOrganizerStep1Schema>;
 

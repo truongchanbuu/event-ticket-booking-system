@@ -39,8 +39,8 @@ const mockApplications = [
       idIssuedBy: "Công an TPHCM",
     },
     optionalInfo: {
-      websiteUrl: "https://coderhub.vn",
-      facebookUrl: "https://facebook.com/coderhub",
+      website: "https://coderhub.vn",
+      facebook: "https://facebook.com/coderhub",
     },
     status: "approved",
     rejectionReason: null,
@@ -67,8 +67,8 @@ const mockApplications = [
       idIssuedBy: "Công an Quận 1",
     },
     optionalInfo: {
-      websiteUrl: "",
-      facebookUrl: "https://facebook.com/techmeet.saigon",
+      website: "",
+      facebook: "https://facebook.com/techmeet.saigon",
     },
     status: "pending",
     rejectionReason: null,
@@ -95,8 +95,8 @@ const mockApplications = [
       idIssuedBy: "Công an Hà Nội",
     },
     optionalInfo: {
-      websiteUrl: "https://devcon.vn",
-      facebookUrl: "",
+      website: "https://devcon.vn",
+      facebook: "",
     },
     status: "rejected",
     rejectionReason:
@@ -413,14 +413,14 @@ const ApplicationDetail = ({ application, onBack, onEdit }) => {
               <label className="text-sm font-medium text-gray-600">
                 Website
               </label>
-              {application.optionalInfo.websiteUrl ? (
+              {application.optionalInfo.website ? (
                 <a
-                  href={application.optionalInfo.websiteUrl}
+                  href={application.optionalInfo.website}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:text-blue-800 mt-1 block break-all"
                 >
-                  {application.optionalInfo.websiteUrl}
+                  {application.optionalInfo.website}
                 </a>
               ) : (
                 <p className="text-gray-500 mt-1">Chưa cung cấp</p>
@@ -430,15 +430,15 @@ const ApplicationDetail = ({ application, onBack, onEdit }) => {
               <label className="text-sm font-medium text-gray-600">
                 Facebook
               </label>
-              {application.optionalInfo.facebookUrl ? (
+              {application.optionalInfo.facebook ? (
                 <a
-                  href={application.optionalInfo.facebookUrl}
+                  href={application.optionalInfo.facebook}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:text-blue-800 mt-1 block break-all flex items-center gap-2"
                 >
                   <Facebook className="w-4 h-4" />
-                  {application.optionalInfo.facebookUrl}
+                  {application.optionalInfo.facebook}
                 </a>
               ) : (
                 <p className="text-gray-500 mt-1">Chưa cung cấp</p>

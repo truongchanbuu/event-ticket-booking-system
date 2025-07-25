@@ -86,16 +86,6 @@ export default class UserController {
             optionalInfo: {},
         };
 
-        // Add optional info if provided
-        if (req.body.optionalInfo?.websiteUrl) {
-            applicationData.optionalInfo.websiteUrl =
-                req.body.optionalInfo.websiteUrl.trim();
-        }
-        if (req.body.optionalInfo?.facebookUrl) {
-            applicationData.optionalInfo.facebookUrl =
-                req.body.optionalInfo.facebookUrl.trim();
-        }
-
         const result =
             await this.organizerService.createApplication(applicationData);
 

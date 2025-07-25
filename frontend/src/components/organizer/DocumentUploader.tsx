@@ -30,7 +30,7 @@ import {
 } from "@/lib/helpers/file.helper";
 import { FileValue } from "@/schema/common";
 
-interface DocumentUploaderProps {
+export interface DocumentUploaderProps {
   label: string;
   required?: boolean;
   value?: FileValue | null;

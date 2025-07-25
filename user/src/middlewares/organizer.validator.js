@@ -38,21 +38,21 @@ export default class OrganizerValidator extends BaseValidator {
             // 4. Validate optional contact and social media information.
             // These fields are prefixed with 'optionalInfo.' as per the original structure.
             ...this.validateURL({
-                fieldName: "optionalInfo.websiteUrl",
+                fieldName: "optionalInfo.website",
                 optional: true,
             }),
             ...this.validateURL({
-                fieldName: "optionalInfo.facebookUrl",
+                fieldName: "optionalInfo.facebook",
                 patterns: ["facebook.com"],
                 optional: true,
             }),
             ...this.validateURL({
-                fieldName: "optionalInfo.instagramUrl",
+                fieldName: "optionalInfo.instagram",
                 patterns: ["instagram.com"],
                 optional: true,
             }),
             ...this.validateURL({
-                fieldName: "optionalInfo.tiktokUrl",
+                fieldName: "optionalInfo.x",
                 patterns: ["tiktok.com"],
                 optional: true,
             }),
@@ -145,21 +145,21 @@ export default class OrganizerValidator extends BaseValidator {
 
             // 4. Validate other optional contact and social media URLs.
             ...this.validateURL({
-                fieldName: "optionalInfo.websiteUrl",
+                fieldName: "optionalInfo.website",
                 optional: true,
             }),
             ...this.validateURL({
-                fieldName: "optionalInfo.facebookUrl",
+                fieldName: "optionalInfo.facebook",
                 patterns: ["facebook.com"],
                 optional: true,
             }),
             ...this.validateURL({
-                fieldName: "optionalInfo.instagramUrl",
+                fieldName: "optionalInfo.instagram",
                 patterns: ["instagram.com"],
                 optional: true,
             }),
             ...this.validateURL({
-                fieldName: "optionalInfo.tiktokUrl",
+                fieldName: "optionalInfo.x",
                 patterns: ["tiktok.com"],
                 optional: true,
             }),

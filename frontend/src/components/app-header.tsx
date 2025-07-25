@@ -55,7 +55,7 @@ export default function AppHeader({
   const [searchQuery, setSearchQuery] = React.useState("");
 
   const { userProfile, isLoggedIn, isAuthLoading } = useUser({
-    needFetchProfile: true,
+    needFetchProfile: false,
   });
 
   // ----- derived user display fields -----

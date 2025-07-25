@@ -1,54 +1,72 @@
-import { NextFunction, Request, Response } from "express";
-import { extractTextFromImage } from "../services/ocr.service";
+// controllers/ocr.controller.ts
 
-export const extractSingleController = async (
+import { Request, Response, NextFunction } from "express";
+import { redisClient } from "../lib/clients";
+import { processImageBatch } from "../services/ocr.service";
+import { HASH_PREFIX } from "../config/constants";
+
+export const processOcrController = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const { base64Image } = req.body;
+    const { imagesToProcess, cachedResults } = req;
+    const newResultsWithMeta = await processImageBatch(imagesToProcess!);
 
-    if (!base64Image || typeof base64Image !== "string") {
-      return res.status(400).json({ message: "base64Image is required." });
-    }
+    if (newResultsWithMeta.length > 0) {
+      const successfulResults = newResultsWithMeta.filter(
+        (r) => r.status !== "failed"
+      );
 
-    const text = await extractTextFromImage(base64Image);
-
-    res.locals.ocrImageCount = 1;
-
-    res.json({ text });
-    next();
-  } catch (error) {
-    console.error("[OCR] Error extracting text:", error);
-    res.status(500).json({ message: "Failed to extract text from image." });
-  }
-};
-
-export const extractMultipleController = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  const { images } = req.body;
-
-  const results = await Promise.all(
-    images.map(async (base64Image: string, index: number) => {
-      try {
-        const { fullText, confidence } = await extractTextFromImage(
-          base64Image
+      if (successfulResults.length > 0) {
+        const itemsToCacheObject = successfulResults.reduce(
+          (acc, result) => {
+            const { hash, index, ...dataToCache } = result;
+            const key = `${HASH_PREFIX}:${hash}`;
+            const value = JSON.stringify(dataToCache);
+            acc[key] = value;
+            return acc;
+          },
+          {} as Record<string, string> // Khởi tạo accumulator là một object rỗng
         );
 
-        const status = confidence < 0.7 ? "blurry" : "ok";
-        return { index, status, text: fullText, confidence };
-      } catch (err) {
-        return { index, status: "failed", text: null, confidence: null };
-      }
-    })
-  );
+        await redisClient.mset(itemsToCacheObject);
 
-  const successfulCount = results.filter((r) => r.status !== "failed").length;
-  res.locals.ocrImageCount = successfulCount;
-  return res.json(results);
-  next();
+        const keysToSetExpiry = Object.keys(itemsToCacheObject);
+        const pipeline = redisClient.multi();
+        keysToSetExpiry.forEach((key) => {
+          pipeline.expire(key, 604800); // 1 tuần
+        });
+        await pipeline.exec();
+      }
+    }
+
+    const standardizedCachedResults = cachedResults!.map((item) => ({
+      index: item.index,
+      ...item.result,
+    }));
+
+    const standardizedNewResults = newResultsWithMeta.map((item) => ({
+      index: item.index,
+      status: item.status,
+      text: item.text,
+      confidence: item.confidence,
+    }));
+
+    const allResults = [
+      ...standardizedCachedResults,
+      ...standardizedNewResults,
+    ];
+
+    allResults.sort((a, b) => a.index - b.index);
+
+    res.locals.ocrImageCount = newResultsWithMeta.filter(
+      (r) => r.status !== "failed"
+    ).length;
+
+    res.status(200).json({ results: allResults });
+  } catch (error) {
+    next(error);
+  }
 };

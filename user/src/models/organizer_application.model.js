@@ -11,8 +11,8 @@ const OrganizerApplication = {
     applicationData: {
         orgName: "CoderHub", // Tên tổ chức/cá nhân
         description: "Chuyên tổ chức hội thảo công nghệ.",
-        websiteUrl: "...",
-        facebookUrl: "...",
+        website: "...",
+        facebook: "...",
     },
 
     // --- KYC/Verification Data ---

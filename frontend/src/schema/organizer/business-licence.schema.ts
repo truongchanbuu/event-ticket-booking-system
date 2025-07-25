@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+const allowedSectorRegex = /^[\p{L}\p{N}\s\-]{2,50}$/u; // chữ cái, số, dấu cách, dấu gạch, 2-50 ký tự
 export const ExtractedBusinessLicenseSchema = z.object({
   businessName: z.string().min(1, "Business name is required."),
   businessCode: z
@@ -11,7 +12,18 @@ export const ExtractedBusinessLicenseSchema = z.object({
   address: z.string().min(1, "Business address is required."),
   typeOfBusiness: z.string().optional(),
   registeredCapital: z.string().optional(),
-  businessSectors: z.array(z.string()).optional(),
+  businessSectors: z
+    .array(
+      z
+        .string()
+        .min(2, "It should have at least 2 letters.")
+        .max(50, "It should have equal or less than 50 letters.")
+        .regex(
+          allowedSectorRegex,
+          "Only character, number and space are available."
+        )
+    )
+    .optional(),
   taxCode: z.string().optional(),
   qrCodeData: z.string().optional(),
   scannedImageUrl: z.string().url().optional(),

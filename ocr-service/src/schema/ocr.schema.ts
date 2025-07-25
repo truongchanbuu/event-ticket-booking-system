@@ -27,3 +27,9 @@ export const extractMultipleTextSchema = z.object({
 export type ExtractMultipleTextInput = z.infer<
   typeof extractMultipleTextSchema
 >;
+
+export interface CachedOcrResult {
+  status: "ok" | "blurry" | "failed";
+  text: string | null;
+  confidence: number | null;
+}

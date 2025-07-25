@@ -54,10 +54,10 @@ export const OrganizerPartSchema = z.object({
   organizerType: OrganizerTypeSchema,
   bio: z.string().optional(),
 
-  websiteUrl: z.string().url().optional(),
-  facebookUrl: z.string().url().optional(),
-  instagramUrl: z.string().url().optional(),
-  xUrl: z.string().url().optional(),
+  website: z.string().url().optional(),
+  facebook: z.string().url().optional(),
+  instagram: z.string().url().optional(),
+  x: z.string().url().optional(),
 
   organizerStatus: OrganizerStatusEnum,
   followersCount: z.number().default(0),

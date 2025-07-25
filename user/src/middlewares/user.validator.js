@@ -88,36 +88,36 @@ export default class UserValidator extends BaseValidator {
                 },
 
                 // --- Organizer-Only Fields (Sử dụng custom validator để check role) ---
-                websiteUrl: {
+                website: {
                     optional: true,
                     ...this.urlValidationRules(),
                     custom: {
                         options: (v, meta) =>
-                            checkRole(v, meta, ROLE.ORGANIZER, "websiteUrl"),
+                            checkRole(v, meta, ROLE.ORGANIZER, "website"),
                     },
                 },
-                facebookUrl: {
+                facebook: {
                     optional: true,
                     ...this.urlValidationRules(["facebook.com"]),
                     custom: {
                         options: (v, meta) =>
-                            checkRole(v, meta, ROLE.ORGANIZER, "facebookUrl"),
+                            checkRole(v, meta, ROLE.ORGANIZER, "facebook"),
                     },
                 },
-                instagramUrl: {
+                instagram: {
                     optional: true,
                     ...this.urlValidationRules(["instagram.com"]),
                     custom: {
                         options: (v, meta) =>
-                            checkRole(v, meta, ROLE.ORGANIZER, "instagramUrl"),
+                            checkRole(v, meta, ROLE.ORGANIZER, "instagram"),
                     },
                 },
-                xUrl: {
+                x: {
                     optional: true,
                     ...this.urlValidationRules(["x.com", "twitter.com"]),
                     custom: {
                         options: (v, meta) =>
-                            checkRole(v, meta, ROLE.ORGANIZER, "xUrl"),
+                            checkRole(v, meta, ROLE.ORGANIZER, "x"),
                     },
                 },
                 bio: {
@@ -430,22 +430,22 @@ export default class UserValidator extends BaseValidator {
             .isString()
             .isLength({ max: 1000 })
             .withMessage("Bio must be a string up to 1000 chars");
-        const websiteUrlChain = this.validateURL({
-            fieldName: "websiteUrl",
+        const websiteChain = this.validateURL({
+            fieldName: "website",
             optional: true,
         });
-        const facebookUrlChain = this.validateURL({
-            fieldName: "facebookUrl",
+        const facebookChain = this.validateURL({
+            fieldName: "facebook",
             patterns: ["facebook.com"],
             optional: true,
         });
-        const instagramUrlChain = this.validateURL({
-            fieldName: "instagramUrl",
+        const instagramChain = this.validateURL({
+            fieldName: "instagram",
             patterns: ["instagram.com"],
             optional: true,
         });
-        const xUrlChain = this.validateURL({
-            fieldName: "xUrl",
+        const xChain = this.validateURL({
+            fieldName: "x",
             patterns: ["x.com", "twitter.com"],
             optional: true,
         });
@@ -453,10 +453,10 @@ export default class UserValidator extends BaseValidator {
         return [
             maybeConditional(organizerTypeChain),
             maybeConditional(bioChain),
-            ...websiteUrlChain.map(maybeConditional),
-            ...facebookUrlChain.map(maybeConditional),
-            ...instagramUrlChain.map(maybeConditional),
-            ...xUrlChain.map(maybeConditional),
+            ...websiteChain.map(maybeConditional),
+            ...facebookChain.map(maybeConditional),
+            ...instagramChain.map(maybeConditional),
+            ...xChain.map(maybeConditional),
         ];
     }
 

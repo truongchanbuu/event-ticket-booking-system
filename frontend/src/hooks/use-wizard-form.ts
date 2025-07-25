@@ -9,7 +9,6 @@ import {
 } from "react-hook-form";
 import { z } from "zod";
 
-// Kiểu dữ liệu cho một bước (có thể là schema hoặc hàm tạo schema)
 type StepSchema<TValues extends FieldValues> =
   | z.ZodTypeAny
   | ((getValues: () => TValues) => z.ZodTypeAny);
@@ -25,9 +24,11 @@ interface UseWizardFormOptions<TValues extends FieldValues> {
   mode?: "onChange" | "onBlur" | "onSubmit" | "onTouched" | "all";
 }
 
-interface WizardReturn<TValues extends FieldValues> {
+// === CẬP NHẬT INTERFACE TRẢ VỀ ===
+export interface WizardReturn<TValues extends FieldValues> {
   methods: UseFormReturn<TValues>;
   currentStep: number;
+  previousStep?: number;
   isFirst: boolean;
   isLast: boolean;
   goNext: () => Promise<void>;
@@ -45,17 +46,21 @@ export function useWizardForm<TValues extends FieldValues>({
   defaultValues,
   mode = "onChange",
 }: UseWizardFormOptions<TValues>): WizardReturn<TValues> {
-  const [currentStep, setCurrentStep] = React.useState(0);
+  // === THÊM STATE ĐỂ LƯU CẢ BƯỚC TRƯỚC ĐÓ ===
+  const [step, setStep] = React.useState({
+    current: 0,
+    previous: undefined as number | undefined,
+  });
 
   const resolver = React.useCallback(
     async (data: TValues, context: any, options: any) => {
-      const schemaOrFn = stepSchemas[currentStep];
+      const schemaOrFn = stepSchemas[step.current];
       const currentSchema =
         typeof schemaOrFn === "function" ? schemaOrFn(() => data) : schemaOrFn;
 
       return zodResolver(currentSchema)(data, context, options);
     },
-    [currentStep, stepSchemas]
+    [step.current, stepSchemas]
   );
 
   const methods = useForm<TValues>({
@@ -67,15 +72,16 @@ export function useWizardForm<TValues extends FieldValues>({
 
   React.useEffect(() => {
     methods.trigger();
-  }, [currentStep, methods]);
+  }, [step.current, methods]);
 
   const currentSchema = React.useMemo(() => {
-    const schemaOrFn = stepSchemas[currentStep];
+    const schemaOrFn = stepSchemas[step.current];
     return typeof schemaOrFn === "function"
       ? schemaOrFn(methods.getValues)
       : schemaOrFn;
-  }, [currentStep, stepSchemas, methods.getValues]);
+  }, [step.current, stepSchemas, methods.getValues]);
 
+  // === CẬP NHẬT `goNext` ===
   const goNext = React.useCallback(async () => {
     let fieldsToValidate: Path<TValues>[] | undefined = undefined;
     if (currentSchema instanceof z.ZodObject) {
@@ -83,24 +89,33 @@ export function useWizardForm<TValues extends FieldValues>({
     }
     const isValid = await methods.trigger(fieldsToValidate);
 
-    if (isValid && currentStep < stepSchemas.length - 1) {
-      setCurrentStep((s) => s + 1);
+    if (isValid && step.current < stepSchemas.length - 1) {
+      setStep((prev) => ({
+        current: prev.current + 1,
+        previous: prev.current, // Lưu lại bước hiện tại làm bước trước đó
+      }));
     }
-  }, [methods, currentStep, stepSchemas.length, currentSchema]);
+  }, [methods, step.current, stepSchemas.length, currentSchema]);
 
+  // === CẬP NHẬT `goPrev` ===
   const goPrev = React.useCallback(() => {
-    if (currentStep > 0) {
-      setCurrentStep((s) => s - 1);
+    if (step.current > 0) {
+      setStep((prev) => ({
+        current: prev.current - 1,
+        previous: prev.current,
+      }));
     }
-  }, [currentStep]);
+  }, [step.current]);
 
   const submitAll = (cb: (data: TValues) => void | Promise<void>) =>
     methods.handleSubmit(async (data) => {
+      const freshData = methods.getValues();
+      console.log("🔥 [submitAll] Raw form data:", freshData); // Log dữ liệu mới nhất
       const finalSchema =
         fullSchema ||
         z.object(
           stepSchemas.reduce((acc, s) => {
-            const schema = typeof s === "function" ? s(() => data) : s;
+            const schema = typeof s === "function" ? s(() => freshData) : s;
             if (schema instanceof z.ZodObject) {
               return { ...acc, ...schema.shape };
             }
@@ -108,29 +123,35 @@ export function useWizardForm<TValues extends FieldValues>({
           }, {})
         );
 
-      const parseResult = await finalSchema.safeParseAsync(data);
+      console.log("🔹 Using provided fullSchema for validation.");
+      const parseResult = await finalSchema.safeParseAsync(freshData);
 
       if (!parseResult.success) {
-        console.error(
-          "Full schema validation failed:",
-          parseResult.error.flatten()
-        );
+        const flattenedErrors = parseResult.error.flatten();
+        console.error("❌ Full schema validation failed:", flattenedErrors);
+
         parseResult.error.issues.forEach((issue) => {
-          methods.setError(issue.path.join(".") as Path<TValues>, {
+          const path = issue.path.join(".") as Path<TValues>;
+          const message = issue.message;
+          console.warn(`⚠️ Setting error for "${path}": ${message}`);
+          methods.setError(path, {
             type: "manual",
-            message: issue.message,
+            message: message,
           });
         });
         return;
       }
+
       await cb(parseResult.data as TValues);
     });
 
+  // === CẬP NHẬT OBJECT TRẢ VỀ ===
   return {
     methods,
-    currentStep,
-    isFirst: currentStep === 0,
-    isLast: currentStep === stepSchemas.length - 1,
+    currentStep: step.current,
+    previousStep: step.previous,
+    isFirst: step.current === 0,
+    isLast: step.current === stepSchemas.length - 1,
     goNext,
     goPrev,
     totalSteps: stepSchemas.length,
