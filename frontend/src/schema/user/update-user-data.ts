@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { UserStatusEnum } from "../enums";
 
 export const UpdateUserSchema = z.object({
   email: z.string().email().optional(),
@@ -24,9 +25,14 @@ export const UpdateUserSchema = z.object({
     .refine((val) => !val || !isNaN(new Date(val).getTime()), {
       message: "Invalid date.",
     }),
-  photoUrl: z.string().url().optional(),
+  photoUrl: z
+    .string()
+    .transform((val) => (val.trim() === "" ? undefined : val))
+    .optional(),
   followedOrganizers: z.array(z.string()).optional(),
   preferenceCategories: z.array(z.string()).optional(),
+  emailVerified: z.boolean().optional(),
+  status: UserStatusEnum.optional(),
 });
 
 export type UpdateUserData = z.infer<typeof UpdateUserSchema>;

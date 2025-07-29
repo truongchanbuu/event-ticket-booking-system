@@ -32,7 +32,7 @@ import {
   DollarSign,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { getEventAttendeesAPI, exportEventAttendeesAPI } from "@/lib/api/base";
+import { getEventAttendeesAPI } from "@/lib/api/base";
 import type { EventType } from "@/schema";
 import { formatDate } from "@/lib/utils";
 import { useAuth } from "@/app/providers/AuthProvider";
@@ -101,25 +101,22 @@ export default function AttendeesModal({
 
   // Export attendees
   const handleExport = async () => {
-    if (!event || !user) return;
-
-    try {
-      const token = await user.getIdToken();
-      const blob = await exportEventAttendeesAPI(event.eventID, token, "csv");
-
-      // Create and download CSV file
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `attendees-${event.eventID}.csv`;
-      a.click();
-      window.URL.revokeObjectURL(url);
-
-      toast({ title: "Attendees exported successfully!", variant: "success" });
-    } catch (error) {
-      console.error("Failed to export attendees:", error);
-      toast({ title: "Failed to export attendees", variant: "destructive" });
-    }
+    // if (!event || !user) return;
+    // try {
+    //   const token = await user.getIdToken();
+    //   const blob = await exportEventAttendeesAPI(event.eventID, token, "csv");
+    //   // Create and download CSV file
+    //   const url = window.URL.createObjectURL(blob);
+    //   const a = document.createElement("a");
+    //   a.href = url;
+    //   a.download = `attendees-${event.eventID}.csv`;
+    //   a.click();
+    //   window.URL.revokeObjectURL(url);
+    //   toast({ title: "Attendees exported successfully!", variant: "success" });
+    // } catch (error) {
+    //   console.error("Failed to export attendees:", error);
+    //   toast({ title: "Failed to export attendees", variant: "destructive" });
+    // }
   };
 
   // Get unique ticket types for filter

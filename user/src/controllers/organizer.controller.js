@@ -69,6 +69,7 @@ export default class UserController {
     }
 
     async applyOrganizer(req, res) {
+        console.log("req: ", req.body);
         const userID = req.user.uid;
 
         const applicationData = {
@@ -85,6 +86,7 @@ export default class UserController {
             requiresAdminApproval: result.requiresAdminApproval,
         });
 
+        console.log("data: ", JSON.stringify(result));
         return res.status(201).json({
             success: true,
             data: {
@@ -96,7 +98,7 @@ export default class UserController {
     }
 
     async getAllApplications(req, res) {
-        const result = await this.applicationService.getAllApplications(
+        const result = await this.organizerService.getAllApplications(
             req.query,
         );
 
@@ -158,8 +160,12 @@ export default class UserController {
 
     async getMyApplications(req, res) {
         const uid = req.user.uid;
-
-        const applications = this.organizerService.getApplicationsByUserID(uid);
+        console.log("uid: ", uid);
+        const applications =
+            await this.organizerService.getApplicationsByUserID(uid);
+        console.log(
+            `APPLICATIONS FOUND: ${applications?.length} - ${applications}`,
+        );
         return res.status(200).json({ success: true, data: applications });
     }
 

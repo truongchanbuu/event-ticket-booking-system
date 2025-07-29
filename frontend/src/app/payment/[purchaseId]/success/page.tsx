@@ -16,13 +16,12 @@ import {
 import { Dialog, DialogTitle } from "@headlessui/react";
 
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { Timestamp } from "firebase/firestore";
 import { useParams, useRouter } from "next/navigation";
 import QRCode from "react-qr-code";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@headlessui/react";
 import { PurchaseItem } from "@/schema/booking";
-import { PurchaseWithDetails, TICKET_STATUS, timestampSchema } from "@/schema";
+import { PurchaseWithDetails, TICKET_STATUS } from "@/schema";
 import PAYMENT_STATUS from "@/schema/enums/payment-status";
 import PAYMENT_METHODS from "@/schema/enums/payment-method";
 

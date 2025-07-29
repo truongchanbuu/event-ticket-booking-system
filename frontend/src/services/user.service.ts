@@ -12,14 +12,15 @@ export class UserService {
     } catch (e) {
       const error = e as ApiResponseError;
       console.error("Error in getUserProfileAPI:", error);
-      throw error;
+      return null;
     }
   }
 
   static async updateUserProfile(userData: UpdateUserData) {
+    console.log(`send update data: ${userData}`);
     const user = await updateUserAPI(userData);
     if (user) {
-      await auth.currentUser.reload();
+      await auth.currentUser?.reload();
     }
 
     return user;

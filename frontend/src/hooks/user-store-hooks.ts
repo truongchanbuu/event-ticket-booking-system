@@ -1,3 +1,4 @@
+import { applyOrganizer } from "@/lib/api";
 import { useUserStore } from "@/store/user.store";
 import { useMemo } from "react";
 
@@ -52,23 +53,44 @@ export const useUserActions = () => {
   );
 };
 
-/**
- * Hook cung cấp cả profile và các actions liên quan.
- * Hữu ích cho các trang như "Chỉnh sửa Profile" nơi cần cả dữ liệu và hàm cập nhật.
- * @returns {object} { userProfile, updateProfile }
- */
 export const useProfileManagement = () => {
   const userProfile = useUserStore((s) => s.userProfile);
   const updateProfile = useUserStore((s) => s.updateProfile);
+  const refetchProfile = useUserStore((s) => s.refreshUserProfile);
   const isProfileLoading = useUserStore((s) => s.isProfileLoading);
+  const isFetching = useUserStore((s) => s.isFetching);
+  const role = useUserStore((s) => s.role);
 
   return useMemo(
     () => ({
       userProfile,
-      updateProfile,
+      role,
       isProfileLoading,
+      isFetching,
+      updateProfile,
+      refetchProfile,
     }),
-    [userProfile, updateProfile, isProfileLoading]
+    [
+      userProfile,
+      role,
+      updateProfile,
+      refetchProfile,
+      isProfileLoading,
+      isFetching,
+    ]
+  );
+};
+
+export const useOrganizerApply = () => {
+  const isApplyingOrganizer = useUserStore((s) => s.isApplyingOrganizer);
+  const applyOrganizer = useUserStore((s) => s.applyOrganizer);
+
+  return useMemo(
+    () => ({
+      isApplyingOrganizer,
+      applyOrganizer,
+    }),
+    [isApplyingOrganizer, applyOrganizer]
   );
 };
 

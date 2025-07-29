@@ -16,7 +16,7 @@ async function bootstrap() {
         const PORT = ENV.PORT || 3000;
 
         server = app.listen(PORT, () => {
-            console.log(`🚀 Auth service running on port ${PORT}`);
+            console.log(`🚀 User service running on port ${PORT}`);
             console.log(`📊 Environment: ${ENV.NODE_ENV}`);
         });
 

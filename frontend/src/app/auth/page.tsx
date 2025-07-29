@@ -9,6 +9,7 @@ import LoadingPage from "@/components/app-loading";
 import { AUTH_MESSAGES } from "@/constants/auth";
 import { SignInForm } from "@/components/auth/signin-form";
 import { SignUpForm } from "@/components/auth/signup-form";
+import { AppUser } from "@/schema/user";
 
 type Mode = "signin" | "signup";
 const EventHubAuth = () => {
@@ -34,7 +35,7 @@ const EventHubAuth = () => {
 
   const handleSignUp = useCallback(
     async (formData: any) => {
-      const userData = {
+      const userData: Partial<AppUser> = {
         username: formData.username,
         email: formData.email,
         phoneNumber: formData.phone,

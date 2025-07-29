@@ -7,7 +7,7 @@ import {
     REDIS_TTL,
     ROLE,
 } from "@event_ticket_booking_system/shared";
-import { db, FieldValue, auth } from "@event_ticket_booking_system/shared";
+import { db, auth } from "@event_ticket_booking_system/shared";
 import { sendUserDeleted } from "../kafka/user.event.js";
 import { USER_STATUS } from "../enums/user-status.enum.js";
 import { sanitizeUserData } from "../utils/sanitize.js";
@@ -266,26 +266,85 @@ export default class UserService {
         return { users, nextCursor, hasMore };
     }
 
+    // Thay thế phương thức findOrCreateUser cũ bằng phương thức này
+
     async findOrCreateUser(userID, userData) {
         let isNew = false;
+        const userCacheKey = this._getUserCacheKey(userID);
 
-        const user = await this.cache.getOrSet(
-            this._getUserCacheKey(userID),
-            REDIS_TTL.USER_PROFILE_DEFAULT,
-            async () => {
-                const existingUser = await this._getUserDoc(userID);
-                if (existingUser) {
-                    if (existingUser.isDeleted) {
-                        throw new AppError({
-                            message: "User is deleted",
-                            errorCode: ERROR_CODE.USER_DELETED,
-                            statusCode: 403,
-                        });
-                    }
-                    return existingUser;
+        // 1. Kiểm tra cache bằng ID trước tiên
+        let user = await this.cache.get(userCacheKey);
+        if (user) {
+            this.logger.debug(`[Cache HIT] findOrCreateUser by ID: ${userID}`);
+            return { user, isNew: false };
+        }
+
+        // Nếu không có email, chỉ có thể tìm/tạo bằng ID
+        if (!userData.email) {
+            // Fallback về logic cũ hơn nếu không có email để kiểm tra
+            user = await this._getUserDoc(userID);
+            if (user) {
+                await this.cache.set(
+                    userCacheKey,
+                    user,
+                    REDIS_TTL.USER_PROFILE_DEFAULT,
+                );
+                return { user, isNew: false };
+            }
+            // Logic tạo mới sẽ nằm ngoài if-else này
+        } else {
+            // 2. Nếu có email, kiểm tra cache bằng email
+            const emailCacheKey = this._getUserByEmailCacheKey(userData.email);
+            user = await this.cache.get(emailCacheKey);
+            if (user) {
+                this.logger.debug(
+                    `[Cache HIT] findOrCreateUser by Email: ${userData.email}`,
+                );
+                // Đồng thời cache lại bằng ID nếu chưa có
+                await this.cache.set(
+                    userCacheKey,
+                    user,
+                    REDIS_TTL.USER_PROFILE_DEFAULT,
+                );
+                return { user, isNew: false };
+            }
+        }
+
+        // 3. Nếu cache không có, thực hiện một giao dịch duy nhất trên DB
+        this.logger.debug(
+            `[Cache MISS] findOrCreateUser for ID: ${userID}. Using DB transaction.`,
+        );
+        try {
+            const createdUser = await db.runTransaction(async (transaction) => {
+                // Kiểm tra lại trong DB bằng ID trước
+                const userRef = this.userCollection.doc(userID);
+                const userDoc = await transaction.get(userRef);
+                if (userDoc.exists) {
+                    this.logger.warn(
+                        `[Transaction] User with ID ${userID} already exists. Race condition?`,
+                    );
+                    return { id: userDoc.id, ...userDoc.data() };
                 }
 
-                // Create new user
+                // Kiểm tra lại trong DB bằng email để đảm bảo không trùng lặp
+                if (userData.email) {
+                    const emailQuery = this.userCollection
+                        .where("email", "==", userData.email)
+                        .limit(1);
+                    const querySnapshot = await transaction.get(emailQuery);
+                    if (!querySnapshot.empty) {
+                        const existingUserDoc = querySnapshot.docs[0];
+                        this.logger.warn(
+                            `[Transaction] User with email ${userData.email} already exists. Race condition?`,
+                        );
+                        return {
+                            id: existingUserDoc.id,
+                            ...existingUserDoc.data(),
+                        };
+                    }
+                }
+
+                // Nếu không có user nào tồn tại, tiến hành tạo mới
                 isNew = true;
                 const newUser = {
                     userID,
@@ -296,8 +355,8 @@ export default class UserService {
                     email: userData.email,
                     role: ROLE.CUSTOMER,
                     isDeleted: false,
-                    emailVerified: false,
-                    phoneVerified: false,
+                    emailVerified: !!userData.emailVerified,
+                    phoneVerified: !!userData.phoneVerified,
                     organizerStatus: ORGANIZER_STATUS.NONE,
                     reportCount: 0,
                     riskScore: 0,
@@ -306,16 +365,54 @@ export default class UserService {
                     ...userData,
                 };
 
-                const saved = await this._createUserDoc(userID, newUser);
-                await auth().setCustomUserClaims(userID, {
-                    role: newUser.role,
+                transaction.set(userRef, newUser);
+                this.logger.info(
+                    `[UserService] New user document created with ID: ${userID}`,
+                );
+
+                // Trả về newUser để có thể sử dụng bên ngoài transaction
+                return newUser;
+            });
+
+            // Đặt custom claims sau khi transaction thành công
+            await auth().setCustomUserClaims(userID, {
+                role: createdUser.role,
+            });
+
+            // 4. Cập nhật cache cho cả ID và email
+            this.logger.debug(
+                `[Cache SET] Caching new user for ID ${createdUser.id} and email ${createdUser.email}`,
+            );
+            const ops = [];
+            ops.push({
+                type: "set",
+                key: this._getUserCacheKey(createdUser.id),
+                value: createdUser,
+                ttl: REDIS_TTL.USER_PROFILE_DEFAULT,
+            });
+            if (createdUser.email) {
+                ops.push({
+                    type: "set",
+                    key: this._getUserByEmailCacheKey(createdUser.email),
+                    value: createdUser,
+                    ttl: REDIS_TTL.USER_PROFILE_DEFAULT,
                 });
+            }
+            await this.cache.pipelineOps(ops);
 
-                return saved;
-            },
-        );
-
-        return { user, isNew };
+            return { user: createdUser, isNew };
+        } catch (error) {
+            this.logger.error(
+                `[UserService] findOrCreateUser transaction failed for userID ${userID}: ${error.message}`,
+            );
+            // Ném lỗi để tầng trên xử lý
+            throw new AppError({
+                message: "Failed to find or create user.",
+                errorCode: ERROR_CODE.DATABASE_ERROR,
+                statusCode: 500,
+                cause: error,
+            });
+        }
     }
 
     async checkUserExists(userID) {
@@ -324,13 +421,19 @@ export default class UserService {
     }
 
     async getUserByID(userID) {
+        const key = this._getUserCacheKey(userID);
+        const ttl = REDIS_TTL.USER_PROFILE_DEFAULT;
+
         return await this.cache.getOrSet(
-            this._getUserCacheKey(userID),
-            REDIS_TTL.USER_PROFILE_DEFAULT,
+            key,
             async () => {
                 const doc = await this.userCollection.doc(userID).get();
-                return doc.exists ? { id: doc.id, ...doc.data() } : null;
+                if (!doc.exists) {
+                    return null;
+                }
+                return { id: doc.id, ...doc.data() };
             },
+            ttl,
         );
     }
 
@@ -377,9 +480,9 @@ export default class UserService {
 
             user.usernameLowerCase = user.username.toLowerCase();
             if (user.birthday) {
-                user.birthday = Timestamp.fromDate(new Date(user.birthday));
+                user.birthday = new Date(user.birthday);
             }
-            user.createdAt = FieldValue.serverTimestamp();
+            user.createdAt = new Date().toISOString();
             user.followedOrganizersCount = 0;
             user.unreadNotificationCount = 0;
 
@@ -425,7 +528,7 @@ export default class UserService {
 
             const updatePayload = {
                 ...user,
-                updatedAt: FieldValue.serverTimestamp(),
+                updatedAt: new Date().toISOString(),
             };
 
             // Update Firestore
@@ -502,7 +605,7 @@ export default class UserService {
                     orgRef,
                     {
                         ...org,
-                        followedAt: FieldValue.serverTimestamp(),
+                        followedAt: new Date().toISOString(),
                     },
                     { merge: true },
                 );
@@ -516,7 +619,7 @@ export default class UserService {
 
         batch.update(userRef, {
             followedOrganizersCount: increment(countDelta),
-            updatedAt: FieldValue.serverTimestamp(),
+            updatedAt: new Date().toISOString(),
         });
 
         await batch.commit();
@@ -552,7 +655,7 @@ export default class UserService {
             };
 
             if (action === "create") {
-                notifData.createdAt = FieldValue.serverTimestamp();
+                notifData.createdAt = new Date().toISOString();
                 if (status === NOTIFICATION_STATUS.UNREAD) unreadCount++;
                 batch.set(notifRef, notifData);
             } else if (action === "update") {
@@ -565,7 +668,7 @@ export default class UserService {
         if (unreadCount !== 0) {
             batch.update(userRef, {
                 unreadNotificationCount: increment(unreadCount),
-                updatedAt: FieldValue.serverTimestamp(),
+                updatedAt: new Date().toISOString(),
             });
         }
 
@@ -588,7 +691,7 @@ export default class UserService {
         if (status === NOTIFICATION_STATUS.READ) {
             await this.userCollection.doc(userID).update({
                 unreadNotificationCount: increment(-1),
-                updatedAt: FieldValue.serverTimestamp(),
+                updatedAt: new Date().toISOString(),
             });
         }
 
@@ -598,7 +701,7 @@ export default class UserService {
     async softDeleteUser(userID) {
         await this.userCollection.doc(userID).update({
             isDeleted: true,
-            deletedAt: FieldValue.serverTimestamp(),
+            deletedAt: new Date().toISOString(),
         });
 
         const user = await this._getUserDoc(userID);

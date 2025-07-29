@@ -350,10 +350,9 @@ export default class UserValidator extends BaseValidator {
 
     static validateCreateUser() {
         return [
-            ...this.validateEmail({ optional: false }), // required
-            ...this.validateName({ optional: false }), // required
-            ...this._getSharedUserRules({ optional: false }),
-            ...this._getOrganizerProfileRules({ conditional: true }),
+            ...this.validateEmail({ optional: false }),
+            ...this.validateName({ optional: false }),
+            ...this._getSharedUserRules({ optional: true }),
         ];
     }
 
@@ -384,9 +383,9 @@ export default class UserValidator extends BaseValidator {
         const chain = (validation) =>
             optional ? validation.optional() : validation;
         return [
-            ...this.validatePhoneNumber({ optional }), // Sử dụng tham số `optional` một cách chính xác
-            ...this.validateBirthday({ optional }), // Sử dụng tham số `optional` một cách chính xác
-            ...this.validateURL({ fieldName: "photoUrl", optional: true }),
+            ...this.validatePhoneNumber({ optional }),
+            ...this.validateBirthday({ optional }),
+            ...this.validateURL({ fieldName: "photoUrl" }),
             chain(body("role"))
                 .isIn(Object.values(ROLE))
                 .withMessage(
@@ -418,7 +417,6 @@ export default class UserValidator extends BaseValidator {
         const maybeConditional = (rule) =>
             conditional ? rule.if(body("role").equals(ROLE.ORGANIZER)) : rule;
 
-        // Tạo các chuỗi validator riêng lẻ để áp dụng điều kiện
         const organizerTypeChain = body("organizerType")
             .optional()
             .isIn(["personal", "business"])

@@ -6,7 +6,6 @@ import type { EventType } from "@/schema";
 import OrganizerEventsManager from "@/components/events/OrganizerEventsManager";
 import LoadingPage from "@/components/app-loading";
 import { mockEvents } from "@/schema/events/events.mock";
-import { mockOrganizer } from "@/schema/user/organizer.mock";
 import { useRouter } from "next/navigation";
 import ROLE from "@/schema/enums/role";
 import { useProfileManagement } from "@/hooks/user-store-hooks";

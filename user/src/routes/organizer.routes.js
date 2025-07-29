@@ -18,10 +18,6 @@ export default class OrganizerRoutes {
             UserValidator.handleValidationErrors,
             this.organizerController.getPublicOrganizers,
         );
-        this.router.get(
-            "/:orgID",
-            this.organizerController.getOrganizerProfile,
-        );
         this.router.post(
             "/apply",
             verifyToken,
@@ -32,17 +28,11 @@ export default class OrganizerRoutes {
 
         // admin-access
         this.router.get(
-            "/",
-            verifyToken,
-            checkAdmin,
-            UserValidator.validateGetUsers(),
-            UserValidator.handleValidationErrors,
-            this.organizerController.getOrganizers,
-        );
-        this.router.get(
             "/applications",
             verifyToken,
             checkAdmin,
+            OrganizerValidator.validateGetAllApplications(),
+            OrganizerValidator.handleValidationErrors,
             this.organizerController.getAllApplications,
         );
         this.router.get(
@@ -67,11 +57,25 @@ export default class OrganizerRoutes {
             OrganizerValidator.handleValidationErrors,
             this.organizerController.deleteApplication,
         );
+
+        this.router.get(
+            "/:orgID",
+            this.organizerController.getOrganizerProfile,
+        );
         this.router.patch(
             "/:applicationID/status",
             verifyToken,
             checkAdmin,
             this.organizerController.checkApplication,
+        );
+
+        this.router.get(
+            "/",
+            verifyToken,
+            checkAdmin,
+            UserValidator.validateGetUsers(),
+            UserValidator.handleValidationErrors,
+            this.organizerController.getOrganizers,
         );
     }
 

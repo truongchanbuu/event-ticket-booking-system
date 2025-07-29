@@ -30,10 +30,9 @@ const formatUserForForm = (user: AppUser | null): UpdateUserData => {
   };
 };
 
-// ----- HOOK CHÍNH (PHIÊN BẢN SỬA LỖI TRIỆT ĐỂ) -----
 interface UseProfileFormProps {
   userProfile: AppUser | null;
-  updateProfile: (data: Partial<UpdateUserData>) => void;
+  updateProfile: (data: Partial<UpdateUserData>) => Promise<void>;
 }
 
 export const useProfileForm = ({
@@ -42,6 +41,7 @@ export const useProfileForm = ({
 }: UseProfileFormProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
     register,
@@ -62,7 +62,9 @@ export const useProfileForm = ({
   }, [userProfile, reset]);
 
   const handleSave = useCallback(
-    (formData: UpdateUserData) => {
+    async (formData: UpdateUserData) => {
+      console.info("ON SAVED DATA");
+      setIsSubmitting(true);
       if (!userProfile) {
         return;
       }
@@ -77,11 +79,14 @@ export const useProfileForm = ({
         };
       }
 
+      console.info("ON SAVED DATA: ", changedFields);
+
       if (Object.keys(changedFields).length > 0) {
-        updateProfile(changedFields);
+        await updateProfile(changedFields);
       }
 
       setIsEditing(false);
+      setIsSubmitting(false);
     },
     [userProfile, updateProfile]
   );
@@ -111,7 +116,7 @@ export const useProfileForm = ({
       } else {
         if (!userProfile) return;
         try {
-          updateProfile({ photoUrl: newUrl });
+          await updateProfile({ photoUrl: newUrl });
         } catch (err) {
           console.error("Failed to update avatar:", err);
         }
@@ -131,12 +136,14 @@ export const useProfileForm = ({
 
   return {
     isEditing,
+    isSubmitting,
     currentData,
     hasChanges: isDirty,
     errors,
     isModalOpen,
     handleEdit,
-    handleSave: handleSubmit(handleSave),
+    handleSave,
+    handleSubmit,
     handleCancel,
     handlePreferencesChange,
     handleAvatarUpload,

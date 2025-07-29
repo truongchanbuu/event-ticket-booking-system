@@ -2,7 +2,6 @@ import { z } from "zod";
 
 import { PaymentStatusEnum } from "../enums/payment-status";
 import { PaymentMethodEnum } from "../enums/payment-method";
-import { timestampSchema } from "../helper";
 import { TicketSchema } from "../tickets";
 
 export const PurchaseSchema = z.object({
@@ -14,8 +13,8 @@ export const PurchaseSchema = z.object({
   totalPrice: z.number().nonnegative(),
   paymentStatus: PaymentStatusEnum,
   paymentMethod: PaymentMethodEnum.optional(),
-  createdAt: timestampSchema,
-  updatedAt: timestampSchema.optional(),
+  createdAt: z.string(),
+  updatedAt: z.string().optional(),
   paymentUrl: z.string(),
   reason: z.string().optional(),
 });

@@ -1,12 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { signOut, User as FirebaseUser } from "firebase/auth";
+import { User as FirebaseUser } from "firebase/auth";
 import { useAuth } from "@/app/providers/AuthProvider";
-import { auth } from "@/lib/firebase";
 import { UserService } from "@/services/user.service";
 import { useToast } from "@/hooks/use-toast";
 import { UpdateUserData, AppUser, fromFirebaseUser } from "@/schema/user";
 import { useEffect, useMemo, useCallback } from "react";
 import { QUERY_KEYS } from "@/constants/user";
+import { logout } from "@/services/auth.service";
+import { applyOrganizer } from "@/lib/api";
 
 type UserProfileResponse = {
   data: AppUser | null;
@@ -26,28 +27,61 @@ const MAX_RETRY = 3;
  */
 function mergeProfile(
   backendUser: AppUser | null | undefined,
-  firebaseUser: FirebaseUser | null
+  firebaseUser: FirebaseUser | null,
+  forceData: any
 ): AppUser | null {
   if (!firebaseUser && !backendUser) {
     return null;
   }
 
   if (!firebaseUser) {
-    return backendUser ?? null;
+    return backendUser ? { ...backendUser, ...forceData } : null;
   }
 
   const fbPartial = fromFirebaseUser(firebaseUser);
-  if (!backendUser) {
-    return fbPartial as unknown as AppUser;
+  const merged = {
+    ...fbPartial,
+    ...(backendUser || {}),
+    ...forceData,
+  };
+
+  const differentKeys: string[] = [];
+
+  if (backendUser) {
+    for (const key in backendUser) {
+      const backendVal = backendUser[key as keyof AppUser];
+      const fbVal = fbPartial[key as keyof AppUser];
+
+      const isDifferent =
+        typeof backendVal === "object"
+          ? JSON.stringify(backendVal) !== JSON.stringify(fbVal)
+          : backendVal !== fbVal;
+
+      if (isDifferent) {
+        differentKeys.push(key);
+      }
+    }
+
+    if (differentKeys.length > 0) {
+      console.log("✅ Các trường khác biệt với Firebase user:");
+      differentKeys.forEach((key) => {
+        console.log(
+          `→ ${key}: backend=${JSON.stringify(backendUser[key as keyof AppUser])}, firebase=${JSON.stringify(fbPartial[key as keyof AppUser])}`
+        );
+      });
+    } else {
+      console.log("⚠️ Không có trường nào khác biệt với Firebase user.");
+    }
+  } else {
+    console.log("⚠️ Không có backendUser.");
   }
 
-  const merged = { ...fbPartial, ...backendUser };
   return merged;
 }
 
 export const useUser = (options?: { needFetchProfile?: boolean }) => {
   const { needFetchProfile = false } = options || {};
-  const { user: firebaseUser, isAuthLoading } = useAuth();
+  const { user: firebaseUser, isAuthLoading, isAdmin, role } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -59,8 +93,7 @@ export const useUser = (options?: { needFetchProfile?: boolean }) => {
   const cached =
     queryClient.getQueryData<UserProfileResponse>(queryKey) || EMPTY_PROFILE;
 
-  const shouldFetch = Boolean(firebaseUser) && !cached.data?.role;
-
+  const shouldFetch = Boolean(firebaseUser?.uid) && !cached.data?.role;
   const {
     data: fetched = cached,
     isLoading: isProfileLoading,
@@ -87,15 +120,15 @@ export const useUser = (options?: { needFetchProfile?: boolean }) => {
   });
 
   useEffect(() => {
-    if (needFetchProfile && firebaseUser) refetch();
-  }, [needFetchProfile, firebaseUser, refetch]);
+    if (needFetchProfile && firebaseUser?.uid) refetch();
+  }, [needFetchProfile, firebaseUser?.uid, refetch]);
 
   const isLoggedIn = Boolean(firebaseUser);
   const isNewUser = fetched.meta?.isNew;
 
   const userProfile = useMemo(
-    () => mergeProfile(fetched.data, firebaseUser ?? null),
-    [fetched.data, firebaseUser]
+    () => mergeProfile(fetched.data, firebaseUser ?? null, { role }),
+    [fetched.data, firebaseUser, role]
   );
 
   const hasDBProfile = Boolean(fetched.data);
@@ -164,7 +197,7 @@ export const useUser = (options?: { needFetchProfile?: boolean }) => {
         description: "Your account has been deleted",
       });
       queryClient.removeQueries({ queryKey });
-      await signOut(auth);
+      await logout();
       queryClient.clear();
     },
     onError: () => {
@@ -176,9 +209,26 @@ export const useUser = (options?: { needFetchProfile?: boolean }) => {
     },
   });
 
-  const refreshUserProfile = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey });
-  }, [queryClient, queryKey]);
+  const applyOrganizerMutation = useMutation({
+    mutationFn: (data: any) => applyOrganizer(data),
+    onSuccess: (data) => {
+      toast({
+        variant: "success",
+        title: "Save successfully",
+        description:
+          "Application submitted successfully! We will review it shortly.",
+      });
+      queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (error) => {
+      console.error("Submission process failed:", error);
+      toast({
+        variant: "destructive",
+        title: "Failed to save",
+        description: `An error occurred during submission. Please try again. \nError: ${error instanceof Error ? error.message : "Unknown error"}`,
+      });
+    },
+  });
 
   return useMemo(
     () => ({
@@ -186,6 +236,8 @@ export const useUser = (options?: { needFetchProfile?: boolean }) => {
       firebaseUser,
       isAuthLoading,
       isLoggedIn,
+      isAdmin,
+      role,
 
       // Profile (merged)
       userProfile,
@@ -199,19 +251,24 @@ export const useUser = (options?: { needFetchProfile?: boolean }) => {
       profileError,
 
       // Mutations
-      updateProfile: updateProfileMutation.mutate,
+      updateProfile: updateProfileMutation.mutateAsync,
       isUpdatingProfile: updateProfileMutation.isPending,
 
-      deleteAccount: deleteAccountMutation.mutate,
+      deleteAccount: deleteAccountMutation.mutateAsync,
       isDeletingAccount: deleteAccountMutation.isPending,
 
+      applyAsOrganizer: applyOrganizerMutation.mutateAsync,
+      isApplyingOrganizer: applyOrganizerMutation.isPending,
+
       // Manual refresh
-      refreshUserProfile,
+      refetchUserProfile: refetch,
     }),
     [
       firebaseUser,
       isAuthLoading,
       isLoggedIn,
+      isAdmin,
+      role,
       userProfile,
       hasDBProfile,
       hasRole,
@@ -219,11 +276,13 @@ export const useUser = (options?: { needFetchProfile?: boolean }) => {
       isProfileLoading,
       isFetching,
       profileError,
-      updateProfileMutation.mutate,
+      updateProfileMutation.mutateAsync,
       updateProfileMutation.isPending,
-      deleteAccountMutation.mutate,
+      deleteAccountMutation.mutateAsync,
       deleteAccountMutation.isPending,
-      refreshUserProfile,
+      applyOrganizerMutation.mutateAsync,
+      applyOrganizerMutation.isPending,
+      refetch,
     ]
   );
 };

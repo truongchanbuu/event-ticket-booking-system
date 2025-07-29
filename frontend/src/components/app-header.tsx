@@ -15,12 +15,12 @@ import {
   LogOut,
   Settings,
   Bell,
-  Ticket,
   X,
   Menu,
+  Users,
+  FileText,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { auth } from "@/lib/firebase";
 import { HeaderProps } from "@/types/app-header/type";
 import {
   dropdownItemCls,
@@ -36,6 +36,7 @@ import UserMenu from "./app-header/user-menu";
 import HeaderSkeleton from "./app-header/header-skeleton";
 import NavigationLinks from "./navigation-links";
 import { useAuthStatus, useUserProfile } from "@/hooks/user-store-hooks";
+import { logout } from "@/services/auth.service";
 
 /* ------------------------------------------------------------------ */
 /* Component                                                           */
@@ -73,8 +74,7 @@ export default function AppHeader({
 
   const handleSignOut = async () => {
     try {
-      const { signOut } = await import("firebase/auth");
-      await signOut(auth);
+      await logout();
     } catch (err) {
       console.error("Sign out error:", err);
     } finally {
@@ -206,6 +206,7 @@ export default function AppHeader({
               <span>Profile</span>
             </div>
           </Link>
+
           {effectiveRole === ROLE.EVENT_ORGANIZER && (
             <Link
               href="/profile/my-events"
@@ -218,10 +219,36 @@ export default function AppHeader({
               </div>
             </Link>
           )}
+
+          {effectiveRole === ROLE.ADMIN && (
+            <>
+              <Link
+                href="/admin/applications"
+                className={`${dropdownItemCls(variant)} rounded-md`}
+                onClick={closeMenus}
+              >
+                <div className="flex items-center space-x-2">
+                  <FileText className="w-4 h-4" />
+                  <span>Application Review</span>
+                </div>
+              </Link>
+              <Link
+                href="/admin/users"
+                className={`${dropdownItemCls(variant)} rounded-md`}
+                onClick={closeMenus}
+              >
+                <div className="flex items-center space-x-2">
+                  <Users className="w-4 h-4" />
+                  <span>User Management</span>
+                </div>
+              </Link>
+            </>
+          )}
+
           <Button
             variant="ghost"
             onClick={handleSignOut}
-            className={`${dropdownItemCls(variant)} rounded-md`}
+            className={`${dropdownItemCls(variant)} rounded-md hover:text-black dark:hover:text-white`}
           >
             <div className="flex items-center space-x-2">
               <LogOut className="w-4 h-4" />

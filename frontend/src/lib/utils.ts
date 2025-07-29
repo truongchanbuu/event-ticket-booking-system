@@ -70,6 +70,28 @@ export function formatDateTime(
   }).format(dateObj);
 }
 
+export function getDaysAgo(dateString: string): string {
+  const inputDate = new Date(dateString);
+  const now = new Date();
+
+  if (isNaN(inputDate.getTime())) {
+    return "Invalid Date";
+  }
+
+  inputDate.setHours(0, 0, 0, 0);
+  now.setHours(0, 0, 0, 0);
+
+  const diffDays = Math.floor(
+    (now.getTime() - inputDate.getTime()) / (1000 * 60 * 60 * 24)
+  );
+
+  if (diffDays < 0) return "In the future";
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+
+  return `${diffDays} day(s) ago`;
+}
+
 export function formatE164PhoneNumber(phone: string) {
   if (!phone.startsWith("+")) {
     return `+84${phone.replace(/^0/, "")}`;

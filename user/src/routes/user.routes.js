@@ -26,7 +26,7 @@ export default class UserRoutes {
             this.userController.getProfile,
         );
         this.router.post(
-            "",
+            "/",
             UserValidator.validateCreateUser(),
             UserValidator.handleValidationErrors,
             this.userController.registerUser,

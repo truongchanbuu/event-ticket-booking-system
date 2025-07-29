@@ -5,13 +5,9 @@ import { Button } from "@/components/ui/button";
 
 interface SaveChangesAlertProps {
   isVisible: boolean;
-  onSave: () => void;
 }
 
-const SaveChangesAlert: React.FC<SaveChangesAlertProps> = ({
-  isVisible,
-  onSave,
-}) => {
+const SaveChangesAlert: React.FC<SaveChangesAlertProps> = ({ isVisible }) => {
   if (!isVisible) return null;
 
   return (
@@ -19,7 +15,7 @@ const SaveChangesAlert: React.FC<SaveChangesAlertProps> = ({
       <span>You have unsaved changes.</span>
       <Button
         disabled={!isVisible}
-        onClick={onSave}
+        type="submit"
         variant="outline"
         className="text-black bg-white"
       >

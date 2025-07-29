@@ -1,5 +1,8 @@
 import { body, query } from "express-validator";
-import { BaseValidator } from "@event_ticket_booking_system/shared";
+import {
+    APPLY_STATUS,
+    BaseValidator,
+} from "@event_ticket_booking_system/shared";
 import { MAX_BIO_TEXT, MIN_BIO_TEXT } from "../config/constants.js";
 
 export default class OrganizerValidator extends BaseValidator {
@@ -118,17 +121,17 @@ export default class OrganizerValidator extends BaseValidator {
             body("documentUrls")
                 .isObject()
                 .withMessage("documentUrls must be an object."),
-            body("documentUrls.identityCardFrontUrl")
+            body("documentUrls.identityCardFront")
                 .isURL()
                 .withMessage(
                     "Front side ID card URL is required and must be valid.",
                 ),
-            body("documentUrls.identityCardBackUrl")
+            body("documentUrls.identityCardBack")
                 .isURL()
                 .withMessage(
                     "Back side ID card URL is required and must be valid.",
                 ),
-            body("documentUrls.businessLicenseUrl")
+            body("documentUrls.businessLicense")
                 .if(body("applyType").equals("business"))
                 .isURL()
                 .withMessage(
@@ -274,6 +277,95 @@ export default class OrganizerValidator extends BaseValidator {
 
             // 5. Explicitly block any attempt to update restricted, system-managed fields.
             ...this._blockSystemFields(restrictedFields),
+        ];
+    }
+
+    static validateGetAllApplications() {
+        const ALLOWED_SORT_FIELDS = [
+            "createdAt",
+            "submittedAt",
+            "updatedAt",
+            "orgName",
+        ];
+
+        return [
+            // Validation cho 'limit'
+            query("limit")
+                .optional() // Không bắt buộc
+                .isInt({ min: 1, max: 100 })
+                .withMessage("Limit must be an integer between 1 and 100")
+                .toInt(), // Sanitizer: Chuyển đổi thành số nguyên
+
+            // Validation cho 'status'
+            query("status")
+                .optional()
+                .isString()
+                .isIn(Object.values(APPLY_STATUS))
+                .withMessage(
+                    `Status must be one of: ${Object.values(APPLY_STATUS).join(", ")}`,
+                ),
+
+            // Validation cho 'sortBy'
+            query("sortBy")
+                .optional()
+                .isString()
+                .isIn(ALLOWED_SORT_FIELDS)
+                .withMessage(
+                    `SortBy must be one of: ${ALLOWED_SORT_FIELDS.join(", ")}`,
+                ),
+
+            // Validation cho 'sortOrder'
+            query("sortOrder")
+                .optional()
+                .isString()
+                .isIn(["asc", "desc"])
+                .withMessage('SortOrder must be "asc" or "desc"'),
+
+            // Validation cho các cờ boolean
+            query("hasCooldown")
+                .optional()
+                .isBoolean()
+                .withMessage("hasCooldown must be a boolean")
+                .toBoolean(),
+            query("requiresAdminApproval")
+                .optional()
+                .isBoolean()
+                .withMessage("requiresAdminApproval must be a boolean")
+                .toBoolean(),
+
+            // Validation cho các ID
+            query("userID")
+                .optional()
+                .isString()
+                .notEmpty()
+                .withMessage("userID must be a non-empty string"),
+
+            // Validation cho ngày tháng (chuẩn ISO 8601)
+            query("dateFrom")
+                .optional()
+                .isISO8601()
+                .withMessage("dateFrom must be a valid ISO 8601 date")
+                .toDate(),
+            query("dateTo")
+                .optional()
+                .isISO8601()
+                .withMessage("dateTo must be a valid ISO 8601 date")
+                .toDate(),
+
+            // Validation cho các số
+            query("minRejectCount")
+                .optional()
+                .isInt({ min: 0 })
+                .withMessage("minRejectCount must be a non-negative integer")
+                .toInt(),
+            query("maxRejectCount")
+                .optional()
+                .isInt({ min: 0 })
+                .withMessage("maxRejectCount must be a non-negative integer")
+                .toInt(),
+
+            // lastVisibleValue thường là một chuỗi phức tạp, chỉ cần kiểm tra là string là đủ
+            query("lastVisibleValue").optional().isString(),
         ];
     }
 

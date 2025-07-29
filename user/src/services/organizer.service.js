@@ -4,20 +4,35 @@ import {
     ERROR_CODE,
     ORGANIZER_STATUS,
     db,
-    FieldValue,
+    REDIS_TTL,
 } from "@event_ticket_booking_system/shared";
 import { USER_STATUS } from "../enums/user-status.enum.js";
+import {
+    ADMIN_APPROVAL_THRESHOLDS,
+    COOLDOWN_CONSTANTS,
+} from "../config/constants.js";
+import { REVIEWER } from "../enums/reviewer.js";
 
 const ORG_APPLICATION_COLLECTION = "orgApplications";
 const USER_COLLECTION = "users";
 const LIMIT_APPLY = 5;
 
-export default class UserService {
-    constructor({ logger }) {
+export default class OrganizerService {
+    constructor({ logger, redisService }) {
         this.logger = logger;
+        this.redisService = redisService;
         this.userCollection = db.collection(USER_COLLECTION);
         this.orgCollection = db.collection(ORG_APPLICATION_COLLECTION);
         this.LIMIT_APPLY = LIMIT_APPLY;
+    }
+
+    _getAppCacheKey(appID) {
+        return `org-app:${appID}`;
+    }
+
+    _getUserAppsCacheKey(userID, options) {
+        const { orderBy = "desc", sortBy = "submittedAt" } = options;
+        return `user-apps:${userID}:${sortBy}:${orderBy}`;
     }
 
     async getAllApplications(options = {}) {
@@ -26,7 +41,7 @@ export default class UserService {
             status,
             search,
             lastVisibleValue,
-            sortBy = "createdAt",
+            sortBy = "submittedAt",
             sortOrder = "desc",
             minRejectCount,
             maxRejectCount,
@@ -39,35 +54,40 @@ export default class UserService {
 
         const safeLimit = Math.min(Math.max(limit, 1), 100);
 
-        let q = query(this.orgCollection);
+        let q = this.orgCollection;
 
         if (status) {
-            q = query(q, where("status", "==", status));
+            q = q.where("status", "==", status);
         }
 
         if (userID) {
-            q = query(q, where("userID", "==", userID));
+            q = q.where("userID", "==", userID);
         }
 
         if (dateFrom) {
-            q = query(q, where("createdAt", ">=", dateFrom));
+            q = q.where("submittedAt", ">=", dateFrom);
         }
 
         if (dateTo) {
-            q = query(q, where("createdAt", "<=", dateTo));
+            q = q.where("submittedAt", "<=", dateTo);
         }
 
-        q = query(q, orderBy(sortBy, sortOrder));
+        q = q.orderBy(sortBy, sortOrder);
 
         if (lastVisibleValue) {
-            q = query(q, startAfter(lastVisibleValue));
+            q = q.startAfter(lastVisibleValue);
         }
 
-        q = query(q, limit(safeLimit));
+        const querySnapshot = await q.limit(safeLimit).get();
 
-        const querySnapshot = await getDocs(q);
+        console.log("📦 Got querySnapshot size:", querySnapshot.size);
+        if (!querySnapshot.empty) {
+            querySnapshot.docs.forEach((doc) =>
+                console.log("📝", doc.id, doc.data()),
+            );
+        }
 
-        const applications = [];
+        let applications = [];
         let lastDocument = null;
 
         querySnapshot.forEach((doc) => {
@@ -106,10 +126,10 @@ export default class UserService {
             }
         }
 
-        if (search.trim() !== "") {
+        if (search?.trim() !== "") {
             applications = this._filterApplicationsBySearch(
                 applications,
-                search.trim(),
+                search?.trim(),
             );
 
             if (applications.length > safeLimit) {
@@ -128,39 +148,71 @@ export default class UserService {
     }
 
     async getApplicationByAppID(appID) {
-        const applicationSnap = await this.orgCollection.doc(appID).get();
+        const cacheKey = this._getAppCacheKey(appID);
 
-        if (applicationSnap.exists()) {
-            throw new AppError({
-                errorCode: ERROR_CODE.USER_NOT_FOUND,
-                message: "Application not found.",
-                statusCode: 404,
-            });
-        }
+        return this.redisService.getOrSet(
+            cacheKey,
+            async () => {
+                this.logger?.log(
+                    `[DB Read] Fetching application ${appID} from Firestore.`,
+                );
+                const applicationSnap = await this.orgCollection
+                    .doc(appID)
+                    .get();
 
-        return applicationSnap.data();
+                if (!applicationSnap.exists) {
+                    return null;
+                }
+                return applicationSnap.data();
+            },
+            REDIS_TTL.ORGANIZER_APP,
+        );
     }
 
-    async getApplicationsByUserID(
-        userID,
-        { orderBy = "desc", sortBy = "createdAt" } = {},
-    ) {
-        const applicationSnap = await this.orgCollection
-            .where("userID", "==", userID)
-            .orderBy(sortBy, orderBy)
-            .get();
+    /**
+     * Lấy danh sách các đơn đăng ký của một người dùng cụ thể.
+     * @param {string} userID - ID của người dùng.
+     * @param {object} options - Các tùy chọn truy vấn.
+     * @param {'asc' | 'desc'} [options.orderBy="desc"] - Hướng sắp xếp.
+     * @param {string} [options.sortBy="submittedAt"] - Trường để sắp xếp (sử dụng submittedAt thay vì createdAt để rõ nghĩa hơn).
+     * @returns {Promise<Array<Object>>} Một mảng các đơn đăng ký, mỗi đơn có cả ID.
+     */
+    async getApplicationsByUserID(userID, options = {}) {
+        const cacheKey = this._getUserAppsCacheKey(userID, options);
 
-        if (applicationSnap.empty) {
-            return [];
-        }
+        return this.redisService.getOrSet(
+            cacheKey,
+            async () => {
+                this.logger?.log(
+                    `[DB Read] Fetching applications for user ${userID} from Firestore.`,
+                );
+                const { orderBy = "desc", sortBy = "submittedAt" } = options;
+                const applicationSnap = await this.orgCollection
+                    .where("userID", "==", userID)
+                    .orderBy(sortBy, orderBy)
+                    .get();
 
-        return applicationSnap.docs.map((doc) => doc.data());
+                if (applicationSnap.empty) {
+                    return []; // Cache một mảng rỗng là hoàn toàn ổn
+                }
+                return applicationSnap.docs.map((doc) => ({
+                    id: doc.id,
+                    ...doc.data(),
+                }));
+            },
+            REDIS_TTL.USER_APPS_LIST,
+        );
     }
 
     async canApplyOrganizer(userID) {
         try {
+            this.logger?.log(`[canApplyOrganizer] Checking user ${userID}`);
+
             const userSnap = await this.userCollection.doc(userID).get();
-            if (!userSnap) {
+            if (!userSnap.exists) {
+                this.logger?.log(
+                    `[canApplyOrganizer] User not found: ${userID}`,
+                );
                 return {
                     canApply: false,
                     reason: "User not found.",
@@ -169,7 +221,10 @@ export default class UserService {
             }
 
             const user = userSnap.data();
-            if (user.isDeleted || user.deletedAt) {
+            this.logger?.log(`[canApplyOrganizer] User data:`, user);
+
+            // Check if account is deleted
+            if (user?.isDeleted || user?.deletedAt) {
                 return {
                     canApply: false,
                     reason: "Account has been disabled.",
@@ -177,28 +232,28 @@ export default class UserService {
                 };
             }
 
-            if (user.status !== USER_STATUS.ACTIVE) {
-                const statusMessages = {
-                    [USER_STATUS.BANNED]:
-                        "Account has been banned permanently.",
-                    [USER_STATUS.SUSPENDED]:
-                        "Account is temporarily suspended.",
-                    [USER_STATUS.INACTIVE]: "Account is not active.",
-                    [USER_STATUS.PENDING]: "Account is not active.",
-                    [USER_STATUS.UNVERIFIED]: "Account is not active.",
-                };
+            // Check invalid user statuses
+            const blockedUserStatuses = {
+                [USER_STATUS.BANNED]: "Account has been banned permanently.",
+                [USER_STATUS.SUSPENDED]: "Account is temporarily suspended.",
+                [USER_STATUS.INACTIVE]: "Account is not active.",
+                [USER_STATUS.PENDING]: "Account is not active.",
+                [USER_STATUS.UNVERIFIED]: "Account is not active.",
+            };
 
+            if (user?.status !== USER_STATUS.ACTIVE) {
                 return {
                     canApply: false,
                     reason:
-                        statusMessages[user.status] ||
+                        blockedUserStatuses[user.status] ||
                         "Account cannot be used.",
-                    requireAdminApproval: user.status === USER_STATUS.BANNED,
+                    requireAdminApproval: user?.status === USER_STATUS.BANNED,
                     errorCode: ERROR_CODE.INVALID_ACCOUNT_STATUS,
                 };
             }
 
-            if (user.organizerStatus === ORGANIZER_STATUS.APPROVED) {
+            // Already an organizer
+            if (user?.organizerStatus === ORGANIZER_STATUS.APPROVED) {
                 return {
                     canApply: false,
                     reason: "You are already an organizer.",
@@ -206,24 +261,39 @@ export default class UserService {
                 };
             }
 
+            // Check existing applications
             const applications = await this.getApplicationsByUserID(userID);
+            this.logger?.log(
+                `[canApplyOrganizer] Found ${applications.length} applications`,
+            );
 
-            if (applications.length !== 0) {
-                const latestApp = applications[0];
+            if (applications.length > 0) {
+                const BLOCKED_STATUSES = [
+                    APPLY_STATUS.PENDING,
+                    APPLY_STATUS.PENDING_ADMIN,
+                    APPLY_STATUS.PROCESSING,
+                    APPLY_STATUS.EDITING,
+                    APPLY_STATUS.LOCKED_BY_ADMIN,
+                ];
 
-                if (latestApp.status === APPLY_STATUS.PENDING) {
+                const blockingApp = applications.find((app) =>
+                    BLOCKED_STATUSES.includes(app.status),
+                );
+
+                if (blockingApp) {
                     return {
                         canApply: false,
-                        reason: "Your application is currently being processed. Please wait for approval.",
-                        applicationId: latestApp.applicationID,
+                        reason: "You already have an ongoing application. Please wait for it to be processed.",
                         errorCode: ERROR_CODE.PENDING_APPLICATION,
+                        blockingStatus: blockingApp.status,
                     };
                 }
 
+                const latestApp = applications[0];
                 if (latestApp.status === APPLY_STATUS.PERMANENT_REJECTED) {
                     return {
                         canApply: false,
-                        reason: "Your account has been permanently restricted from becoming an organizer. Please contact admin for support.",
+                        reason: "Your account has been permanently restricted from applying.",
                         requireAdminApproval: true,
                         errorCode: ERROR_CODE.PERMANENT_REJECTED,
                     };
@@ -232,9 +302,8 @@ export default class UserService {
                 if (applications.length > this.LIMIT_APPLY) {
                     return {
                         canApply: false,
-                        reason: "You have exceeded the maximum number of applications. Please contact admin to become an organizer.",
+                        reason: "You have exceeded the maximum number of applications allowed.",
                         requireAdminApproval: true,
-                        applicationCount: applications.length,
                         errorCode: ERROR_CODE.TOO_MANY_APPLICATIONS,
                     };
                 }
@@ -251,10 +320,11 @@ export default class UserService {
                     applications,
                     user,
                 );
+
                 if (adminApprovalResult.requiresAdminApproval) {
                     return {
                         canApply: false,
-                        reason: "Your application requires admin approval. Please contact admin for support.",
+                        reason: "Your application requires admin approval. Please contact support.",
                         requireAdminApproval: true,
                         errorCode: ERROR_CODE.REQUIRES_ADMIN_APPROVAL,
                         ...adminApprovalResult,
@@ -265,6 +335,8 @@ export default class UserService {
             return {
                 canApply: true,
                 message: "You can apply to become an organizer.",
+                user,
+                applications,
             };
         } catch (error) {
             this.logger?.error("Error in canApplyOrganizer:", error);
@@ -278,7 +350,14 @@ export default class UserService {
 
     async createApplication(applicationData) {
         const userID = applicationData.userID;
+
+        this.logger?.log(`[createApplication] Start for user: ${userID}`);
+
         const canApplyResult = await this.canApplyOrganizer(userID);
+        this.logger?.log(
+            `[createApplication] canApply result:`,
+            canApplyResult,
+        );
 
         if (!canApplyResult.canApply) {
             throw new AppError({
@@ -288,35 +367,61 @@ export default class UserService {
             });
         }
 
-        const applications = await this.getApplicationsByUserID(userID);
-        const user = (await this.userCollection.doc(userID).get()).data();
+        const { user, applications } = canApplyResult;
+
         const adminApprovalCheck = this.checkAdminApprovalRequired(
             applications,
             user,
         );
 
+        this.logger?.log(
+            `[createApplication] Admin approval check:`,
+            adminApprovalCheck,
+        );
+
         const applicationID = `oa_${Date.now()}_${userID.slice(-4)}`;
+
+        const initialStatus = adminApprovalCheck.requiresAdminApproval
+            ? APPLY_STATUS.PENDING_ADMIN
+            : APPLY_STATUS.PENDING;
+
         const newApplication = {
-            applicationID,
             ...applicationData,
-            // status: adminApprovalCheck.requiresAdminApproval
-            //     ? APPLY_STATUS.PENDING_ADMIN
-            //     : APPLY_STATUS.PENDING,
-            status: APPLY_STATUS.PENDING_ADMIN, // TODO: ADMIN APPROVAL FOR SIMPLE
-            requiresAdminApproval: adminApprovalCheck.requiresAdminApproval,
-            rejectCount: adminApprovalCheck.rejectCount || 0,
-            createdAt: FieldValue.serverTimestamp(),
+            applicationID,
+            status: initialStatus,
+            submittedAt: new Date().toISOString(),
+            moderation: {
+                rejectionReason: adminApprovalCheck.reason,
+                requiresAdminApproval: adminApprovalCheck.requiresAdminApproval,
+                rejectCount: adminApprovalCheck.rejectCount || 0,
+                reviewedBy: REVIEWER.SYSTEM,
+                reviewedAt: new Date().toISOString(),
+            },
         };
+
+        this.logger?.log(
+            `[createApplication] New application:`,
+            newApplication,
+        );
 
         const batch = db.batch();
 
         batch.set(this.orgCollection.doc(applicationID), newApplication);
         batch.update(this.userCollection.doc(userID), {
             organizerStatus: ORGANIZER_STATUS.PENDING,
-            updatedAt: FieldValue.serverTimestamp(),
+            updatedAt: new Date().toISOString(),
         });
 
         await batch.commit();
+
+        this.logger?.log(
+            `[createApplication] Application committed: ${applicationID}`,
+        );
+
+        this.logger?.log(
+            `[Cache Invalidate] Deleting user apps list cache for user ${userID}`,
+        );
+        await this.redisService.del(this._getUserAppsCacheKey(userID, {}));
 
         return {
             success: true,
@@ -330,17 +435,7 @@ export default class UserService {
 
     async updateApplication(applicationID, updateData, isAdmin = false) {
         const docRef = this.orgCollection.doc(applicationID);
-        const docSnap = await docRef.get();
-
-        if (!docSnap.exists()) {
-            throw new AppError({
-                message: "Application not found.",
-                errorCode: ERROR_CODE.NOT_FOUND,
-                statusCode: 404,
-            });
-        }
-
-        const existingApp = docSnap.data();
+        const existingApp = this.getApplicationByAppID(applicationID);
 
         const blockedStatuses = [
             APPLY_STATUS.APPROVED,
@@ -376,7 +471,7 @@ export default class UserService {
                     ...updateData.kycInfo?.business,
                 },
             },
-            updatedAt: FieldValue.serverTimestamp(),
+            updatedAt: new Date().toISOString(),
         };
 
         if (!isAdmin) {
@@ -386,7 +481,7 @@ export default class UserService {
                 "rejectionReason",
                 "cooldownUntil",
                 "requiresAdminApproval",
-                "createdAt",
+                "submittedAt",
                 "lastRejectedAt",
                 "reviewedBy",
                 "reviewedAt",
@@ -406,6 +501,14 @@ export default class UserService {
 
         await docRef.set(mergedData, { merge: true });
 
+        this.logger?.log(
+            `[Cache Invalidate] Deleting caches for app ${applicationID} and user ${existingApp.userID}`,
+        );
+        await this.redisService.del([
+            this._getAppCacheKey(applicationID),
+            this._getUserAppsCacheKey(existingApp.userID, {}),
+        ]);
+
         return {
             success: true,
             message: "Application updated successfully",
@@ -422,20 +525,17 @@ export default class UserService {
     ) {
         const updateData = {
             status,
-            updatedAt: FieldValue.serverTimestamp(),
+            updatedAt: new Date().toISOString(),
             ...(reviewedBy && {
                 reviewedBy,
-                reviewedAt: FieldValue.serverTimestamp(),
+                reviewedAt: new Date().toISOString(),
             }),
             ...(rejectionReason && { rejectionReason }),
         };
 
         await this.orgCollection.doc(applicationID).update(updateData);
 
-        const application = (
-            await this.orgCollection.doc(applicationID).get()
-        ).data();
-
+        const application = await this.getApplicationByAppID(applicationID);
         if (application.userID !== userID) {
             throw new AppError({
                 message: "You are not allowed to update application",
@@ -454,14 +554,43 @@ export default class UserService {
 
         await this.userCollection.doc(userID).update({
             organizerStatus: userOrganizerStatus,
-            updatedAt: FieldValue.serverTimestamp(),
+            updatedAt: new Date().toISOString(),
         });
+
+        await this.redisService.del([
+            this._getAppCacheKey(applicationID),
+            this._getUserAppsCacheKey(userID, {}),
+        ]);
+        this.logger?.log(
+            `[Cache Invalidate] Deleting caches for app ${applicationID} and user ${userID}`,
+        );
 
         return { success: true, applicationID, status };
     }
 
     async deleteApplication(applicationID) {
+        // [CACHE] Đọc dữ liệu từ cache/DB trước để lấy userID
+        const appToDelete = await this.getApplicationByAppID(applicationID);
+
+        // Nếu không có đơn hoặc không có userID, không cần làm gì thêm
+        if (!appToDelete || !appToDelete.userID) {
+            this.logger?.warn(
+                `[deleteApplication] Application ${applicationID} not found or has no userID. Nothing to delete or invalidate.`,
+            );
+            return;
+        }
+
+        // Tiến hành xóa khỏi DB
         await this.orgCollection.doc(applicationID).delete();
+
+        // [CACHE] Xóa cache của đơn này VÀ danh sách đơn của người dùng
+        this.logger?.log(
+            `[Cache Invalidate] Deleting caches for app ${applicationID} and user ${appToDelete.userID}`,
+        );
+        await this.redisService.del([
+            this._getAppCacheKey(applicationID),
+            this._getUserAppsCacheKey(appToDelete.userID, {}),
+        ]);
     }
 
     // Helper methods
@@ -477,28 +606,36 @@ export default class UserService {
         const latestRejection = rejectedApps[0];
         const rejectCount = rejectedApps.length;
 
-        // Calculate cooldown period: 7 days for first rejection (7 → 14 → 28 → 56 → 90 days max)
-        const cooldownDays = Math.min(7 * Math.pow(2, rejectCount - 1), 90);
+        // Use named constants instead of magic numbers
+        const cooldownDays = Math.min(
+            COOLDOWN_CONSTANTS.BASE_DAYS *
+                Math.pow(COOLDOWN_CONSTANTS.MULTIPLIER, rejectCount - 1),
+            COOLDOWN_CONSTANTS.MAX_DAYS,
+        );
 
-        let rejectionDate;
-        if (latestRejection.updatedAt) {
-            rejectionDate = latestRejection.updatedAt.toDate();
-        } else {
-            rejectionDate = latestRejection.createdAt.toDate();
-        }
+        // Robustly handle both Firestore Timestamps and ISO strings
+        const rejectionTimestamp =
+            latestRejection.updatedAt ||
+            latestRejection.submittedAt ||
+            latestRejection.createdAt;
+        const rejectionDate =
+            typeof rejectionTimestamp.toDate === "function"
+                ? rejectionTimestamp.toDate()
+                : new Date(rejectionTimestamp);
 
+        const now = new Date();
         const cooldownEnd = new Date(
             rejectionDate.getTime() + cooldownDays * 24 * 60 * 60 * 1000,
         );
 
-        if (new Date() < cooldownEnd) {
+        if (now < cooldownEnd) {
             const daysLeft = Math.ceil(
-                (cooldownEnd - new Date()) / (24 * 60 * 60 * 1000),
+                (cooldownEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
             );
             return {
                 canApply: false,
                 reason: `You must wait ${daysLeft} more days before applying again.`,
-                cooldownUntil: cooldownEnd,
+                cooldownUntil: cooldownEnd.toISOString(),
                 rejectCount,
                 daysLeft,
             };
@@ -512,66 +649,51 @@ export default class UserService {
             (app) => app.status === APPLY_STATUS.REJECTED,
         ).length;
 
-        // Require admin approval if:
-        // - More than 2 rejections
-        // - User has been reported multiple times
-        // - User has high risk score
-        const requiresApproval =
-            rejectedCount >= 2 ||
-            (user.reportCount && user.reportCount >= 3) ||
-            (user.riskScore && user.riskScore > 0.7);
+        const reasons = [];
+
+        if (rejectedCount >= ADMIN_APPROVAL_THRESHOLDS.REJECTION_COUNT) {
+            reasons.push(`High rejection count (${rejectedCount})`);
+        }
+        if ((user.reportCount ?? 0) >= ADMIN_APPROVAL_THRESHOLDS.REPORT_COUNT) {
+            reasons.push(`Multiple user reports (${user.reportCount})`);
+        }
+        if ((user.riskScore ?? 0) > ADMIN_APPROVAL_THRESHOLDS.RISK_SCORE) {
+            reasons.push(`High risk score (${user.riskScore})`);
+        }
+
+        const requiresApproval = reasons.length > 0;
 
         return {
             requiresAdminApproval: requiresApproval,
-            reason:
-                rejectedCount >= 2
-                    ? `Too many rejections (${rejectedCount})`
-                    : "High risk profile",
+            reason: requiresApproval ? reasons.join("; ") : "No issues found.",
+            reasons,
             rejectCount: rejectedCount,
         };
     }
 
     _filterApplicationsBySearch(applications, searchTerm) {
+        if (!searchTerm) {
+            return applications;
+        }
+
         const term = searchTerm.toLowerCase();
 
         return applications.filter((app) => {
-            if (app.orgName && app.orgName.toLowerCase().includes(term)) {
-                return true;
-            }
+            const searchableFields = [
+                app.orgName,
+                app.kycInfo?.fullName,
+                app.moderation?.rejectionReason,
+                app.description,
+                app.applicationID,
+                app.userID,
+            ];
 
-            // Search in full name (KYC info)
-            if (
-                app.kycInfo?.fullName &&
-                app.kycInfo.fullName.toLowerCase().includes(term)
-            ) {
-                return true;
-            }
-
-            // Search in rejection reason
-            if (
-                app.rejectionReason &&
-                app.rejectionReason.toLowerCase().includes(term)
-            ) {
-                return true;
-            }
-
-            // Search in description
-            if (
-                app.description &&
-                app.description.toLowerCase().includes(term)
-            ) {
-                return true;
-            }
-
-            // Search in application ID
-            if (
-                app.applicationID &&
-                app.applicationID.toLowerCase().includes(term)
-            ) {
-                return true;
-            }
-
-            return false;
+            return searchableFields.some(
+                (field) =>
+                    field &&
+                    typeof field === "string" &&
+                    field.toLowerCase().includes(term),
+            );
         });
     }
 }

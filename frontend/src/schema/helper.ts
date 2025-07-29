@@ -1,5 +1,3 @@
-import { Timestamp } from "firebase/firestore";
-import { z } from "zod";
 /**
  * Convert enum-like object values to array
  * Example: { SUCCESS: "success", FAILED: "failed" } => ["success", "failed"]
@@ -25,5 +23,3 @@ export function enumObjectToLiteralArray<T extends Record<string, string>>(
 ) {
   return Object.values(obj) as [T[keyof T], ...T[keyof T][]]; // cast to tuple of literals
 }
-
-export const timestampSchema = z.instanceof(Timestamp);

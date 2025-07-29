@@ -12,7 +12,7 @@ import EVENT_STATUS from "@/schema/enums/event-status";
 interface EventCardProps {
   event: EventType;
   organizerName: string;
-  organizerPhotoUrl: string;
+  organizerPhotoUrl?: string;
 }
 
 export default function EventCard({

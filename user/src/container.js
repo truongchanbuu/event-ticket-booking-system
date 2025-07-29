@@ -10,26 +10,18 @@ import UserRoutes from "../src/routes/user.routes.js";
 import OrganizerRoutes from "./routes/organizer.routes.js";
 import { RedisService } from "@event_ticket_booking_system/shared";
 import Profileroutes from "./routes/profile.routes.js";
+import redisClient from "@event_ticket_booking_system/shared/redis/main.js";
 
 const container = createContainer();
 
 // Logger
 // const loggerInstance = createLogger();
 
-const mockRedis = {
-    get: async () => null,
-    set: async () => true,
-    del: async () => 0,
-    mget: async () => [],
-    multiDelAndSet: async () => true,
-    pipelineOps: async () => true,
-};
-
 container.register({
     logger: asValue(console),
     prefix: asValue(config.redis.prefix),
     defaultTTL: asValue(config.redis.defaultTTL),
-    client: asValue(mockRedis), // TODO: Mock in test
+    client: asValue(redisClient),
     redisService: asClass(RedisService).singleton(),
     userService: asClass(UserService).scoped(),
     organizerService: asClass(OrganizerService).scoped(),

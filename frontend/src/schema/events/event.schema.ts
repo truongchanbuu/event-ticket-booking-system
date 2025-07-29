@@ -2,7 +2,6 @@ import { z } from "zod";
 import { TicketTypeSchema } from "../tickets";
 import { CategorySchema } from "./category.schema";
 import { EventStatusEnum } from "../enums/event-status";
-import { timestampSchema } from "../helper";
 
 // Event schema
 export const EventSchema = z.object({
@@ -19,14 +18,14 @@ export const EventSchema = z.object({
   participantCount: z.number().int().nonnegative(),
   location: z.string(),
 
-  startTime: timestampSchema,
-  endTime: timestampSchema,
+  startTime: z.string(),
+  endTime: z.string(),
 
   ticketTypes: z.array(TicketTypeSchema),
 
   status: EventStatusEnum,
-  createdAt: timestampSchema,
-  updatedAt: timestampSchema,
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
 });
 
 export type EventType = z.infer<typeof EventSchema>;

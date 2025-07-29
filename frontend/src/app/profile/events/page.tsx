@@ -190,7 +190,7 @@ const MyEventsPage = () => {
   const filteredEvents = filterEvents(mockedEvents, activeTab);
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute allowedRoles={["organizer"]}>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
         {/* Header */}
         <div className="bg-white/80 backdrop-blur-sm border-b border-slate-200/50 sticky top-0 z-10">

@@ -34,7 +34,7 @@ const OrganizerApplication = {
 
     // --- Moderation & Status Control ---
     moderation: {
-        rejectionReason: "Giấy tờ không hợp lệ", // Lý do từ chối gần nhất
+        rejectionReason: "Giấy tờ không hợp lệ",
         requiresAdminApproval: false,
         rejectCount: 0,
         lastRejectedAt: null, // Firestore.Timestamp | null

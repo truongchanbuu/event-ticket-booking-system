@@ -1,5 +1,5 @@
 import { Kafka } from "kafkajs";
-import kafkaConfig from "../config/kafka.config.js";
+import config from "../config/index.js";
 
 class KafkaService {
     constructor() {
@@ -16,11 +16,11 @@ class KafkaService {
         try {
             console.log("Initializing Kafka connection...");
             console.log("Kafka config:", {
-                clientId: kafkaConfig.clientId,
-                brokers: kafkaConfig.brokers,
+                clientId: config.kafka.clientId,
+                brokers: config.kafka.brokers,
             });
 
-            this.kafka = new Kafka(kafkaConfig);
+            this.kafka = new Kafka(config.kafka);
 
             // Initialize producer
             this.producer = this.kafka.producer({

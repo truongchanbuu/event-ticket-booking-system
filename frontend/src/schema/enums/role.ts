@@ -1,5 +1,6 @@
 import { z } from "zod";
 enum ROLE {
+  GUEST = "guest",
   CUSTOMER = "customer",
   EVENT_ORGANIZER = "event_organizer",
   ADMIN = "admin",

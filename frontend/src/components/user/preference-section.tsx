@@ -27,11 +27,11 @@ const PreferencesSection: React.FC<Props> = ({
   const openModal = () => setIsModalOpen(true);
   const closeModal = () => setIsModalOpen(false);
 
-  const handleSavePreferences = (selections: string[]) => {
+  const handleSavePreferences = async (selections: string[]) => {
     if (isEditing) {
       onPreferencesChange(selections);
     } else {
-      updateProfile({ preferenceCategories: selections });
+      await updateProfile({ preferenceCategories: selections });
     }
     closeModal();
   };
@@ -50,7 +50,7 @@ const PreferencesSection: React.FC<Props> = ({
       }
     >
       <div className="flex flex-wrap gap-2">
-        {user?.preferenceCategories.length ? (
+        {user?.preferenceCategories?.length ? (
           user.preferenceCategories.map((catId) => {
             const category = categories.find((c) => c.id === catId);
             if (!category) return null;
@@ -67,7 +67,7 @@ const PreferencesSection: React.FC<Props> = ({
       </div>
 
       <CategoryDialog
-        initialCategories={user.preferenceCategories}
+        initialCategories={user.preferenceCategories ?? []}
         closeModal={closeModal}
         isModalOpen={isModalOpen}
         onSave={handleSavePreferences}

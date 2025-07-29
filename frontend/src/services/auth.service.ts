@@ -4,10 +4,12 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
+  UserCredential,
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { createUserAPI } from "@/lib/api";
 import { AppUser } from "@/schema/user";
+import { createSession, logOut } from "@/lib/api/auth/api";
 
 export interface AuthError {
   code: string;
@@ -17,46 +19,60 @@ export interface AuthError {
 export async function signUp(
   email: string,
   password: string,
-  userData: AppUser
-) {
+  userData: Partial<AppUser>
+): Promise<{ userCredential: UserCredential; sessionCreated: boolean }> {
+  let userCredential;
   try {
-    // 1. Tạo user trong Firebase Auth
-    const userCredential = await createUserWithEmailAndPassword(
+    userCredential = await createUserWithEmailAndPassword(
       auth,
       email,
       password
     );
-    const user = userCredential.user;
-
-    // 2. Lưu thông tin user vào Firestore thông qua API
-    try {
-      const userDataForAPI = {
-        ...userData,
-        userID: user.uid,
-        email: user.email,
-        createdAt: new Date(),
-      };
-
-      await createUserAPI(userDataForAPI);
-
-      return userCredential;
-    } catch (error) {
-      await user.delete();
-      throw error;
-    }
   } catch (error: any) {
-    console.error(error);
+    console.error("Sign up failed:", error);
     const authError: AuthError = {
       code: error.code || "unknown",
       message: getErrorMessage(error.code),
     };
     throw authError;
   }
+
+  const user = userCredential.user;
+  try {
+    const userDataForAPI = {
+      ...userData,
+      userID: user.uid,
+      email: user.email,
+    };
+
+    await createUserAPI(userDataForAPI);
+  } catch (dbError) {
+    await user.delete();
+    throw dbError;
+  }
+
+  try {
+    await createSession();
+    return { userCredential, sessionCreated: true };
+  } catch (sessionError) {
+    console.error(
+      "Session creation failed, but user account is created:",
+      sessionError
+    );
+
+    return { userCredential, sessionCreated: false };
+  }
 }
 
 export async function signIn(email: string, password: string) {
   try {
-    return await signInWithEmailAndPassword(auth, email, password);
+    const userCrediential = await signInWithEmailAndPassword(
+      auth,
+      email,
+      password
+    );
+    await createSession();
+    return userCrediential;
   } catch (error: any) {
     const authError: AuthError = {
       code: error.code || "unknown",
@@ -76,21 +92,25 @@ export async function signInWithGoogle(userData?: Partial<AppUser>) {
         const username =
           userData?.username || result.user.displayName || `user`;
 
-        const userDataForAPI = {
+        const userDataForAPI: Partial<AppUser> = {
           ...userData,
           userID: result.user.uid,
-          email: result.user.email,
+          email: result.user.email!,
           username,
-          photoUrl: result.user.photoURL,
           emailVerified: result.user.emailVerified,
           provider: "google.com",
         };
+
+        if (result.user.photoURL) {
+          userDataForAPI.photoUrl = result.user.photoURL;
+        }
 
         if (result.user.phoneNumber) {
           userDataForAPI.phoneNumber = result.user.phoneNumber;
         }
 
         await createUserAPI(userDataForAPI);
+        await createSession();
       } catch (error) {
         console.error("Failed to save additional user data:", error);
       }
@@ -108,12 +128,14 @@ export async function signInWithGoogle(userData?: Partial<AppUser>) {
 
 export async function logout() {
   try {
-    return await signOut(auth);
+    await signOut(auth);
+    await logOut();
   } catch (error: any) {
     const authError: AuthError = {
       code: error.code || "unknown",
       message: getErrorMessage(error.code),
     };
+
     throw authError;
   }
 }

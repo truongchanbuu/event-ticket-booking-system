@@ -105,6 +105,7 @@ export default class EventService {
 
         const eventDocRef = this.eventCollection.doc();
 
+        // TODO: Đổi sang ISO string
         const eventID = eventDocRef.id;
         const eventTitleLowerCase = eventTitle.toLowerCase();
         const timestampNow = FieldValue.serverTimestamp();

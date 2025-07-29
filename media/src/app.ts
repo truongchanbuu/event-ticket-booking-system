@@ -4,7 +4,14 @@ import mediaRouter from "./routes/cloudinary.routes";
 
 const app = express();
 
-app.use(cors());
+if (process.env.NODE_ENV == "development") app.use(cors());
+
+// Add logging middleware
+app.use((req, res, next) => {
+    console.log(`📨 ${req.method} ${req.url} - ${new Date().toISOString()}`);
+    next();
+});
+
 app.use(express.json());
 
 app.use("/api/media", mediaRouter);

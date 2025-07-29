@@ -1,6 +1,12 @@
 import * as React from "react";
 import Link from "next/link";
-import { User as UserIcon, LogOut, Ticket } from "lucide-react";
+import {
+  User as UserIcon,
+  LogOut,
+  Ticket,
+  FileText,
+  Users,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AppUser } from "@/schema/user";
@@ -11,7 +17,6 @@ import {
   linkCls,
 } from "@/styles/app-header/style";
 
-// Props cần thiết cho UserMenu
 interface UserMenuProps {
   variant: "default" | "dark" | "gradient";
   userProfile: AppUser | null;
@@ -75,6 +80,45 @@ export default function UserMenu({
                 <span>Event Management</span>
               </div>
             </Link>
+          )}
+
+          {effectiveRole !== ROLE.GUEST && (
+            <Link
+              href="/profile/applications"
+              className={dropdownItemCls(variant)}
+              onClick={closeMenu}
+            >
+              <div className="flex items-center space-x-2">
+                <FileText className="w-4 h-4" />
+                <span>Applications</span>
+              </div>
+            </Link>
+          )}
+
+          {effectiveRole === ROLE.ADMIN && (
+            <>
+              <Link
+                href="/admin/applications"
+                className={dropdownItemCls(variant)}
+                onClick={closeMenu}
+              >
+                <div className="flex items-center space-x-2">
+                  <FileText className="w-4 h-4" />
+                  <span>Application Review</span>
+                </div>
+              </Link>
+
+              <Link
+                href="/admin/users"
+                className={dropdownItemCls(variant)}
+                onClick={closeMenu}
+              >
+                <div className="flex items-center space-x-2">
+                  <Users className="w-4 h-4" />
+                  <span>User Management</span>
+                </div>
+              </Link>
+            </>
           )}
 
           <hr className="my-1 border-gray-200" />

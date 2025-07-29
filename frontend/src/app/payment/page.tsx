@@ -37,7 +37,6 @@ import PaymentHelper from "@/lib/payment/PaymentHelper";
 import EventThumbnail from "@/components/events/event-thumb";
 import EventNotFound from "@/components/events/event-not-found";
 import { TicketQuantity } from "@/schema/tickets/ticket-quantity.schema";
-import { Timestamp } from "firebase/firestore";
 import { usePaymenntCustomerForm } from "@/hooks/use-payment-customer-form";
 import { PaymentCustomerFormInfo } from "@/schema/payments/payment-customer-form.schema";
 import PaymentCustomerInfo from "@/components/payment/custom-info-card";

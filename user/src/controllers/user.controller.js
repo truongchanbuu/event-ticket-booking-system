@@ -1,4 +1,4 @@
-import { catchAsync, FieldValue } from "@event_ticket_booking_system/shared";
+import { catchAsync } from "@event_ticket_booking_system/shared";
 import { normalizeFirebaseUser } from "../utils/sanitize.js";
 
 export default class UserController {
@@ -44,6 +44,7 @@ export default class UserController {
     }
 
     async updateUser(req, res) {
+        console.log("REQBODY: ", req.body);
         const userID = req.params.userID || req.user.uid;
 
         const { success, data } = await this.userService.updateUser({
@@ -111,7 +112,7 @@ export default class UserController {
             success: true,
             data: {
                 userID,
-                deletedAt: FieldValue.serverTimestamp(),
+                deletedAt: new Date().toISOString(),
                 deletedBy: req.user,
             },
         });
@@ -130,7 +131,7 @@ export default class UserController {
             success: true,
             data: {
                 userID,
-                deletedAt: FieldValue.serverTimestamp(),
+                deletedAt: new Date().toISOString(),
                 deletedBy: req.user,
             },
         });

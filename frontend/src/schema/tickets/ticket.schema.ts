@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { TicketStatusEnum } from "../enums/ticket-status";
-import { timestampSchema } from "../helper";
 
 export const TicketSchema = z.object({
   ticketId: z.string(),
@@ -14,7 +13,7 @@ export const TicketSchema = z.object({
 
   qrCode: z.string(),
   status: TicketStatusEnum,
-  issuedAt: timestampSchema,
+  issuedAt: z.string(),
   usedAt: z.string().datetime().optional(),
 });
 

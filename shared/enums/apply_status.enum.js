@@ -7,6 +7,8 @@ const APPLY_STATUS = {
   REJECTED: "rejected",
   PERMANENT_REJECTED: "permanent_rejected",
   CANCELLED: "cancelled",
+  EDITING: "editing",
+  LOCKED_BY_ADMIN: "locked_by_admin",
 };
 
 export default APPLY_STATUS;

@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": false,
@@ -11,8 +15,12 @@
     "esModuleInterop": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@shared/*": ["../shared/src/*"]
+      "@/*": [
+        "src/*"
+      ],
+      "@shared/*": [
+        "../shared/src/*"
+      ]
     },
     "moduleResolution": "node",
     "resolveJsonModule": true,
@@ -22,16 +30,21 @@
       {
         "name": "next"
       }
-    ]
+    ],
+    "strictNullChecks": true
   },
   "include": [
     "next-env.d.ts",
     ".next/types/**/*.ts",
     "**/*.ts",
     "**/*.tsx",
+    "middleware.ts",
     "../shared/schema/helper.ts",
     "../shared/schema/index.ts",
-    "../shared/schema/relationship.schema.ts"
-, "src/components/app-loading.tsx"  ],
-  "exclude": ["node_modules"]
+    "../shared/schema/relationship.schema.ts",
+    "src/components/app-loading.tsx"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

@@ -160,7 +160,6 @@ export function fromFirebaseUser(firebaseUser: FirebaseUser): Partial<AppUser> {
 
     // Defaults
     phoneVerified: false,
-    role: ROLE.CUSTOMER, // Mặc định là Customer
     status: USER_STATUS.ACTIVE,
 
     // Cung cấp giá trị mặc định cho các trường từ các schema đã merge
@@ -171,7 +170,6 @@ export function fromFirebaseUser(firebaseUser: FirebaseUser): Partial<AppUser> {
     riskScore: 0,
 
     // Mặc định cho các trường của Organizer
-    organizerStatus: ORGANIZER_STATUS.NONE,
     followersCount: 0,
     eventsCount: 0,
   };

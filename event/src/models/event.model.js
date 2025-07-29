@@ -10,8 +10,8 @@ module.exports =
         category: ["music", "..."],
         participantCount: number,
         location: string,
-        startTime: Timestamp,
-        endTime: Timestamp,
+        startTime: string,
+        endTime: string,
         ticketTypes: [
             {
                 typeID: string,
@@ -21,8 +21,8 @@ module.exports =
             },
         ],
         status: "draft" | "published" | "cancelled",
-        createdAt: Timestamp,
-        updatedAt: Timestamp,
+        createdAt: string,
+        updatedAt: string,
 
         participants: [], // Subcollection
     };

@@ -1,28 +1,47 @@
-// Define sensitive fields that should never be exposed
+/**
+ * @fileoverview
+ * Mô-đun tiện ích cho việc làm sạch (sanitizing) dữ liệu người dùng dựa trên quyền của người xem.
+ * Cung cấp các lớp bảo vệ để ngăn chặn rò rỉ thông tin nhạy cảm trong các phản hồi API.
+ *
+ * Các tính năng chính:
+ * - Lọc trường (field) dựa trên vai trò: admin, chủ sở hữu (self), công khai.
+ * - Danh sách đen (blacklist) các trường nhạy cảm tuyệt đối.
+ * - Cho phép ghi đè bằng danh sách trắng (whitelist) và danh sách đen (blacklist) tùy chỉnh.
+ * - Chống tham chiếu vòng tròn để ngăn chặn tấn công DoS.
+ * - Các hàm bao bọc (wrapper) tiện lợi cho các trường hợp sử dụng phổ biến.
+ */
+
+// --- ĐỊNH NGHĨA CÁC BỘ TRƯỜNG (FIELD SETS) ---
+
+// Các trường nhạy cảm không bao giờ được hiển thị, trừ khi cho chính chủ sở hữu.
 const SENSITIVE_FIELDS = new Set([
+    // --- PII (Thông tin nhận dạng cá nhân) ---
     "email",
     "phoneNumber",
     "password",
     "passwordHash",
     "salt",
+    "socialSecurityNumber",
+    "personalAddress",
+    "homeAddress",
+    "personalPhoneNumber",
+    "birthday",
+    // --- Tokens & Secrets ---
     "refreshToken",
     "accessToken",
-    "socialSecurityNumber",
-    "creditCardNumber",
-    "bankAccount",
-    "taxId",
-    "passport",
-    "driverLicense",
-    "ipAddress",
-    "deviceId",
-    "sessionId",
     "resetToken",
     "verificationToken",
     "twoFactorSecret",
     "backupCodes",
     "apiKeys",
     "webhookSecrets",
-    // Event organizer specific sensitive fields
+    // --- Dữ liệu hệ thống và bảo mật ---
+    "ipAddress",
+    "deviceId",
+    "sessionId",
+    "nextOfKin",
+    "emergencyContact",
+    // --- Thông tin tài chính và kinh doanh của nhà tổ chức ---
     "stripeAccountId",
     "stripeCustomerId",
     "paypalAccountId",
@@ -30,18 +49,13 @@ const SENSITIVE_FIELDS = new Set([
     "bankAccountNumber",
     "routingNumber",
     "ein",
-    "businessLicense",
-    "personalAddress",
-    "homeAddress",
-    "personalPhoneNumber",
-    "emergencyContact",
-    "nextOfKin",
     "w9Form",
     "taxDocuments",
     "identityDocuments",
     "backgroundCheckResults",
     "revenueData",
     "earningsData",
+
     "payoutDetails",
     "commissionDetails",
     "contractTerms",
@@ -50,15 +64,13 @@ const SENSITIVE_FIELDS = new Set([
     "bondInformation",
 ]);
 
-// Define admin-only fields that should only be shown to administrators
+// Các trường chỉ dành cho quản trị viên (Admin).
 const ADMIN_ONLY_FIELDS = new Set([
+    // --- Metadata tài khoản ---
     "isDeleted",
     "status",
-    "birthday",
-    "preferenceCategories",
     "createdAt",
     "updatedAt",
-    "userID",
     "deletedAt",
     "suspendedAt",
     "verifiedAt",
@@ -66,6 +78,7 @@ const ADMIN_ONLY_FIELDS = new Set([
     "loginAttempts",
     "lockedUntil",
     "failedLoginAttempts",
+    // --- Dữ liệu quản trị và kiểm duyệt ---
     "accountFlags",
     "internalNotes",
     "moderatorNotes",
@@ -78,13 +91,12 @@ const ADMIN_ONLY_FIELDS = new Set([
     "permissions",
     "roles",
     "adminLevel",
-    // Event organizer specific admin fields
+    // --- Dữ liệu quản trị dành riêng cho nhà tổ chức ---
     "organizerApplicationDate",
     "organizerApprovalDate",
     "organizerReviewNotes",
     "organizerRejectionReason",
     "organizerVerificationLevel",
-    "organizerVerificationDocuments",
     "organizerComplianceStatus",
     "organizerRiskAssessment",
     "organizerTaxStatus",
@@ -107,11 +119,13 @@ const ADMIN_ONLY_FIELDS = new Set([
     "organizerWatchlistStatus",
 ]);
 
-// Define owner-only fields that should only be shown to the user themselves
+// Các trường chỉ chủ sở hữu mới có thể xem (ngoài các trường nhạy cảm đã được xử lý).
 const OWNER_ONLY_FIELDS = new Set([
+    // --- Thông tin cá nhân (đã được bao gồm trong SENSITIVE nhưng cần liệt kê để isSelf có hiệu lực) ---
     "email",
     "phoneNumber",
     "birthday",
+    // --- Cài đặt và sở thích ---
     "preferenceCategories",
     "notificationSettings",
     "privacySettings",
@@ -120,7 +134,7 @@ const OWNER_ONLY_FIELDS = new Set([
     "emergencyContacts",
     "medicalInfo",
     "personalNotes",
-    // Event organizer specific owner fields
+    // --- Thông tin kinh doanh của nhà tổ chức ---
     "businessEmail",
     "businessPhoneNumber",
     "businessAddress",
@@ -146,8 +160,9 @@ const OWNER_ONLY_FIELDS = new Set([
     "organizerCurrencyPreferences",
 ]);
 
-// Define public fields that are safe to show to everyone
+// Các trường công khai, an toàn để hiển thị cho tất cả mọi người.
 const PUBLIC_FIELDS = new Set([
+    "userID",
     "username",
     "displayName",
     "firstName",
@@ -165,8 +180,8 @@ const PUBLIC_FIELDS = new Set([
     "rating",
     "reviews",
     "publicStats",
-    "joinedDate", // Different from createdAt - can be approximate
-    "location", // Public location, not precise address
+    "joinedDate",
+    "location",
     "timezone",
     "language",
     "publicBadges",
@@ -175,20 +190,130 @@ const PUBLIC_FIELDS = new Set([
     "interests",
 ]);
 
+// Các trường được miễn trừ khỏi việc kiểm duyệt chuỗi (redaction).
+const FIELDS_EXCLUDED_FROM_REDACTION = new Set([
+    "note",
+    "description",
+    "comment",
+    "feedback",
+    "bio",
+]);
+
+// --- CÁC HÀM TIỆN ÍCH NỘI BỘ ---
+
 /**
- * Sanitizes user data based on the viewer's permissions
- * @param {Object} user - The user object to sanitize
- * @param {Object} options - Sanitization options
- * @param {boolean} options.isAdmin - Whether the viewer is an admin
- * @param {boolean} options.isSelf - Whether the viewer is the user themselves
- * @param {string|null} options.viewerRole - The role of the viewer (admin, moderator, user)
- * @param {Array<string>} options.allowedFields - Explicitly allowed fields (overrides defaults)
- * @param {Array<string>} options.deniedFields - Explicitly denied fields (overrides defaults)
- * @param {boolean} options.strictMode - If true, only allows explicitly whitelisted fields
- * @returns {Object} Sanitized user object
+ * Kiểm tra xem tên trường có gợi ý rằng nó chứa thông tin nhạy cảm hay không.
+ * @param {string} fieldName - Tên trường cần kiểm tra.
+ * @returns {boolean} True nếu tên trường có vẻ nhạy cảm.
+ */
+function looksLikeSensitiveField(fieldName) {
+    const sensitivePatterns = [
+        /password/i,
+        /token/i,
+        /secret/i,
+        /key/i,
+        /auth/i,
+        /credential/i,
+        /private/i,
+        /ssn/i,
+        /tax/i,
+        /bank/i,
+        /card/i,
+        /license/i,
+        /passport/i,
+        /address/i,
+    ];
+    return sensitivePatterns.some((pattern) => pattern.test(fieldName));
+}
+
+/**
+ * Làm sạch một chuỗi để loại bỏ các mẫu thông tin nhạy cảm tiềm tàng.
+ * @param {string} str - Chuỗi cần làm sạch.
+ * @param {string} fieldName - Tên trường để xác định ngữ cảnh.
+ * @returns {string} Chuỗi đã được làm sạch.
+ */
+function sanitizeString(str) {
+    if (typeof str !== "string") return str;
+    // Đơn giản hóa: Hiện tại chỉ trả về chuỗi gốc.
+    // Logic kiểm duyệt (redaction) có thể được thêm vào đây nếu cần.
+    // Ví dụ: str.replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, "[REDACTED]");
+    return str;
+}
+
+/**
+ * Làm sạch giá trị của từng trường một cách đệ quy.
+ * @param {*} value - Giá trị của trường.
+ * @param {string} fieldName - Tên trường để xác định ngữ cảnh.
+ * @param {WeakSet<object>} visited - Một Set để theo dõi các đối tượng đã duyệt qua nhằm tránh tham chiếu vòng tròn.
+ * @returns {*} Giá trị đã được làm sạch.
+ */
+function sanitizeFieldValue(value, fieldName, visited) {
+    // Xử lý các giá trị không phải đối tượng hoặc null
+    if (typeof value !== "object" || value === null) {
+        if (
+            typeof value === "string" &&
+            !FIELDS_EXCLUDED_FROM_REDACTION.has(fieldName.toLowerCase())
+        ) {
+            return sanitizeString(value);
+        }
+        return value;
+    }
+
+    // --- BẢO VỆ CHỐNG THAM CHIẾU VÒNG TRÒN ---
+    if (visited.has(value)) {
+        return "[Circular Reference]";
+    }
+    visited.add(value);
+    // -------------------------------------------
+
+    // Xử lý Date objects
+    if (value instanceof Date) {
+        return value.toISOString();
+    }
+
+    // Xử lý mảng (Array)
+    if (Array.isArray(value)) {
+        return value.map((item, index) =>
+            sanitizeFieldValue(item, `${fieldName}[${index}]`, visited),
+        );
+    }
+
+    // Xử lý các đối tượng thuần (plain objects)
+    if (value.constructor === Object) {
+        const sanitizedObj = {};
+        for (const key in value) {
+            // Chỉ xử lý các thuộc tính của chính đối tượng đó
+            if (Object.prototype.hasOwnProperty.call(value, key)) {
+                // Tiếp tục làm sạch các trường con
+                sanitizedObj[key] = sanitizeFieldValue(
+                    value[key],
+                    key,
+                    visited,
+                );
+            }
+        }
+        return sanitizedObj;
+    }
+
+    // Trả về các loại đối tượng khác (ví dụ: Buffer) mà không thay đổi
+    return value;
+}
+
+// --- HÀM LÀM SẠCH CHÍNH ---
+
+/**
+ * Làm sạch dữ liệu người dùng dựa trên quyền của người xem.
+ * @param {Object} user - Đối tượng người dùng cần làm sạch.
+ * @param {Object} options - Các tùy chọn làm sạch.
+ * @param {boolean} [options.isAdmin=false] - Người xem có phải là admin không.
+ * @param {boolean} [options.isSelf=false] - Người xem có phải là chính người dùng đó không.
+ * @param {string|null} [options.viewerRole=null] - Vai trò của người xem.
+ * @param {string[]} [options.allowedFields=[]] - Các trường được cho phép rõ ràng.
+ * @param {string[]} [options.deniedFields=[]] - Các trường bị từ chối rõ ràng.
+ * @param {boolean} [options.strictMode=false] - Chỉ cho phép các trường trong `allowedFields`.
+ * @returns {Object} Đối tượng người dùng đã được làm sạch.
  */
 export function sanitizeUserData(user, options = {}) {
-    // Input validation
     if (!user || typeof user !== "object") {
         return {};
     }
@@ -202,221 +327,95 @@ export function sanitizeUserData(user, options = {}) {
         strictMode = false,
     } = options;
 
-    // Create a copy to avoid mutating the original
     const sanitizedUser = {};
+    const visited = new WeakSet(); // Khởi tạo bộ theo dõi cho mỗi lần gọi chính
 
-    // Determine permission level
     const hasAdminAccess =
         isAdmin || viewerRole === "admin" || viewerRole === "superadmin";
-    const hasModeratorAccess = hasAdminAccess || viewerRole === "moderator";
 
-    Object.keys(user).forEach((field) => {
+    for (const field in user) {
+        if (!Object.prototype.hasOwnProperty.call(user, field)) {
+            continue;
+        }
+
         const value = user[field];
-
-        // Skip null/undefined values
         if (value === null || value === undefined) {
-            return;
+            continue;
         }
 
-        // Always deny explicitly denied fields
+        // --- QUY TẮC ƯU TIÊN ---
+
+        // 1. LUÔN TỪ CHỐI (DENY): Các trường bị từ chối rõ ràng.
         if (deniedFields.includes(field)) {
-            return;
+            continue;
         }
 
-        // Always allow explicitly allowed fields (unless they're sensitive)
-        if (allowedFields.includes(field) && !SENSITIVE_FIELDS.has(field)) {
-            sanitizedUser[field] = sanitizeFieldValue(value, field);
-            return;
+        // 2. LUÔN CHO PHÉP (ALLOW): Các trường được cho phép rõ ràng.
+        if (allowedFields.includes(field)) {
+            sanitizedUser[field] = sanitizeFieldValue(value, field, visited);
+            continue;
         }
 
-        // Never expose sensitive fields regardless of permissions
-        if (SENSITIVE_FIELDS.has(field)) {
-            return;
-        }
-
-        // In strict mode, only allow explicitly whitelisted fields
+        // 3. CHẾ ĐỘ NGHIÊM NGẶT (STRICT MODE): Nếu bật, chỉ các trường trong `allowedFields` mới được qua.
         if (strictMode) {
-            if (allowedFields.includes(field)) {
-                sanitizedUser[field] = sanitizeFieldValue(value, field);
-            }
-            return;
+            continue;
         }
 
-        // Admin access - can see admin-only fields
+        // 4. BẢO MẬT TUYỆT ĐỐI (SENSITIVE): Từ chối các trường nhạy cảm, TRỪ KHI người xem là chính chủ.
+        if (SENSITIVE_FIELDS.has(field) && !isSelf) {
+            continue;
+        }
+
+        // --- QUY TẮC DỰA TRÊN VAI TRÒ ---
+
+        // 5. QUYỀN ADMIN: Cho phép các trường chỉ dành cho admin.
         if (hasAdminAccess && ADMIN_ONLY_FIELDS.has(field)) {
-            sanitizedUser[field] = sanitizeFieldValue(value, field);
-            return;
+            sanitizedUser[field] = sanitizeFieldValue(value, field, visited);
+            continue;
         }
 
-        // Owner access - can see their own sensitive info
+        // 6. QUYỀN SỞ HỮU: Cho phép các trường chỉ dành cho chủ sở hữu.
         if (isSelf && OWNER_ONLY_FIELDS.has(field)) {
-            sanitizedUser[field] = sanitizeFieldValue(value, field);
-            return;
+            sanitizedUser[field] = sanitizeFieldValue(value, field, visited);
+            continue;
         }
 
-        // Public fields - safe for everyone
+        // 7. CÔNG KHAI: Cho phép các trường công khai.
         if (PUBLIC_FIELDS.has(field)) {
-            sanitizedUser[field] = sanitizeFieldValue(value, field);
-            return;
+            sanitizedUser[field] = sanitizeFieldValue(value, field, visited);
+            continue;
         }
 
-        // For unknown fields, be conservative
-        // Only allow if admin or if it's the user's own data
-        if (hasAdminAccess || isSelf) {
-            // Even then, check if it looks sensitive
-            if (!looksLikeSensitiveField(field)) {
-                sanitizedUser[field] = sanitizeFieldValue(value, field);
-            }
+        // 8. DỰ PHÒNG: Xử lý các trường không xác định.
+        // Chỉ cho phép admin hoặc chủ sở hữu thấy nếu tên trường không có vẻ nhạy cảm.
+        if ((hasAdminAccess || isSelf) && !looksLikeSensitiveField(field)) {
+            sanitizedUser[field] = sanitizeFieldValue(value, field, visited);
         }
-    });
+    }
 
     return sanitizedUser;
 }
 
-/**
- * Sanitizes individual field values
- * @param {*} value - The field value
- * @param {string} fieldName - The field name for context
- * @returns {*} Sanitized value
- */
-function sanitizeFieldValue(value, fieldName) {
-    // Handle objects recursively (but be careful about circular references)
-    if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-        if (value.constructor === Object) {
-            const sanitizedObj = {};
-            Object.keys(value).forEach((key) => {
-                if (!SENSITIVE_FIELDS.has(key.toLowerCase())) {
-                    sanitizedObj[key] = sanitizeFieldValue(value[key], key);
-                }
-            });
-            return sanitizedObj;
-        }
-        // For non-plain objects (Date, etc.), return as-is or convert appropriately
-        if (value instanceof Date) {
-            return value.toISOString();
-        }
-        return value;
-    }
-
-    // Handle arrays
-    if (Array.isArray(value)) {
-        return value.map((item, index) =>
-            sanitizeFieldValue(item, `${fieldName}[${index}]`),
-        );
-    }
-
-    // Handle strings - remove potential sensitive patterns
-    if (typeof value === "string") {
-        return sanitizeString(value, fieldName);
-    }
-
-    // Return primitive values as-is
-    return value;
-}
+// --- CÁC HÀM BAO BỌC TIỆN LỢI ---
 
 /**
- * Sanitizes string values to remove potential sensitive information
- * @param {string} str - The string to sanitize
- * @param {string} fieldName - The field name for context
- * @returns {string} Sanitized string
- */
-function sanitizeString(str, fieldName) {
-    if (typeof str !== "string") return str;
-
-    let sanitized = str;
-
-    // Remove common sensitive patterns if not in a field that should contain them
-    if (
-        !fieldName.toLowerCase().includes("note") &&
-        !fieldName.toLowerCase().includes("description")
-    ) {
-        // Remove patterns that look like emails
-        sanitized = sanitized.replace(
-            /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
-            "[EMAIL_REDACTED]",
-        );
-
-        // Remove patterns that look like phone numbers
-        sanitized = sanitized.replace(
-            /(\+?1-?)?(\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4})/g,
-            "[PHONE_REDACTED]",
-        );
-
-        // Remove patterns that look like SSNs
-        sanitized = sanitized.replace(
-            /\b\d{3}-?\d{2}-?\d{4}\b/g,
-            "[SSN_REDACTED]",
-        );
-
-        // Remove patterns that look like credit cards
-        sanitized = sanitized.replace(
-            /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g,
-            "[CARD_REDACTED]",
-        );
-    }
-
-    return sanitized;
-}
-
-/**
- * Checks if a field name suggests it might contain sensitive information
- * @param {string} fieldName - The field name to check
- * @returns {boolean} True if the field might be sensitive
- */
-function looksLikeSensitiveField(fieldName) {
-    const sensitivePatterns = [
-        /password/i,
-        /token/i,
-        /secret/i,
-        /key/i,
-        /auth/i,
-        /credential/i,
-        /private/i,
-        /confidential/i,
-        /ssn/i,
-        /social/i,
-        /tax/i,
-        /bank/i,
-        /account/i,
-        /payment/i,
-        /card/i,
-        /license/i,
-        /passport/i,
-        /medical/i,
-        /health/i,
-        /diagnosis/i,
-        /prescription/i,
-        /address/i,
-        /location/i,
-        /coordinate/i,
-        /gps/i,
-        /ip/i,
-        /device/i,
-        /session/i,
-        /fingerprint/i,
-        /biometric/i,
-    ];
-
-    return sensitivePatterns.some((pattern) => pattern.test(fieldName));
-}
-
-/**
- * Convenience function for the most common use case
- * @param {Object} user - The user object to sanitize
- * @param {boolean} isAdmin - Whether the viewer is an admin
- * @param {boolean} isSelf - Whether the viewer is the user themselves
- * @returns {Object} Sanitized user object
+ * Wrapper đơn giản cho các trường hợp phổ biến.
+ * @param {Object} user - Đối tượng người dùng.
+ * @param {boolean} [isAdmin=false] - Người xem có phải là admin không.
+ * @param {boolean} [isSelf=false] - Người xem có phải là chính người dùng đó không.
+ * @returns {Object} Đối tượng người dùng đã được làm sạch.
  */
 export function sanitizeUserDataSimple(user, isAdmin = false, isSelf = false) {
     return sanitizeUserData(user, { isAdmin, isSelf });
 }
 
 /**
- * Sanitizes user data for public API responses
- * @param {Object} user - The user object to sanitize
- * @returns {Object} Sanitized user object with only public fields
+ * Làm sạch dữ liệu cho các phản hồi API công khai (chỉ giữ lại các trường công khai).
+ * @param {Object} user - Đối tượng người dùng.
+ * @returns {Object} Đối tượng người dùng đã được làm sạch.
  */
 export function sanitizeUserDataPublic(user) {
+    // Sử dụng strictMode để đảm bảo chỉ các trường trong PUBLIC_FIELDS được trả về.
     return sanitizeUserData(user, {
         strictMode: true,
         allowedFields: Array.from(PUBLIC_FIELDS),
@@ -424,30 +423,37 @@ export function sanitizeUserDataPublic(user) {
 }
 
 /**
- * Sanitizes user data for the user's own profile view
- * @param {Object} user - The user object to sanitize
- * @returns {Object} Sanitized user object with owner-accessible fields
+ * Làm sạch dữ liệu cho chính người dùng xem hồ sơ của họ.
+ * @param {Object} user - Đối tượng người dùng.
+ * @returns {Object} Đối tượng người dùng đã được làm sạch.
  */
 export function sanitizeUserDataOwner(user) {
     return sanitizeUserData(user, { isSelf: true });
 }
 
 /**
- * Sanitizes user data for admin view
- * @param {Object} user - The user object to sanitize
- * @returns {Object} Sanitized user object with admin-accessible fields
+ * Làm sạch dữ liệu cho quản trị viên xem.
+ * @param {Object} user - Đối tượng người dùng.
+ * @returns {Object} Đối tượng người dùng đã được làm sạch.
  */
 export function sanitizeUserDataAdmin(user) {
     return sanitizeUserData(user, { isAdmin: true });
 }
 
+/**
+ * Chuẩn hóa đối tượng người dùng từ Firebase Decoded ID Token.
+ * @param {object} decodedToken - Đối tượng token đã được giải mã từ Firebase Admin SDK.
+ * @returns {object} Đối tượng người dùng với các trường đã được chuẩn hóa.
+ */
 export function normalizeFirebaseUser(decodedToken) {
+    if (!decodedToken) return null;
     return {
         userID: decodedToken.uid,
         email: decodedToken.email || null,
         emailVerified: decodedToken.email_verified || false,
         phoneNumber: decodedToken.phone_number || null,
-        username: decodedToken.name || null,
+        username:
+            decodedToken.name || decodedToken.email?.split("@")[0] || null,
         photoUrl: decodedToken.picture || null,
         provider: decodedToken.firebase?.sign_in_provider || "unknown",
     };
