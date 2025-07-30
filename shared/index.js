@@ -7,7 +7,7 @@ export {
   fromFirebaseAuthError,
 } from "./error/index.js";
 
-export { createLogger } from "./logger/index.js";
+export * from "./logger/index.js";
 
 export * from "./kafka/index.js";
 

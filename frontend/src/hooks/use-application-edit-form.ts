@@ -4,25 +4,31 @@ import { useEffect, useState } from "react";
 import { useUserApplication } from "./use-user-application";
 import { Application, APPLY_STATUS } from "@/schema";
 import { applicationSchema } from "@/schema/application/edit-application.schema";
+import { toInputFormat } from "@/lib/helpers/date.helper";
 
 export type ApplicationFormValues = Pick<
   Application,
   "applicationData" | "representativeInfo" | "businessInfo"
 >;
 
-export function useApplicationEditForm(userID?: string) {
+export function useApplicationEditForm(userID: string) {
+  const [isFormInitialized, setIsFormInitialized] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
   const {
-    applicationQuery: { data, isLoading, isFetched, isFetching },
+    applicationQuery: { data, isLoading, isFetched, refetch, isFetching },
     setEditting,
+    updateData,
+    updateDocumentUrl,
+    updateDocumentUrlInCache,
   } = useUserApplication(userID);
 
   const {
     register,
     handleSubmit,
     reset,
-    formState: { isDirty, isSubmitting, errors },
+    formState: { isDirty, isSubmitting, errors, touchedFields, dirtyFields },
     control,
+    clearErrors,
     getValues,
     watch,
     setValue,
@@ -63,15 +69,24 @@ export function useApplicationEditForm(userID?: string) {
     mode: "onChange",
   });
 
-  // Load data from backend once fetched
   useEffect(() => {
     const app = data?.data?.[0];
-    if (app) {
-      reset({
-        applicationData: app.applicationData,
-        representativeInfo: app.representativeInfo,
-        businessInfo: app.businessInfo,
-      });
+    if (app && !isFormInitialized) {
+      const transformedData = {
+        ...app,
+        representativeInfo: {
+          ...app.representativeInfo,
+          dob: toInputFormat(app.representativeInfo.dob),
+          idIssueDate: toInputFormat(app.representativeInfo.idIssueDate),
+        },
+        businessInfo: app.businessInfo
+          ? {
+              ...app.businessInfo,
+              dateOfIssue: toInputFormat(app.businessInfo.dateOfIssue),
+            }
+          : undefined,
+      };
+      reset(transformedData);
 
       setCanEdit(
         [
@@ -81,8 +96,10 @@ export function useApplicationEditForm(userID?: string) {
           APPLY_STATUS.REJECTED,
         ].includes(app.status)
       );
+
+      setIsFormInitialized(true);
     }
-  }, [data, reset]);
+  }, [data, reset, isFormInitialized]);
 
   const application = data?.data?.[0];
 
@@ -93,16 +110,28 @@ export function useApplicationEditForm(userID?: string) {
     reset,
     isDirty,
     isSubmitting,
+    touchedFields,
+    dirtyFields,
     errors,
     getValues,
     watch,
     setValue,
+    clearErrors,
+
     isLoading,
+    isFetching,
     isFetched,
     application,
     canEdit,
+    currentApplication: data?.data,
     applicationID: application?.applicationID,
     moderation: application?.moderation,
     setEditting,
+
+    updateData,
+    updateDocumentUrl,
+
+    queryRefetch: refetch,
+    updateDocumentUrlInCache,
   };
 }

@@ -83,9 +83,19 @@ export interface Application {
   moderation: ModerationInfo;
 }
 
-export interface ApplicationsApiResponse {
+export interface ApplicationListReponse {
   success: boolean;
   data: Application[];
+  meta: {
+    count: number;
+    hasMore: boolean;
+    lastVisibleValue: string | null;
+  };
+}
+
+export interface ApplicationReponse {
+  success: boolean;
+  data: Application;
   meta: {
     count: number;
     hasMore: boolean;

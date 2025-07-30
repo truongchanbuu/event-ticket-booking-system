@@ -214,7 +214,6 @@ export default class OrganizerValidator extends BaseValidator {
      * All user-updatable fields are optional, and system-managed fields are forbidden.
      */
     static validateUpdateApplication() {
-        // Define the list of fields that are managed by the system and cannot be updated by the user.
         const restrictedFields = [
             "status",
             "rejectionReason",
@@ -229,54 +228,152 @@ export default class OrganizerValidator extends BaseValidator {
         ];
 
         return [
-            // 1. Validate the applicationID from the URL parameter. It's required.
             ...this.validateIDParam({
                 paramName: "applicationID",
                 label: "Application ID",
             }),
 
-            // 2. Validate optional organization info. If provided, it must be valid.
-            body("orgName")
+            // ──────── Application Data ─────────
+            body("applicationData.orgName")
                 .optional()
                 .isString()
                 .trim()
                 .notEmpty()
                 .withMessage("Organization name cannot be empty"),
 
-            body("description")
+            body("applicationData.description")
                 .optional()
                 .isString()
-                .trim()
                 .isLength({ min: 10, max: 1000 })
                 .withMessage(
                     "Description must be between 10 and 1000 characters",
                 ),
 
-            // 3. Allow updates to KYC/KYB info by making all its internal fields optional.
-            ...this._getKycRules({ optional: true }),
-
-            // 4. Validate other optional contact and social media URLs.
             ...this.validateURL({
-                fieldName: "optionalInfo.website",
+                fieldName: "applicationData.website",
                 optional: true,
             }),
             ...this.validateURL({
-                fieldName: "optionalInfo.facebook",
+                fieldName: "applicationData.facebook",
                 patterns: ["facebook.com"],
                 optional: true,
             }),
             ...this.validateURL({
-                fieldName: "optionalInfo.instagram",
+                fieldName: "applicationData.instagram",
                 patterns: ["instagram.com"],
                 optional: true,
             }),
             ...this.validateURL({
-                fieldName: "optionalInfo.x",
-                patterns: ["tiktok.com"],
+                fieldName: "applicationData.x",
+                patterns: ["tiktok.com", "x.com", "twitter.com"],
                 optional: true,
             }),
 
-            // 5. Explicitly block any attempt to update restricted, system-managed fields.
+            // ──────── Representative Info ─────────
+            body("representativeInfo.fullName")
+                .optional()
+                .isString()
+                .notEmpty()
+                .withMessage("Full name is required"),
+
+            body("representativeInfo.idNumber")
+                .optional()
+                .isString()
+                .isLength({ min: 9, max: 12 })
+                .withMessage("ID number must be between 9 and 12 characters"),
+
+            body("representativeInfo.dateOfBirth")
+                .optional()
+                .isString()
+                .notEmpty()
+                .withMessage("Date of birth is required"),
+
+            body("representativeInfo.gender")
+                .optional()
+                .isIn(["Male", "Female"])
+                .withMessage("Gender must be Male or Female"),
+
+            body("representativeInfo.nationality").optional().isString(),
+
+            body("representativeInfo.placeOfOrigin").optional().isString(),
+
+            body("representativeInfo.permanentAddress")
+                .optional()
+                .isString()
+                .notEmpty()
+                .withMessage("Permanent address is required"),
+
+            body("representativeInfo.dateOfIssue")
+                .optional()
+                .isString()
+                .notEmpty()
+                .withMessage("Date of issue is required"),
+
+            body("representativeInfo.placeOfIssue")
+                .optional()
+                .isString()
+                .notEmpty()
+                .withMessage("Place of issue is required"),
+
+            // ──────── Business Info ─────────
+            body("businessInfo.businessName")
+                .optional()
+                .isString()
+                .notEmpty()
+                .withMessage("Business name is required"),
+
+            body("businessInfo.taxCode")
+                .optional()
+                .isString()
+                .isLength({ min: 10 })
+                .withMessage("Business code must be at least 10 characters"),
+
+            body("businessInfo.dateOfIssue")
+                .optional()
+                .isString()
+                .notEmpty()
+                .withMessage("Date of issue is required"),
+
+            body("businessInfo.placeOfIssue")
+                .optional()
+                .isString()
+                .notEmpty()
+                .withMessage("Place of issue is required"),
+
+            body("businessInfo.legalRepresentative").optional().isString(),
+
+            body("businessInfo.address")
+                .optional()
+                .isString()
+                .notEmpty()
+                .withMessage("Business address is required"),
+
+            body("businessInfo.typeOfBusiness")
+                .optional()
+                .isIn([
+                    "Doanh nghiệp tư nhân",
+                    "Công ty TNHH một thành viên",
+                    "Công ty TNHH hai thành viên trở lên",
+                    "Công ty cổ phần",
+                    "Công ty hợp danh",
+                ])
+                .withMessage("Invalid business type"),
+
+            body("businessInfo.registeredCapital").optional().isString(),
+
+            body("businessInfo.businessSectors")
+                .optional()
+                .isArray()
+                .withMessage("Business sectors must be an array"),
+
+            body("businessInfo.businessSectors.*")
+                .optional()
+                .isString()
+                .isLength({ min: 2, max: 50 })
+                .matches(/^[\p{L}\p{N} ]+$/u)
+                .withMessage("Only letters, numbers and spaces are allowed"),
+
+            // ──────── Block System Fields ─────────
             ...this._blockSystemFields(restrictedFields),
         ];
     }

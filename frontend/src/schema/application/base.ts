@@ -40,4 +40,5 @@ export interface DocumentBase {
   documentName: string;
   documentType: string;
   fileUrl: string;
+  updatedAt?: string;
 }

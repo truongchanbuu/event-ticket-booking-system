@@ -1,18 +1,25 @@
+import kafkaService from "./KafkaService.js";
+import { APPLICATION_EVENT } from "../constants/topics.js";
 import {
-    APPLICATION_EVENT,
-    EVENT_TYPES,
+    APPLICATION_APPROVED,
+    APPLICATION_PERMANENTLY_REJECTED,
+    APPLICATION_REJECTED,
 } from "@event_ticket_booking_system/shared";
-import { KafkaManager } from "@event_ticket_booking_system/shared/kafka/kafka.js";
 
-const sendApplicationEvent = KafkaManager.createTopicSender(
+export const sendApplicationApprovedEvent = kafkaService.createTopicSender(
     APPLICATION_EVENT,
-    "APPLICATION_EVENT",
-    "user-service",
+    APPLICATION_APPROVED,
 );
 
-export const sendAppStatusChanged = (appData, eventType) =>
-    sendApplicationEvent({
-        key: appData.userID,
-        value: { ...appData, updatedAt: new Date().toISOString() },
-        eventType,
-    });
+// ===> SENDER MỚI CHO VIỆC TỪ CHỐI TẠM THỜI <===
+export const sendApplicationRejectedEvent = kafkaService.createTopicSender(
+    APPLICATION_EVENT,
+    APPLICATION_REJECTED,
+);
+
+// ===> SENDER MỚI CHO VIỆC TỪ CHỐI VĨNH VIỄN <===
+export const sendApplicationPermanentlyRejectedEvent =
+    kafkaService.createTopicSender(
+        APPLICATION_EVENT,
+        APPLICATION_PERMANENTLY_REJECTED,
+    );

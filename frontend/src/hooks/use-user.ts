@@ -45,37 +45,6 @@ function mergeProfile(
     ...forceData,
   };
 
-  const differentKeys: string[] = [];
-
-  if (backendUser) {
-    for (const key in backendUser) {
-      const backendVal = backendUser[key as keyof AppUser];
-      const fbVal = fbPartial[key as keyof AppUser];
-
-      const isDifferent =
-        typeof backendVal === "object"
-          ? JSON.stringify(backendVal) !== JSON.stringify(fbVal)
-          : backendVal !== fbVal;
-
-      if (isDifferent) {
-        differentKeys.push(key);
-      }
-    }
-
-    if (differentKeys.length > 0) {
-      console.log("✅ Các trường khác biệt với Firebase user:");
-      differentKeys.forEach((key) => {
-        console.log(
-          `→ ${key}: backend=${JSON.stringify(backendUser[key as keyof AppUser])}, firebase=${JSON.stringify(fbPartial[key as keyof AppUser])}`
-        );
-      });
-    } else {
-      console.log("⚠️ Không có trường nào khác biệt với Firebase user.");
-    }
-  } else {
-    console.log("⚠️ Không có backendUser.");
-  }
-
   return merged;
 }
 

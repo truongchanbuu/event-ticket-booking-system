@@ -11,8 +11,6 @@ export async function uploadToCloudinary(
   docType: string
 ): Promise<string> {
   const signData = await signUpload(docType);
-
-  console.log(JSON.stringify(signData));
   const { timestamp, signature, api_key, folder, cloud_name } = signData;
 
   const formData = new FormData();

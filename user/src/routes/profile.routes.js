@@ -46,6 +46,8 @@ export default class Profileroutes {
         this.router.post(
             "/applications/:applicationID",
             verifyToken,
+            OrganizerValidator.validateUpdateApplication(),
+            OrganizerValidator.handleValidationErrors,
             this.organizerController.updateMyApplication,
         );
         this.router.delete(

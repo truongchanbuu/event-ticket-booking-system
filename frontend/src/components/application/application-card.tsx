@@ -26,19 +26,19 @@ import {
   TooltipProvider,
 } from "../ui/tooltip";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
 
 interface ApplicationCardProps {
   application: Application;
-  onApprove: () => void;
-  onReject: () => void;
-  onPermanentReject: () => void;
-  onMarkProcessing: () => void;
-  onLockByAdmin: () => void;
-  isApproving: boolean;
-  isRejecting: boolean;
-  isPermanentRejecting: boolean;
-  isMarkingProcessing: boolean;
-  isLockingByAdmin: boolean;
+  onApprove?: () => void;
+  onReject?: () => void;
+  onPermanentReject?: () => void;
+  onMarkProcessing?: () => void;
+  onLockByAdmin?: () => void;
+  isApproving?: boolean;
+  isRejecting?: boolean;
+  isPermanentRejecting?: boolean;
+  isLockingByAdmin?: boolean;
 }
 
 const getStatusConfig = (status: APPLY_STATUS) => {
@@ -99,20 +99,16 @@ export default function ApplicationCard({
   onPermanentReject,
   onMarkProcessing,
   onLockByAdmin,
-  isApproving,
-  isRejecting,
-  isPermanentRejecting,
-  isMarkingProcessing,
-  isLockingByAdmin,
+  isApproving = false,
+  isRejecting = false,
+  isPermanentRejecting = false,
+  isLockingByAdmin = false,
 }: ApplicationCardProps) {
   const router = useRouter();
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const isActionPending =
-    isApproving ||
-    isRejecting ||
-    isPermanentRejecting ||
-    isMarkingProcessing ||
-    isLockingByAdmin;
+    isApproving || isRejecting || isPermanentRejecting || isLockingByAdmin;
 
   const config = getStatusConfig(application.status as APPLY_STATUS);
 
@@ -124,6 +120,17 @@ export default function ApplicationCard({
 
   const isRejected = application.status === APPLY_STATUS.REJECTED;
   const isEditing = application.status === APPLY_STATUS.EDITING;
+
+  const handleViewDetail = async () => {
+    try {
+      setIsProcessing(true);
+      router.push(`/admin/applications/${application.applicationID}`);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   return (
     <TooltipProvider>
@@ -205,6 +212,7 @@ export default function ApplicationCard({
                           `/admin/applications/${application.applicationID}`
                         )
                       }
+                      loading={isProcessing}
                     >
                       <Eye className="w-4 h-4" />
                       <span>View Details</span>
@@ -237,7 +245,7 @@ export default function ApplicationCard({
                           >
                             <AlertCircle className="w-4 h-4" />
                             <span>
-                              {isMarkingProcessing ? "Marking..." : "Process"}
+                              {isProcessing ? "Marking..." : "Process"}
                             </span>
                           </Button>
                         )}
@@ -307,9 +315,8 @@ export default function ApplicationCard({
             <Button
               variant="outline"
               className="w-full flex items-center justify-center gap-2"
-              onClick={() =>
-                router.push(`/admin/applications/${application.applicationID}`)
-              }
+              onClick={handleViewDetail}
+              loading={isProcessing}
             >
               <Eye className="w-4 h-4" />
               <span className="hidden sm:inline">View Details</span>

@@ -8,7 +8,6 @@ import {
     ROLE,
 } from "@event_ticket_booking_system/shared";
 import { db, auth } from "@event_ticket_booking_system/shared";
-import { sendUserDeleted } from "../kafka/user.event.js";
 import { USER_STATUS } from "../enums/user-status.enum.js";
 import { sanitizeUserData } from "../utils/sanitize.js";
 import {
@@ -18,6 +17,7 @@ import {
 
 const NOTIFICATIONS_COLLECTION = "notifcations";
 const ORGANIZERS_COLLECTION = "followedOrganizers";
+
 export default class UserService {
     constructor({ logger, redisService }) {
         this.logger = logger;
@@ -713,9 +713,9 @@ export default class UserService {
         }
 
         await auth.updateUser(userID, { disabled: true });
-        sendUserDeleted({ userID, deleteType: "soft" }).catch((e) =>
-            console.log("Kafka sends failed: ", e),
-        );
+        // sendUserDeleted({ userID, deleteType: "soft" }).catch((e) =>
+        //     console.log("Kafka sends failed: ", e),
+        // );
     }
 
     async hardDeleteUser(userID) {
@@ -747,9 +747,9 @@ export default class UserService {
 
         await userRef.delete();
         await auth.deleteUser(userID);
-        sendUserDeleted({ userID, deleteType: "hard" }).catch((e) =>
-            console.log("Kafka sends failed: ", e),
-        );
+        // sendUserDeleted({ userID, deleteType: "hard" }).catch((e) =>
+        //     console.log("Kafka sends failed: ", e),
+        // );
 
         return { success: true, deletedUserID: userID };
     }

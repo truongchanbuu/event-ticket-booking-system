@@ -14,10 +14,9 @@ export const signUpload = async (req: Request, res: Response) => {
         const { docType } = req.body as { docType?: string };
 
         const timestamp = Math.floor(Date.now() / 1000);
-
         const folder = docType
-            ? `${config.app_name}/documents/${docType}/${userId}/${timestamp}`
-            : `${config.app_name}/documents/${userId}/${timestamp}`;
+            ? `${config.app_name}/documents/${docType}/${userId}`
+            : `${config.app_name}/documents/${userId}`;
 
         const signature = getUploadSignature({
             folder,

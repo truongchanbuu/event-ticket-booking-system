@@ -11,6 +11,7 @@ import OrganizerRoutes from "./routes/organizer.routes.js";
 import { RedisService } from "@event_ticket_booking_system/shared";
 import Profileroutes from "./routes/profile.routes.js";
 import redisClient from "@event_ticket_booking_system/shared/redis/main.js";
+import rootLogger from "@event_ticket_booking_system/shared/logger/index.js";
 
 const container = createContainer();
 
@@ -18,7 +19,7 @@ const container = createContainer();
 // const loggerInstance = createLogger();
 
 container.register({
-    logger: asValue(console),
+    logger: asValue(rootLogger),
     prefix: asValue(config.redis.prefix),
     defaultTTL: asValue(config.redis.defaultTTL),
     client: asValue(redisClient),

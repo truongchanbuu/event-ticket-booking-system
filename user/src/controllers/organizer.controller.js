@@ -1,14 +1,18 @@
 import {
     APPLY_STATUS,
     catchAsync,
-    EVENT_TYPES,
     ROLE,
+    USER_APPROVED_AS_ORGANIZER,
 } from "@event_ticket_booking_system/shared";
-import { sendUserRoleChanged } from "../kafka/user.event.js";
-import { sendAppStatusChanged } from "../kafka/application.event.js";
+import {
+    sendApplicationApprovedEvent,
+    sendApplicationPermanentlyRejectedEvent,
+    sendApplicationRejectedEvent,
+} from "../kafka/application.event.js";
 
 export default class UserController {
-    constructor({ userService, organizerService }) {
+    constructor({ userService, organizerService, logger }) {
+        this.logger = logger;
         this.userService = userService;
         this.organizerService = organizerService;
 
@@ -69,7 +73,7 @@ export default class UserController {
     }
 
     async applyOrganizer(req, res) {
-        console.log("req: ", req.body);
+        this.logger?.debug("req: ", req.body);
         const userID = req.user.uid;
 
         const applicationData = {
@@ -86,7 +90,7 @@ export default class UserController {
             requiresAdminApproval: result.requiresAdminApproval,
         });
 
-        console.log("data: ", JSON.stringify(result));
+        this.logger?.debug("data: ", JSON.stringify(result));
         return res.status(201).json({
             success: true,
             data: {
@@ -132,7 +136,7 @@ export default class UserController {
             isAdmin,
         );
 
-        return res.status(200).json(result);
+        return res.status(200).json({ success: true, data: result });
     }
 
     async deleteApplication(req, res) {
@@ -162,10 +166,10 @@ export default class UserController {
 
     async getMyApplications(req, res) {
         const uid = req.user.uid;
-        console.log("uid: ", uid);
+        this.logger?.debug("uid: ", uid);
         const applications =
             await this.organizerService.getApplicationsByUserID(uid);
-        console.log(
+        this.logger?.debug(
             `APPLICATIONS FOUND: ${applications?.length} - ${applications}`,
         );
         return res.status(200).json({ success: true, data: applications });
@@ -173,9 +177,9 @@ export default class UserController {
 
     async getMyApplicationDetail(req, res) {
         const appID = req.params.applicationID;
-        const app = await this.organizerService.getApplicationByID(appID);
+        const app = await this.organizerService.getApplicationByAppID(appID);
 
-        console.log(`appid ${appID} - app: ${JSON.stringify(app)}`);
+        this.logger?.debug(`appid ${appID} - app: ${JSON.stringify(app)}`);
 
         if (app.userID !== uid) {
             return res.status(403).json({
@@ -192,13 +196,22 @@ export default class UserController {
         const applicationID = req.params.applicationID;
         const updateData = req.body;
 
+        this.logger?.debug(`updated : ${JSON.stringify(updateData)}`);
+
         const app =
-            await this.organizerService.getApplicationByID(applicationID);
+            await this.organizerService.getApplicationByAppID(applicationID);
 
         if (app.userID !== uid) {
             return res.status(403).json({
                 success: false,
-                message: "You are not authorized to update this application",
+                message: "You are not authorized to update this application.",
+            });
+        }
+
+        if (app.status === APPLY_STATUS.LOCKED_BY_ADMIN) {
+            return res.status(401).json({
+                success: false,
+                message: "This application has been locked.",
             });
         }
 
@@ -253,48 +266,97 @@ export default class UserController {
 
         const updatedUser = { userID, role: ROLE.CUSTOMER };
         await this.userService.updateUser(updatedUser);
-        sendUserRoleChanged({
-            userID,
-            previousRole: ROLE.EVENT_ORGANIZER,
-            newRole: ROLE.CUSTOMER,
-            reason: "organizer_deactivated",
-        }).catch((e) => console.error("Role updated failed, ", e));
 
         return res.status(200).json({ success: true, data: updatedUser });
     }
 
     async checkApplication(req, res) {
-        const appID = req.params.applicationID;
-        const status = req.params.status;
-
-        console.log(`appID: ${appID} - ${status}`);
-
+        // 1. Lấy tất cả thông tin cần thiết từ request
+        const { uid, role } = req.user;
+        const { applicationID, status } = req.params;
         const { reviewedBy, rejectionReason } = req.body;
 
-        const application =
-            await this.organizerService.getApplicationByAppID(appID);
+        this.logger?.debug(`DATA: ${uid} - role: ${role}`);
 
-        if (!application) {
-            return res
-                .status(404)
-                .json({ success: false, message: "There is no application" });
-        }
-
-        if (application.status === APPLY_STATUS.PROCESSING) {
+        // 2. Rào chắn bảo vệ: Kiểm tra dữ liệu đầu vào có hợp lệ không
+        if (!Object.values(APPLY_STATUS).includes(status)) {
             return res.status(400).json({
                 success: false,
-                message: "Your application is being processing. Please wait.",
+                message: `Invalid status: ${status}`,
             });
         }
 
+        // 3. Lấy thông tin đơn ứng tuyển từ database
+        const application =
+            await this.organizerService.getApplicationByAppID(applicationID);
+        if (!application) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Application not found" });
+        }
+
+        const isOwner = application.userID === uid;
+        const isAdmin = role === ROLE.ADMIN;
+
+        // 4. Rào chắn bảo vệ: Người dùng không phải admin và cũng không phải chủ đơn thì từ chối ngay
+        if (!isAdmin && !isOwner) {
+            return res.status(403).json({
+                success: false,
+                message: "You are not allowed to access this application.",
+            });
+        }
+
+        // 5. Logic xử lý quyền hạn cho người dùng (không phải admin)
+        if (!isAdmin) {
+            if (status !== APPLY_STATUS.EDITING) {
+                return res.status(403).json({
+                    success: false,
+                    message: `As a user, you can only change status to ${APPLY_STATUS.EDITING}.`,
+                });
+            }
+
+            // Người dùng không được chỉnh sửa khi đơn đang được xử lý
+            const editableStatuses = [APPLY_STATUS.EDITING];
+            if (!editableStatuses.includes(application.status)) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Application with status '${application.status}' cannot be edited.`,
+                });
+            }
+        }
+
+        if (isAdmin) {
+            if (status === APPLY_STATUS.LOCKED_BY_ADMIN) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Locking should be available for editing mode.",
+                });
+            }
+        }
+
+        // TODO: Có thể thêm 1 transition validation (Giữ nguyên theo yêu cầu)
+
+        // 7. Thực hiện cập nhật sau khi đã qua tất cả các bước kiểm tra
         await this.organizerService.updateApplicationStatus(
-            appID,
+            applicationID,
             status,
             application.userID,
             reviewedBy ?? "admin",
             rejectionReason,
         );
 
+        const baseEventPayload = {
+            key: uid,
+            value: {
+                userID: uid,
+                email: user.email,
+                fullName: user.fullName,
+                applicationId: application.applicationID,
+                processedBy: adminId, // Người xử lý (admin)
+            },
+        };
+
+        // Xử lý các tác vụ phụ khi đơn được chấp thuận
         if (status === APPLY_STATUS.APPROVED) {
             await this.userService.updateUser({
                 userID: application.userID,
@@ -302,21 +364,42 @@ export default class UserController {
                 organizerStatus: status,
             });
 
-            sendUserRoleChanged({
-                userID: application.userID,
-                previousRole: ROLE.CUSTOMER,
-                newRole: ROLE.EVENT_ORGANIZER,
-                reason: "application approved",
-            }).catch((e) => console.error("failed to send role changed: ", e));
+            sendApplicationApprovedEvent({
+                key: baseEventPayload.key,
+                value: {
+                    ...baseEventPayload.value,
+                    approvedAt: new Date().toISOString(),
+                },
+            });
         }
 
-        // TODO: Nên thêm 1 hàm send email + thông báo (notification-serivce)
+        if (status === APPLY_STATUS.REJECTED) {
+            sendApplicationRejectedEvent({
+                key: baseEventPayload.key,
+                value: {
+                    ...baseEventPayload.value,
+                    rejectedAt: new Date().toISOString(),
+                    reason: rejectionReason,
+                },
+            });
+        }
+
+        if (status === APPLY_STATUS.PERMANENT_REJECTED) {
+            sendApplicationPermanentlyRejectedEvent({
+                key: baseEventPayload.key,
+                value: {
+                    ...baseEventPayload.value,
+                    rejectedAt: new Date().toISOString(),
+                    reason: rejectionReason, // <-- Rất quan trọng!
+                },
+            });
+        }
 
         return res.status(200).json({
             success: true,
-            message: `Application ${status}`,
+            message: `Application status successfully updated to ${status}.`,
             data: {
-                applicationID: appID,
+                applicationID: applicationID,
                 status,
             },
         });

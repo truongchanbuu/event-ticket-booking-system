@@ -44,10 +44,10 @@ export default function ProtectedRoute({
 
 function checkAccess(
   user: User | null,
-  role: Role,
+  role?: Role,
   allowedRoles?: Role[]
 ): boolean {
-  if (!user) return false;
+  if (!user || !role) return false;
 
   if (!allowedRoles || allowedRoles.length === 0) {
     return true;

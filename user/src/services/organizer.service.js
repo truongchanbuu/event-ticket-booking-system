@@ -80,13 +80,6 @@ export default class OrganizerService {
 
         const querySnapshot = await q.limit(safeLimit).get();
 
-        console.log("📦 Got querySnapshot size:", querySnapshot.size);
-        if (!querySnapshot.empty) {
-            querySnapshot.docs.forEach((doc) =>
-                console.log("📝", doc.id, doc.data()),
-            );
-        }
-
         let applications = [];
         let lastDocument = null;
 
@@ -163,6 +156,10 @@ export default class OrganizerService {
                 if (!applicationSnap.exists) {
                     return null;
                 }
+
+                console.log(
+                    `[DB GET] - db got: ${JSON.stringify(applicationSnap)}`,
+                );
                 return applicationSnap.data();
             },
             REDIS_TTL.ORGANIZER_APP,
@@ -433,59 +430,35 @@ export default class OrganizerService {
         };
     }
 
-    async updateApplication(batch, applicationID, updateData, isAdmin = false) {
+    async updateApplication(applicationID, updateData, isAdmin = false) {
+        const batch = db.batch();
         const docRef = this.orgCollection.doc(applicationID);
         const existingApp = await this.getApplicationByAppID(applicationID);
 
-        const blockedStatuses = [
-            APPLY_STATUS.APPROVED,
-            APPLY_STATUS.CANCELLED,
-            APPLY_STATUS.PERMANENT_REJECTED,
-            APPLY_STATUS.REJECTED,
-            APPLY_STATUS.PROCESSING,
-        ];
-        if (blockedStatuses.includes(existingApp.status)) {
-            throw new AppError({
-                message: `Cannot update an application in status: ${existingApp.status}`,
-                errorCode: ERROR_CODE.INVALID_ACCOUNT_STATUS,
-                statusCode: 400,
-            });
-        }
-
-        const mergedData = {
-            ...existingApp,
-            orgName: updateData.orgName ?? existingApp.orgName,
-            description: updateData.description ?? existingApp.description,
-            optionalInfo: {
-                ...existingApp.optionalInfo,
-                ...updateData.optionalInfo,
-            },
-            kycInfo: {
-                ...existingApp.kycInfo,
-                individual: {
-                    ...existingApp.kycInfo?.individual,
-                    ...updateData.kycInfo?.individual,
-                },
-                business: {
-                    ...existingApp.kycInfo?.business,
-                    ...updateData.kycInfo?.business,
-                },
-            },
-            updatedAt: new Date().toISOString(),
-        };
-
+        // Chặn update các trường nhạy cảm nếu không phải admin
         if (!isAdmin) {
+            const blockedStatuses = [
+                APPLY_STATUS.APPROVED,
+                APPLY_STATUS.CANCELLED,
+                APPLY_STATUS.PERMANENT_REJECTED,
+                APPLY_STATUS.PROCESSING,
+            ];
+
+            if (blockedStatuses.includes(existingApp.status)) {
+                throw new AppError({
+                    message: `Cannot update an application in status: ${existingApp.status}`,
+                    errorCode: ERROR_CODE.INVALID_ACCOUNT_STATUS,
+                    statusCode: 400,
+                });
+            }
+
             const protectedFields = [
                 "status",
-                "rejectCount",
-                "rejectionReason",
-                "cooldownUntil",
-                "requiresAdminApproval",
-                "submittedAt",
-                "lastRejectedAt",
-                "reviewedBy",
-                "reviewedAt",
+                "applicationID",
                 "userID",
+                "submittedAt",
+                "submittedBy",
+                "moderation",
             ];
 
             for (const field of protectedFields) {
@@ -499,8 +472,47 @@ export default class OrganizerService {
             }
         }
 
-        batch.set(docRef, mergedData, { merge: true });
+        let updatedDocuments = existingApp.documents || [];
 
+        if (updateData.documents?.length) {
+            const docMap = new Map();
+
+            for (const doc of updatedDocuments) {
+                docMap.set(doc.documentType, doc);
+            }
+
+            for (const newDoc of updateData.documents) {
+                docMap.set(newDoc.documentType, {
+                    ...docMap.get(newDoc.documentType),
+                    ...newDoc,
+                });
+            }
+
+            updatedDocuments = Array.from(docMap.values());
+        }
+
+        const updatedStatus =
+            existingApp.status === APPLY_STATUS.EDITING
+                ? APPLY_STATUS.PENDING_ADMIN
+                : existingApp.status;
+
+        // Merge data
+        const mergedData = {
+            applicationData: {
+                ...existingApp.applicationData,
+                ...updateData.applicationData,
+            },
+            representativeInfo: {
+                ...existingApp.representativeInfo,
+                ...updateData.representativeInfo,
+            },
+            documents: updatedDocuments,
+            status: updatedStatus,
+            updatedAt: new Date().toISOString(),
+        };
+
+        batch.set(docRef, mergedData, { merge: true });
+        await batch.commit();
         this.logger?.log(
             `[Cache Invalidate] Deleting caches for app ${applicationID} and user ${existingApp.userID}`,
         );
@@ -513,13 +525,13 @@ export default class OrganizerService {
     }
 
     async updateApplicationStatus(
-        batch,
         applicationID,
         status,
         userID,
         reviewedBy = null,
         rejectionReason = null,
     ) {
+        const batch = db.batch();
         const updateData = {
             status,
             updatedAt: new Date().toISOString(),
@@ -545,6 +557,7 @@ export default class OrganizerService {
         const userRef = this.userCollection.doc(userID);
 
         batch.update(appRef, updateData);
+        console.log(`updated data: ${updateData}`);
 
         const userOrganizerStatus =
             {
@@ -558,6 +571,7 @@ export default class OrganizerService {
             organizerStatus: userOrganizerStatus,
             updatedAt: new Date().toISOString(),
         });
+        await batch.commit();
 
         await this.redisService.del([
             this._getAppCacheKey(applicationID),

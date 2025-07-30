@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import { SectionCard } from "@/components/application/section-card";
 import { DocumentItem } from "@/components/application/document-item";
-import { useApplicationDetail } from "@/hooks/user-application-detail";
 import { useParams } from "next/navigation";
 import LoadingPage from "@/components/app-loading";
 import { Label } from "@/components/ui/label";
@@ -29,10 +28,27 @@ import { formatDate } from "@/lib/utils";
 import { isEmptyObject } from "@/lib/helpers/object.helper";
 import { Button } from "@/components/ui/button";
 import { APPLY_STATUS } from "@/schema";
+import { useApplicationDetail } from "@/hooks/use-application-detail";
+import { Textarea } from "@/components/ui/textarea";
+
+const canLockStatuses = [
+  APPLY_STATUS.APPROVED,
+  APPLY_STATUS.REJECTED,
+  APPLY_STATUS.PERMANENT_REJECTED,
+  APPLY_STATUS.CANCELLED,
+  APPLY_STATUS.PROCESSING,
+];
 
 const EventOrganizerAdmin = () => {
   const { applicationId } = useParams<{ applicationId: string }>();
-  const { data, isLoading } = useApplicationDetail(applicationId);
+  const {
+    query: { data, isLoading },
+    approve,
+    reject,
+    permanentReject,
+    lock,
+    revertToPending,
+  } = useApplicationDetail(applicationId);
   const applicationData = data?.data;
 
   const [expandedSections, setExpandedSections] = useState({
@@ -43,14 +59,10 @@ const EventOrganizerAdmin = () => {
     documents: true,
     moderation: true,
   });
-
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [showBanForm, setShowBanForm] = useState(false);
   const [banReason, setBanReason] = useState("");
-  const [actionStatus, setActionStatus] = useState<
-    "approved" | "rejected" | null
-  >(null);
 
   if (isLoading || !applicationData) {
     return <LoadingPage />;
@@ -63,20 +75,33 @@ const EventOrganizerAdmin = () => {
     }));
   };
 
-  const handleApprove = () => {
-    setActionStatus("approved");
-    setTimeout(() => setActionStatus(null), 3000);
+  const handleApprove = async () => {
+    await approve.mutateAsync();
   };
-  const handleReject = () => {
-    if (rejectionReason.trim()) {
-      setActionStatus("rejected");
-      setShowRejectForm(false);
-      setRejectionReason("");
-      setTimeout(() => setActionStatus(null), 3000);
-    }
+
+  const handleReject = async () => {
+    if (!rejectionReason.trim()) return;
+    await reject.mutateAsync({ rejectionReason });
+    setShowRejectForm(false);
+    setRejectionReason("");
   };
-  const handleLock = () => alert("Locked");
-  const handleUnlock = () => alert("Unocked");
+
+  const handlePermanentReject = async () => {
+    if (!banReason.trim()) return;
+    await permanentReject.mutateAsync({
+      rejectionReason: banReason,
+    });
+    setShowBanForm(false);
+    setBanReason("");
+  };
+
+  const handleToggleLock = async () => {
+    await lock.mutateAsync();
+  };
+
+  const handleUnlock = async () => {
+    await revertToPending.mutateAsync();
+  };
 
   const isBlocked = applicationData.status === APPLY_STATUS.LOCKED_BY_ADMIN;
 
@@ -165,14 +190,6 @@ const EventOrganizerAdmin = () => {
           </div>
         </div>
 
-        {/* Action Status Alert */}
-        {actionStatus && (
-          <div
-            className={`p-4 rounded-lg border ${actionStatus === "approved" ? "border-green-200 bg-green-50 text-green-800" : "border-red-200 bg-red-50 text-red-800"}`}
-          >
-            Application has been {actionStatus}!
-          </div>
-        )}
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
@@ -377,62 +394,6 @@ const EventOrganizerAdmin = () => {
               </SectionCard>
             )}
 
-            {/* Event Permit Information */}
-            {!isEmptyObject(applicationData.eventPermitInfo) && (
-              <SectionCard
-                title="Event Permit Information"
-                icon={Calendar}
-                isExpanded={expandedSections.permit}
-                onToggle={() => toggleSection("permit")}
-              >
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-sm font-medium text-gray-600">
-                      Permit Number
-                    </Label>
-                    <p className="text-gray-800 font-mono">
-                      {applicationData.eventPermitInfo?.permitNumber}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium text-gray-600">
-                      Issue Date
-                    </Label>
-                    <p className="text-gray-800">
-                      {formatDate(applicationData.eventPermitInfo?.issueDate) ??
-                        "N/A"}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium text-gray-600">
-                      Issuse Date
-                    </Label>
-                    <p className="text-gray-800">
-                      {formatDate(applicationData.eventPermitInfo?.issueDate) ??
-                        "N/A"}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium text-gray-600">
-                      Issused By
-                    </Label>
-                    <p className="text-gray-800">
-                      {applicationData.eventPermitInfo?.issuedBy} people
-                    </p>
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label className="text-sm font-medium text-gray-600">
-                      Event Location
-                    </Label>
-                    <p className="text-gray-800 flex items-center gap-1">
-                      <MapPin size={14} />
-                      {applicationData.eventPermitInfo?.location}
-                    </p>
-                  </div>
-                </div>
-              </SectionCard>
-            )}
-
             {/* Documents */}
             <SectionCard
               title="Uploaded Documents"
@@ -529,27 +490,36 @@ const EventOrganizerAdmin = () => {
                 <div className="space-y-3">
                   <Button
                     onClick={handleApprove}
+                    loading={approve.isPending}
+                    disabled={applicationData.status === APPLY_STATUS.APPROVED}
                     className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-lg"
                   >
                     <CheckCircle size={18} />
                     Approve Application
                   </Button>
-
-                  <Button
-                    onClick={isBlocked ? handleUnlock : handleLock}
-                    className={
-                      isBlocked
-                        ? "w-full bg-gradient-to-r from-blue-500 to-blue-500 hover:from-blue-600 hover:to-blue-600 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-l"
-                        : "w-full bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-lg"
-                    }
-                  >
-                    <Lock size={18} />
-                    {isBlocked ? "Unlock" : "Lock"}
-                  </Button>
-
+                  {!canLockStatuses.includes(applicationData.status) && (
+                    <Button
+                      loading={
+                        isBlocked ? revertToPending.isPending : lock.isPending
+                      }
+                      onClick={isBlocked ? handleUnlock : handleToggleLock}
+                      className={
+                        isBlocked
+                          ? "w-full bg-gradient-to-r from-blue-500 to-blue-500 hover:from-blue-600 hover:to-blue-600 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-l"
+                          : "w-full bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-lg"
+                      }
+                    >
+                      <Lock size={18} />
+                      {isBlocked ? "Unlock" : "Lock"}
+                    </Button>
+                  )}
                   <Button
                     onClick={() => setShowRejectForm(true)}
                     className="w-full bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-lg"
+                    disabled={
+                      applicationData.status === APPLY_STATUS.REJECTED ||
+                      applicationData.status === APPLY_STATUS.PERMANENT_REJECTED
+                    }
                   >
                     <XCircle size={18} />
                     Reject Application
@@ -557,6 +527,9 @@ const EventOrganizerAdmin = () => {
                   <Button
                     onClick={() => setShowBanForm(true)}
                     className="w-full bg-red-700 hover:bg-red-800 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-lg"
+                    disabled={
+                      applicationData.status === APPLY_STATUS.PERMANENT_REJECTED
+                    }
                   >
                     <Shield size={18} />
                     Ban Permanently
@@ -568,7 +541,7 @@ const EventOrganizerAdmin = () => {
                     <Label className="block text-sm font-medium text-gray-700 mb-2">
                       Rejection Reason <span className="text-red-500">*</span>
                     </Label>
-                    <textarea
+                    <Textarea
                       value={rejectionReason}
                       onChange={(e) => setRejectionReason(e.target.value)}
                       placeholder="Please provide a detailed reason for rejection..."
@@ -578,6 +551,7 @@ const EventOrganizerAdmin = () => {
                   </div>
                   <div className="flex gap-2">
                     <Button
+                      loading={reject.isPending}
                       onClick={handleReject}
                       disabled={!rejectionReason.trim()}
                       className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white font-semibold py-2 px-4 rounded-lg"
@@ -599,7 +573,7 @@ const EventOrganizerAdmin = () => {
                       Permanent Ban Reason{" "}
                       <span className="text-red-500">*</span>
                     </Label>
-                    <textarea
+                    <Textarea
                       value={banReason}
                       onChange={(e) => setBanReason(e.target.value)}
                       placeholder="This action is irreversible. Clearly state the reason for the permanent ban..."
@@ -609,13 +583,8 @@ const EventOrganizerAdmin = () => {
                   </div>
                   <div className="flex gap-2">
                     <Button
-                      onClick={() => {
-                        if (banReason.trim()) {
-                          alert("User banned permanently");
-                          setShowBanForm(false);
-                          setBanReason("");
-                        }
-                      }}
+                      loading={permanentReject.isPending}
+                      onClick={handlePermanentReject}
                       disabled={!banReason.trim()}
                       className="flex-1 bg-red-800 hover:bg-red-900 disabled:bg-gray-400 text-white font-semibold py-2 px-4 rounded-lg"
                     >

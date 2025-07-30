@@ -20,6 +20,7 @@ import {
   Search,
   Users,
   ArchiveX,
+  Loader2,
 } from "lucide-react";
 import { Application } from "@/schema/application";
 import ApplicationCard from "@/components/application/application-card";
@@ -45,35 +46,55 @@ export default function ApplicationManagementPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const {
-    applicationsQuery,
-    approve,
-    reject,
-    permanentReject,
-    markProcessing,
-  } = useAdminApplication({
+  const { applicationsQuery } = useAdminApplication({
     status: statusFilter === "all" ? undefined : statusFilter,
     limit: 20,
     sortBy: "submittedAt",
   });
 
-  const { data: response, isLoading, isError, refetch } = applicationsQuery;
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = applicationsQuery;
 
-  const applications = useMemo(() => response?.data || [], [response]);
-  const meta = useMemo(() => response?.meta, [response]);
+  const allApplications = useMemo(
+    () => data?.pages.flatMap((page) => page.data) || [],
+    [data]
+  );
+
+  const meta = useMemo(() => data?.pages[0]?.meta, [data]);
+
+  const filteredApplications = useMemo(() => {
+    if (!allApplications) return [];
+    const searchLower = searchTerm.toLowerCase();
+    return allApplications.filter((app: Application) => {
+      return (
+        searchTerm === "" ||
+        app.applicationData.orgName.toLowerCase().includes(searchLower) ||
+        app.applicationID.toLowerCase().includes(searchLower)
+      );
+    });
+  }, [allApplications, searchTerm]);
 
   const statsData = useMemo(() => {
+    // Tổng số lấy từ meta để có con số chính xác từ DB
     const total = meta?.count || 0;
 
-    const pendingReview = applications.filter((app) =>
+    // Các con số thống kê khác có thể tính toán từ dữ liệu đã tải về
+    const pendingReview = allApplications.filter((app) =>
       [APPLY_STATUS.PENDING, APPLY_STATUS.PENDING_ADMIN].includes(
         app.status as APPLY_STATUS
       )
     ).length;
-    const approved = applications.filter(
+    const approved = allApplications.filter(
       (app) => app.status === APPLY_STATUS.APPROVED
     ).length;
-    const closedOrRejected = applications.filter((app) =>
+    const closedOrRejected = allApplications.filter((app) =>
       [
         APPLY_STATUS.REJECTED,
         APPLY_STATUS.PERMANENT_REJECTED,
@@ -107,27 +128,13 @@ export default function ApplicationManagementPage() {
         gradient: "from-red-500 to-red-400",
       },
     ];
-  }, [applications, meta]);
+  }, [allApplications, meta]);
 
-  // ✨ CHANGE: Chỉ cần lọc theo `searchTerm` vì `statusFilter` đã được xử lý ở server
-  const filteredApplications = useMemo(() => {
-    if (!applications) return [];
-    return applications.filter((app: Application) => {
-      const searchLower = searchTerm.toLowerCase();
-      return (
-        searchTerm === "" ||
-        app.applicationData.orgName.toLowerCase().includes(searchLower) ||
-        app.applicationID.toLowerCase().includes(searchLower)
-      );
-    });
-  }, [applications, searchTerm]);
-
-  // ✨ CHANGE: Hiển thị skeleton loading khi `isLoading` là true
-  if (isLoading && !response) {
+  // ✨ SỬA: Điều kiện loading chỉ nên kiểm tra `isLoading` và khi không có dữ liệu nào cả
+  if (isLoading) {
     return <ApplicationCardSkeleton />;
   }
 
-  // ✨ CHANGE: Sử dụng `isError` từ hook
   if (isError) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -135,6 +142,7 @@ export default function ApplicationManagementPage() {
           <h2 className="text-xl font-semibold">
             Failed to load applications.
           </h2>
+          {/* ✨ SỬA: refetch là một hàm, không cần await */}
           <Button className="mt-4" onClick={() => refetch()}>
             Try Again
           </Button>
@@ -241,53 +249,80 @@ export default function ApplicationManagementPage() {
             <ApplicationCard
               key={app.applicationID}
               application={app}
-              isLockingByAdmin={app.status === APPLY_STATUS.LOCKED_BY_ADMIN}
-              onLockByAdmin={async () => await Promise.resolve()}
-              onApprove={async () =>
-                await approve.mutateAsync(app.applicationID)
-              }
-              onReject={async () => await reject.mutateAsync(app.applicationID)}
-              onPermanentReject={async () =>
-                await permanentReject.mutateAsync(app.applicationID)
-              }
-              onMarkProcessing={async () =>
-                await markProcessing.mutateAsync(app.applicationID)
-              }
+              // isLockingByAdmin={app.status === APPLY_STATUS.LOCKED_BY_ADMIN}
+              // onLockByAdmin={async () =>
+              //   await lock.mutateAsync(app.applicationID)
+              // }
+              // onApprove={async () =>
+              //   await approve.mutateAsync(app.applicationID)
+              // }
+              // onReject={async () => await reject.mutateAsync(app.applicationID)}
+              // onPermanentReject={async () =>
+              //   await permanentReject.mutateAsync({
+              //     applicationId: app.applicationID,
+              //     rejectionReason: "",
+              //   })
+              // }
+              // onMarkProcessing={async () =>
+              //   await markProcessing.mutateAsync(app.applicationID)
+              // }
               // Truyền trạng thái `isPending` để vô hiệu hóa button khi đang xử lý
-              isApproving={approve.isPending}
-              isRejecting={reject.isPending}
-              isPermanentRejecting={permanentReject.isPending}
-              isMarkingProcessing={markProcessing.isPending}
+              // isApproving={approve.isPending}
+              // isRejecting={reject.isPending}
+              // isPermanentRejecting={permanentReject.isPending}
             />
           ))}
         </div>
 
+        {/* Nút Load More */}
+        <div className="mt-8 text-center">
+          {hasNextPage && (
+            <Button
+              onClick={() => fetchNextPage()}
+              disabled={isFetchingNextPage}
+              variant="outline"
+              className="w-48"
+            >
+              {isFetchingNextPage ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                "Load More"
+              )}
+            </Button>
+          )}
+        </div>
+
         {/* Empty State */}
-        {filteredApplications.length === 0 && !isLoading && (
-          <Card className="bg-white/70 backdrop-blur-sm border-0 shadow-lg">
-            <CardContent className="p-12 text-center">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Users className="w-8 h-8 text-gray-400" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                No applications found
-              </h3>
-              <p className="text-gray-600 mb-5">
-                Try adjusting your search or filter to find what you're looking
-                for.
-              </p>
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setSearchTerm("");
-                  setStatusFilter("all");
-                }}
-              >
-                Clear Filters
-              </Button>
-            </CardContent>
-          </Card>
-        )}
+        {filteredApplications.length === 0 &&
+          !isFetchingNextPage &&
+          !isLoading && (
+            <Card className="bg-white/70 backdrop-blur-sm border-0 shadow-lg">
+              <CardContent className="p-12 text-center">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Users className="w-8 h-8 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  No applications found
+                </h3>
+                <p className="text-gray-600 mb-5">
+                  Try adjusting your search or filter to find what you're
+                  looking for.
+                </p>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setSearchTerm("");
+                    setStatusFilter("all");
+                  }}
+                >
+                  Clear Filters
+                </Button>
+              </CardContent>
+            </Card>
+          )}
       </div>
     </div>
   );

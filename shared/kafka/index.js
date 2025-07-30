@@ -1,2 +1,3 @@
-export { default as kafkaManager, KafkaManager } from "./kafka.js";
+export * from "./kafka.service.js";
 export * from "./topics.js";
+export * from "./kafka.events.js";
