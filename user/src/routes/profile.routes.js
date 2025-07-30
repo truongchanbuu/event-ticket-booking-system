@@ -12,20 +12,6 @@ export default class Profileroutes {
     }
 
     initRoutes() {
-        this.router.get("/", verifyToken, this.userController.getProfile);
-        this.router.put(
-            "/",
-            verifyToken,
-            UserValidator.validateSelfUpdate(),
-            UserValidator.handleValidationErrors,
-            this.userController.updateUser,
-        );
-        this.router.delete(
-            "/",
-            UserValidator.validateDeleteUser(),
-            UserValidator.handleValidationErrors,
-            this.userController.softDeleteUser,
-        );
         this.router.post(
             "/followed-organizers",
             verifyToken,
@@ -69,10 +55,25 @@ export default class Profileroutes {
             OrganizerValidator.handleValidationErrors,
             this.organizerController.cancelMyApplication,
         );
-        this.router.post(
-            "/:applicationID/deactivate",
+        // this.router.post(
+        //     "/:applicationID/deactivate",
+        //     verifyToken,
+        //     this.organizerController.deactivateOrganizer,
+        // );
+
+        this.router.get("/", verifyToken, this.userController.getProfile);
+        this.router.put(
+            "/",
             verifyToken,
-            this.organizerController.deactivateOrganizer,
+            UserValidator.validateSelfUpdate(),
+            UserValidator.handleValidationErrors,
+            this.userController.updateUser,
+        );
+        this.router.delete(
+            "/",
+            UserValidator.validateDeleteUser(),
+            UserValidator.handleValidationErrors,
+            this.userController.softDeleteUser,
         );
     }
 

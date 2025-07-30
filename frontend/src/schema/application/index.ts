@@ -5,8 +5,19 @@ import {
   BaseEventPermitData,
   BaseRepresentativeData,
   DocumentBase,
-  IDCardDocument,
 } from "./base";
+
+// IDCardDocument giờ kế thừa từ BaseRepresentativeData
+export interface IDCardDocument extends DocumentBase, BaseRepresentativeData {
+  documentType: "id_card";
+  qrCodeData?: string;
+  mrzCode?: string;
+  photoUrls: {
+    front: string;
+    back: string;
+  };
+  signatureImageUrl?: string;
+}
 
 // BusinessLicenseDocument kế thừa từ BaseBusinessData
 interface BusinessLicenseDocument extends DocumentBase, BaseBusinessData {
@@ -53,20 +64,25 @@ export interface ModerationInfo {
 }
 
 export interface Application {
-  id: string;
+  applicationID: string;
   userID: string;
   applyType: OrganizerType;
   status: ApplyStatus;
-  submissionDate: string;
+  submittedAt: string;
+  submittedBy?: {
+    email?: string;
+    phoneNumber?: string;
+    username?: string;
+  };
 
   applicationData: ApplicationData;
   representativeInfo: BaseRepresentativeData;
   businessInfo?: BaseBusinessData;
-  eventPermitInfo?: BaseEventPermitData;
 
-  documents: Document[];
+  documents: DocumentBase[];
   moderation: ModerationInfo;
 }
+
 export interface ApplicationsApiResponse {
   success: boolean;
   data: Application[];

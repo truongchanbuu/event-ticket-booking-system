@@ -14,18 +14,36 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-export function formatDate(date: Date | string | Timestamp): string {
+export function formatDate(
+  date?: Date | string | Timestamp
+): string | undefined {
+  if (date === undefined) return undefined;
+
   if (date instanceof Timestamp) {
     date = date.toDate();
   }
 
-  const d = typeof date === "string" ? new Date(date) : date;
+  let d: Date;
+  if (typeof date === "string") {
+    // detect if format is dd/MM/yyyy
+    const parts = date.split("/");
+    if (parts.length === 3) {
+      const [day, month, year] = parts.map(Number);
+      d = new Date(year, month - 1, day); // JS months are 0-indexed
+    } else {
+      d = new Date(date); // try default parsing
+    }
+  } else {
+    d = date;
+  }
+
+  if (isNaN(d.getTime())) return "Invalid date";
 
   return new Intl.DateTimeFormat("en-US", {
-    weekday: "long", // e.g., Thursday
-    year: "numeric", // e.g., 2025
-    month: "long", // e.g., July
-    day: "numeric", // e.g., 4
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
   }).format(d);
 }
 

@@ -37,18 +37,7 @@ export interface BaseEventPermitData {
 }
 
 export interface DocumentBase {
+  documentName: string;
   documentType: string;
-  fileUrl: string; // URL để xem/tải file gốc
-}
-
-// IDCardDocument giờ kế thừa từ BaseRepresentativeData
-export interface IDCardDocument extends DocumentBase, BaseRepresentativeData {
-  documentType: "id_card";
-  qrCodeData?: string;
-  mrzCode?: string;
-  photoUrls: {
-    front: string;
-    back: string;
-  };
-  signatureImageUrl?: string;
+  fileUrl: string;
 }

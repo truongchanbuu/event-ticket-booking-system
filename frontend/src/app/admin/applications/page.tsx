@@ -43,13 +43,8 @@ const statusLabels: { [key in APPLY_STATUS]: string } = {
 
 export default function ApplicationManagementPage() {
   const [searchTerm, setSearchTerm] = useState("");
-  // ✨ CHANGE: Đặt giá trị ban đầu là 'all', nhưng sẽ chuyển thành `undefined` khi gọi hook
-  // để API trả về tất cả nếu không có filter.
   const [statusFilter, setStatusFilter] = useState("all");
 
-  // ✨ CHANGE: Kết nối state `statusFilter` vào `params` của hook.
-  // Nếu statusFilter là 'all', chúng ta không truyền thuộc tính `status` vào hook,
-  // để API có thể trả về tất cả các đơn.
   const {
     applicationsQuery,
     approve,
@@ -58,29 +53,23 @@ export default function ApplicationManagementPage() {
     markProcessing,
   } = useAdminApplication({
     status: statusFilter === "all" ? undefined : statusFilter,
-    // Bạn có thể thêm các params khác ở đây, ví dụ: page, limit, sortBy
+    limit: 20,
+    sortBy: "submittedAt",
   });
 
-  // ✨ CHANGE: Lấy dữ liệu, trạng thái loading/error trực tiếp từ `applicationsQuery`
   const { data: response, isLoading, isError, refetch } = applicationsQuery;
 
-  // Lấy danh sách applications và thông tin meta từ response của API
   const applications = useMemo(() => response?.data || [], [response]);
   const meta = useMemo(() => response?.meta, [response]);
 
   const statsData = useMemo(() => {
-    // ✨ CHANGE: Dùng `meta.count` thay vì `apiResponse`
     const total = meta?.count || 0;
 
-    // Lưu ý: Các số liệu thống kê này hiện được tính toán dựa trên dữ liệu đã tải trên trang hiện tại.
-    // Nếu có phân trang, các con số này sẽ không phản ánh toàn bộ hệ thống.
-    // Để chính xác, bạn nên lấy các số liệu này từ một endpoint API riêng.
     const pendingReview = applications.filter((app) =>
       [APPLY_STATUS.PENDING, APPLY_STATUS.PENDING_ADMIN].includes(
         app.status as APPLY_STATUS
       )
     ).length;
-    // ... các tính toán khác giữ nguyên ...
     const approved = applications.filter(
       (app) => app.status === APPLY_STATUS.APPROVED
     ).length;
@@ -128,7 +117,7 @@ export default function ApplicationManagementPage() {
       return (
         searchTerm === "" ||
         app.applicationData.orgName.toLowerCase().includes(searchLower) ||
-        app.id.toLowerCase().includes(searchLower)
+        app.applicationID.toLowerCase().includes(searchLower)
       );
     });
   }, [applications, searchTerm]);
@@ -250,13 +239,20 @@ export default function ApplicationManagementPage() {
         <div className="grid gap-6">
           {filteredApplications.map((app) => (
             <ApplicationCard
-              key={app.id}
+              key={app.applicationID}
               application={app}
-              // Truyền các hàm `mutate` để thực thi hành động
-              onApprove={() => approve.mutate(app.id)}
-              onReject={() => reject.mutate(app.id)}
-              onPermanentReject={() => permanentReject.mutate(app.id)}
-              onMarkProcessing={() => markProcessing.mutate(app.id)}
+              isLockingByAdmin={app.status === APPLY_STATUS.LOCKED_BY_ADMIN}
+              onLockByAdmin={async () => await Promise.resolve()}
+              onApprove={async () =>
+                await approve.mutateAsync(app.applicationID)
+              }
+              onReject={async () => await reject.mutateAsync(app.applicationID)}
+              onPermanentReject={async () =>
+                await permanentReject.mutateAsync(app.applicationID)
+              }
+              onMarkProcessing={async () =>
+                await markProcessing.mutateAsync(app.applicationID)
+              }
               // Truyền trạng thái `isPending` để vô hiệu hóa button khi đang xử lý
               isApproving={approve.isPending}
               isRejecting={reject.isPending}

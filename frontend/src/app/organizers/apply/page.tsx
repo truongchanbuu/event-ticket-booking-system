@@ -4,7 +4,11 @@ import React, { useCallback, useEffect } from "react";
 import { ApplyOrganizerForm } from "@/components/organizer/ApplyOrganizerForm";
 import ProtectedRoute from "@/components/ProtectRoute";
 import { uploadToCloudinary } from "@/services/cloudinary.service";
-import { ApplyOrganizerFormData, ORGANIZER_STATUS } from "@/schema";
+import {
+  ApplyOrganizerFormData,
+  DocumentBase,
+  ORGANIZER_STATUS,
+} from "@/schema";
 import { useToast } from "@/hooks/use-toast";
 import { hasEventPermitData } from "@/lib/helpers/type-guard.helper";
 import {
@@ -27,10 +31,18 @@ function _ApplyOrganizerPage() {
     setIsUploading(true);
 
     try {
-      const documentUrls = await handleFileUploads(data);
+      const documents = await handleFileUploads(data);
 
       setIsUploading(false);
-      const finalDataForBackend = prepareFinalData(data, documentUrls);
+      const finalDataForBackend = prepareFinalData(
+        data,
+        {
+          email: userProfile?.email,
+          phoneNumber: userProfile?.phoneNumber,
+          username: userProfile?.username,
+        },
+        documents
+      );
 
       await applyOrganizer(finalDataForBackend);
       router.push(`/profile/application`);
@@ -83,52 +95,57 @@ export default function ApplyOrganizerPage() {
 }
 
 // --- Helpers (Có thể đặt bên ngoài component function) ---
-
 /**
  * Tải tất cả các file cần thiết lên Cloudinary.
  * @param data Dữ liệu từ form ApplyOrganizerFormData
- * @returns Promise chứa object các URL đã được tải lên.
+ * @returns Promise chứa mảng DocumentBase đã được tải lên.
  */
 const handleFileUploads = async (
   data: ApplyOrganizerFormData
-): Promise<{ [key: string]: string }> => {
+): Promise<DocumentBase[]> => {
   console.log("Starting file uploads...");
-  const uploadPromises: Promise<{ key: string; url: string }>[] = [];
+
+  const uploadPromises: Promise<DocumentBase>[] = [];
+
   const filesToUpload = [
     {
-      key: "identityCardFront",
+      documentName: "identityCardFront",
       fileValue: data.identityCardFront,
-      docType: "id_card_front",
+      documentType: "id_card_front",
     },
     {
-      key: "identityCardBack",
+      documentName: "identityCardBack",
       fileValue: data.identityCardBack,
-      docType: "id_card_back",
+      documentType: "id_card_back",
     },
     {
-      key: "businessLicense",
+      documentName: "businessLicense",
       fileValue: data.businessLicense,
-      docType: "business_license",
+      documentType: "business_license",
     },
-    {
-      key: "eventLicense",
-      fileValue: data.eventLicense,
-      docType: "event_permit",
-    },
+    // {
+    //   documentName: "eventLicense",
+    //   fileValue: data.eventLicense,
+    //   documentType: "event_permit",
+    // },
   ];
 
-  for (const { key, fileValue, docType } of filesToUpload) {
+  for (const { documentName, fileValue, documentType } of filesToUpload) {
     if (fileValue?.file) {
-      console.log(`Preparing to upload: ${docType} (${key})`);
+      console.log(`Preparing to upload: ${documentType} (${documentName})`);
       uploadPromises.push(
-        uploadToCloudinary(fileValue.file, docType)
+        uploadToCloudinary(fileValue.file, documentType)
           .then((url) => {
-            console.log(`✅ SUCCESS uploading: ${docType}. URL: ${url}`);
-            return { key, url };
+            console.log(`✅ SUCCESS uploading: ${documentType}. URL: ${url}`);
+            return {
+              documentName,
+              documentType,
+              fileUrl: url,
+            };
           })
           .catch((err) => {
             console.error(
-              `❌ FAILED uploading: ${docType} (${key}). Reason:`,
+              `❌ FAILED uploading: ${documentType} (${documentName}). Reason:`,
               err
             );
             throw err;
@@ -137,16 +154,7 @@ const handleFileUploads = async (
     }
   }
 
-  // Promise.all sẽ vẫn thất bại như trước, nhưng giờ bạn đã biết chính xác file nào gây ra nó.
-  return Promise.all(uploadPromises).then((uploadedResults) => {
-    return uploadedResults.reduce(
-      (acc, { key, url }) => {
-        acc[key] = url;
-        return acc;
-      },
-      {} as { [key: string]: string }
-    );
-  });
+  return Promise.all(uploadPromises);
 };
 
 /**
@@ -157,11 +165,13 @@ const handleFileUploads = async (
  */
 const prepareFinalData = (
   data: ApplyOrganizerFormData,
-  documentUrls: { [key: string]: string }
+  metadata: { email?: string; phoneNumber?: string; username?: string },
+  documents: DocumentBase[]
 ) => {
   const finalDataForBackend = {
     // --- Core Info ---
     applyType: data.type,
+    submittedBy: metadata,
 
     // --- Application Data ---
     applicationData: {
@@ -202,25 +212,25 @@ const prepareFinalData = (
       },
     }),
 
-    documentUrls: documentUrls,
+    documents: documents,
 
-    eventPermitInfo: {},
+    // eventPermitInfo: {},
   };
 
-  if (hasEventPermitData(data)) {
-    finalDataForBackend.eventPermitInfo = {
-      eventName: data.eventName,
-      organizerName: data.organizerName,
-      eventDate: data.eventDate,
-      eventTime: data.eventTime,
-      location: data.location,
-      issueDate: data.issueDate,
-      issuedBy: data.issuedBy,
-      permitNumber: data.permitNumber,
-      purpose: data.purpose,
-      signedBy: data.signedBy,
-    };
-  }
+  // if (hasEventPermitData(data)) {
+  //   finalDataForBackend.eventPermitInfo = {
+  //     eventName: data.eventName,
+  //     organizerName: data.organizerName,
+  //     eventDate: data.eventDate,
+  //     eventTime: data.eventTime,
+  //     location: data.location,
+  //     issueDate: data.issueDate,
+  //     issuedBy: data.issuedBy,
+  //     permitNumber: data.permitNumber,
+  //     purpose: data.purpose,
+  //     signedBy: data.signedBy,
+  //   };
+  // }
 
   return finalDataForBackend;
 };

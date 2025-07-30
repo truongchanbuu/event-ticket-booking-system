@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Building2,
   User,
@@ -10,21 +9,36 @@ import {
   Shield,
   CheckCircle,
   XCircle,
-  Clock,
-  Star,
-  AlertTriangle,
+  Facebook,
+  Instagram,
+  Twitter,
+  Globe,
+  Phone,
+  Mail,
+  MapPin,
+  Hash,
+  Lock,
 } from "lucide-react";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { SectionCard } from "@/components/application/section-card";
 import { DocumentItem } from "@/components/application/document-item";
+import { useApplicationDetail } from "@/hooks/user-application-detail";
+import { useParams } from "next/navigation";
+import LoadingPage from "@/components/app-loading";
+import { Label } from "@/components/ui/label";
+import { formatDate } from "@/lib/utils";
+import { isEmptyObject } from "@/lib/helpers/object.helper";
+import { Button } from "@/components/ui/button";
+import { APPLY_STATUS } from "@/schema";
 
 const EventOrganizerAdmin = () => {
+  const { applicationId } = useParams<{ applicationId: string }>();
+  const { data, isLoading } = useApplicationDetail(applicationId);
+  const applicationData = data?.data;
+
   const [expandedSections, setExpandedSections] = useState({
     organization: true,
     representative: true,
-    license: true,
+    business: true,
     permit: true,
     documents: true,
     moderation: true,
@@ -32,95 +46,15 @@ const EventOrganizerAdmin = () => {
 
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [showBanForm, setShowBanForm] = useState(false);
+  const [banReason, setBanReason] = useState("");
   const [actionStatus, setActionStatus] = useState<
     "approved" | "rejected" | null
   >(null);
 
-  // Sample application data
-  const applicationData = {
-    id: "APP-2025-001",
-    submittedDate: "2025-07-20",
-    status: "pending",
-    organization: {
-      name: "Sunrise Events Co.",
-      type: "Limited Liability Company",
-      address: "123 Business District, Ho Chi Minh City, Vietnam",
-      phone: "+84 28 1234 5678",
-      email: "contact@sunriseevents.vn",
-      website: "https://sunriseevents.vn",
-      description:
-        "Professional event management company specializing in corporate conferences, cultural festivals, and entertainment events.",
-    },
-    representative: {
-      name: "Nguyen Van Minh",
-      position: "CEO & Founder",
-      phone: "+84 90 123 4567",
-      email: "minh.nguyen@sunriseevents.vn",
-      idNumber: "012345678901",
-      experience: "8 years in event management",
-    },
-    businessLicense: {
-      number: "BL-2023-HCM-5678",
-      issueDate: "2023-03-15",
-      expiryDate: "2028-03-14",
-      issuingAuthority:
-        "Ho Chi Minh City Department of Planning and Investment",
-      status: "valid",
-    },
-    eventPermit: {
-      number: "EP-2025-HCM-1234",
-      issueDate: "2025-01-10",
-      expiryDate: "2026-01-09",
-      eventTypes: ["Conferences", "Cultural Events", "Concerts", "Exhibitions"],
-      maxCapacity: "5000 attendees",
-      status: "valid",
-    },
-    documents: [
-      {
-        name: "Business Registration Certificate",
-        url: "",
-        type: "PDF",
-        size: "2.3 MB",
-        status: "verified",
-      },
-      {
-        name: "Tax Registration Document",
-        url: "",
-        type: "PDF",
-        size: "1.8 MB",
-        status: "verified",
-      },
-      {
-        name: "Insurance Certificate",
-        url: "",
-        type: "PDF",
-        size: "1.2 MB",
-        status: "verified",
-      },
-      {
-        name: "Previous Event Portfolio",
-        url: "",
-        type: "PDF",
-        size: "8.7 MB",
-        status: "verified",
-      },
-      {
-        name: "Financial Statement 2024",
-        url: "",
-        type: "PDF",
-        size: "3.1 MB",
-        status: "pending",
-      },
-    ],
-    moderation: {
-      riskLevel: "low",
-      backgroundCheck: "passed",
-      previousViolations: 0,
-      creditScore: "excellent",
-      reviewNotes:
-        "Well-established company with strong track record in event management.",
-    },
-  };
+  if (isLoading || !applicationData) {
+    return <LoadingPage />;
+  }
 
   const toggleSection = (section) => {
     setExpandedSections((prev) => ({
@@ -129,55 +63,10 @@ const EventOrganizerAdmin = () => {
     }));
   };
 
-  const getStatusBadge = (status) => {
-    const statusConfig = {
-      pending: {
-        color: "bg-amber-100 text-amber-800 border-amber-200",
-        icon: Clock,
-      },
-      verified: {
-        color: "bg-emerald-100 text-emerald-800 border-emerald-200",
-        icon: CheckCircle,
-      },
-      valid: {
-        color: "bg-blue-100 text-blue-800 border-blue-200",
-        icon: CheckCircle,
-      },
-      passed: {
-        color: "bg-green-100 text-green-800 border-green-200",
-        icon: CheckCircle,
-      },
-      excellent: {
-        color: "bg-purple-100 text-purple-800 border-purple-200",
-        icon: Star,
-      },
-      low: {
-        color: "bg-green-100 text-green-800 border-green-200",
-        icon: Shield,
-      },
-    };
-
-    const config = statusConfig[status] || {
-      color: "bg-gray-100 text-gray-800 border-gray-200",
-      icon: AlertTriangle,
-    };
-    const Icon = config.icon;
-
-    return (
-      <span
-        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${config.color}`}
-      >
-        <Icon size={12} />
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </span>
-    );
-  };
-
   const handleApprove = () => {
     setActionStatus("approved");
     setTimeout(() => setActionStatus(null), 3000);
   };
-
   const handleReject = () => {
     if (rejectionReason.trim()) {
       setActionStatus("rejected");
@@ -186,26 +75,91 @@ const EventOrganizerAdmin = () => {
       setTimeout(() => setActionStatus(null), 3000);
     }
   };
+  const handleLock = () => alert("Locked");
+  const handleUnlock = () => alert("Unocked");
+
+  const isBlocked = applicationData.status === APPLY_STATUS.LOCKED_BY_ADMIN;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-      {/* Admin Header */}
       <div className="max-w-7xl mx-auto p-4 space-y-6">
         {/* Application Overview */}
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-          <div className="bg-gradient-to-r from-gray-50 to-slate-50 p-6 border-b">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6 shadow-sm">
+          {/* Main Title Section */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-blue-50 rounded-lg">
+                <FileText className="w-6 h-6 text-blue-600" />
+              </div>
               <div>
-                <h2 className="text-xl font-bold text-gray-800">
-                  Application #{applicationData.id}
+                <h2 className="text-2xl font-bold text-gray-900">
+                  Application #{applicationData.applicationID}
                 </h2>
-                <p className="text-gray-600">
-                  Submitted on {applicationData.submittedDate}
+                <div className="flex items-center text-gray-600 mt-1">
+                  <Calendar className="w-4 h-4 mr-2" />
+                  <span>
+                    Submitted on{" "}
+                    {formatDate(applicationData.submittedAt) ?? "N/A"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Application Type Badge */}
+            <div className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+              {applicationData.applyType.toUpperCase()}
+            </div>
+          </div>
+
+          {/* User Information Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-gray-100">
+            <div className="flex items-center space-x-2">
+              <Hash className="w-4 h-4 text-gray-400" />
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">
+                  User ID
+                </p>
+                <p className="text-sm font-medium text-gray-900">
+                  {applicationData.userID}
                 </p>
               </div>
-              <div className="flex items-center gap-3">
-                {getStatusBadge(applicationData.status)}
-                <div className="text-sm text-gray-500">Pending Review</div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <User className="w-4 h-4 text-gray-400" />
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">
+                  Username
+                </p>
+                <p className="text-sm font-medium text-gray-900">
+                  {applicationData.submittedBy?.username || "N/A"}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Mail className="w-4 h-4 text-gray-400" />
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">
+                  Email
+                </p>
+                <p className="text-sm font-medium text-gray-900 truncate">
+                  {applicationData.submittedBy?.email ||
+                    applicationData.submittedBy?.username ||
+                    "N/A"}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Phone className="w-4 h-4 text-gray-400" />
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">
+                  Phone
+                </p>
+                <p className="text-sm font-medium text-gray-900">
+                  {applicationData.submittedBy?.phoneNumber || "N/A"}
+                </p>
               </div>
             </div>
           </div>
@@ -213,304 +167,290 @@ const EventOrganizerAdmin = () => {
 
         {/* Action Status Alert */}
         {actionStatus && (
-          <Alert
-            className={`${actionStatus === "approved" ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}
+          <div
+            className={`p-4 rounded-lg border ${actionStatus === "approved" ? "border-green-200 bg-green-50 text-green-800" : "border-red-200 bg-red-50 text-red-800"}`}
           >
-            <AlertDescription
-              className={`${actionStatus === "approved" ? "text-green-800" : "text-red-800"}`}
-            >
-              Application has been {actionStatus}!
-            </AlertDescription>
-          </Alert>
+            Application has been {actionStatus}!
+          </div>
         )}
-
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
             {/* Organization Information */}
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-              <SectionCard
-                title="Organization Information"
-                icon={Building2}
-                isExpanded={expandedSections.organization}
-                onToggle={() => toggleSection("organization")}
-              >
-                {expandedSections.organization && (
-                  <div className="p-6 space-y-4">
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Company Name
-                        </label>
-                        <p className="text-gray-800 font-semibold">
-                          {applicationData.organization.name}
-                        </p>
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium text-gray-600">
-                          Business Type
-                        </Label>
-                        <p className="text-gray-800">
-                          {applicationData.organization.type}
-                        </p>
-                      </div>
-                      <div className="md:col-span-2">
-                        <Label className="text-sm font-medium text-gray-600">
-                          Address
-                        </Label>
-                        <p className="text-gray-800">
-                          {applicationData.organization.address}
-                        </p>
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium text-gray-600">
-                          Phone
-                        </Label>
-                        <p className="text-gray-800">
-                          {applicationData.organization.phone}
-                        </p>
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium text-gray-600">
-                          Email
-                        </Label>
-                        <p className="text-blue-600">
-                          {applicationData.organization.email}
-                        </p>
-                      </div>
-                      <div className="md:col-span-2">
-                        <Label className="text-sm font-medium text-gray-600">
-                          Website
-                        </Label>
-                        <p className="text-blue-600">
-                          {applicationData.organization.website}
-                        </p>
-                      </div>
-                      <div className="md:col-span-2">
-                        <Label className="text-sm font-medium text-gray-600">
-                          Description
-                        </Label>
-                        <p className="text-gray-800">
-                          {applicationData.organization.description}
-                        </p>
-                      </div>
-                    </div>
+            <SectionCard
+              title="Organization Information"
+              icon={Building2}
+              isExpanded={expandedSections.organization}
+              onToggle={() => toggleSection("organization")}
+            >
+              <div className="space-y-4">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm font-medium text-gray-600">
+                      Organization Name
+                    </Label>
+                    <p className="text-gray-800 font-semibold">
+                      {applicationData.applicationData.orgName}
+                    </p>
                   </div>
-                )}
-              </SectionCard>
-            </div>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-gray-600">
+                    Description
+                  </Label>
+                  <p className="text-gray-800">
+                    {applicationData.applicationData.description}
+                  </p>
+                </div>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {applicationData.applicationData.website && (
+                    <div>
+                      <Label className="text-sm font-medium text-gray-600">
+                        Website
+                      </Label>
+                      <a
+                        href={applicationData.applicationData.website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline flex items-center gap-1"
+                      >
+                        <Globe size={14} />
+                        {applicationData.applicationData.website}
+                      </a>
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-4">
+                  {applicationData.applicationData.facebook && (
+                    <a
+                      href={applicationData.applicationData.facebook}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline flex items-center gap-1"
+                    >
+                      <Facebook size={14} />
+                      Facebook
+                    </a>
+                  )}
+                  {applicationData.applicationData.instagram && (
+                    <a
+                      href={applicationData.applicationData.instagram}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-pink-600 hover:underline flex items-center gap-1"
+                    >
+                      <Instagram size={14} />
+                      Instagram
+                    </a>
+                  )}
+                  {applicationData.applicationData.x && (
+                    <a
+                      href={applicationData.applicationData.x}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-gray-800 hover:underline flex items-center gap-1"
+                    >
+                      <Twitter size={14} />X (Twitter)
+                    </a>
+                  )}
+                </div>
+              </div>
+            </SectionCard>
 
             {/* Representative Information */}
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-              <SectionCard
-                title="Representative Information"
-                icon={User}
-                isExpanded={expandedSections.representative}
-                onToggle={() => toggleSection("representative")}
-              >
-                {expandedSections.representative && (
-                  <div className="p-6 space-y-4">
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <Label className="text-sm font-medium text-gray-600">
-                          Full Name
-                        </Label>
-                        <p className="text-gray-800 font-semibold">
-                          {applicationData.representative.name}
-                        </p>
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium text-gray-600">
-                          Position
-                        </Label>
-                        <p className="text-gray-800">
-                          {applicationData.representative.position}
-                        </p>
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium text-gray-600">
-                          Phone
-                        </Label>
-                        <p className="text-gray-800">
-                          {applicationData.representative.phone}
-                        </p>
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium text-gray-600">
-                          Email
-                        </Label>
-                        <p className="text-blue-600">
-                          {applicationData.representative.email}
-                        </p>
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium text-gray-600">
-                          ID Number
-                        </Label>
-                        <p className="text-gray-800">
-                          {applicationData.representative.idNumber}
-                        </p>
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium text-gray-600">
-                          Experience
-                        </Label>
-                        <p className="text-gray-800">
-                          {applicationData.representative.experience}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </SectionCard>
-            </div>
+            <SectionCard
+              title="Representative Information"
+              icon={User}
+              isExpanded={expandedSections.representative}
+              onToggle={() => toggleSection("representative")}
+            >
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium text-gray-600">
+                    Full Name
+                  </Label>
+                  <p className="text-gray-800 font-semibold">
+                    {applicationData.representativeInfo.fullName}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-gray-600">
+                    ID Number
+                  </Label>
+                  <p className="text-gray-800 font-mono">
+                    {applicationData.representativeInfo.idNumber}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-gray-600">
+                    Date of Birth
+                  </Label>
+                  <p className="text-gray-800">
+                    {formatDate(applicationData.representativeInfo.dob) ??
+                      "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-gray-600">
+                    Place of Birth
+                  </Label>
+                  <p className="text-gray-800">
+                    {applicationData.representativeInfo.placeOfOrigin}
+                  </p>
+                </div>
+                <div className="md:col-span-2">
+                  <Label className="text-sm font-medium text-gray-600">
+                    Address
+                  </Label>
+                  <p className="text-gray-800 flex items-center gap-1">
+                    <MapPin size={14} />
+                    {applicationData.representativeInfo.permanentAddress}
+                  </p>
+                </div>
+              </div>
+            </SectionCard>
 
-            {/* Business License */}
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+            {/* Business Information */}
+            {!isEmptyObject(applicationData.businessInfo) && (
               <SectionCard
-                title="Business License"
-                icon={FileText}
-                isExpanded={expandedSections.license}
-                onToggle={() => toggleSection("license")}
-                badge={getStatusBadge(applicationData.businessLicense.status)}
+                title="Business Information"
+                icon={Building2}
+                isExpanded={expandedSections.business}
+                onToggle={() => toggleSection("business")}
               >
-                {expandedSections.license && (
-                  <div className="p-6 space-y-4">
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <Label className="text-sm font-medium text-gray-600">
-                          License Number
-                        </Label>
-                        <p className="text-gray-800 font-mono">
-                          {applicationData.businessLicense.number}
-                        </p>
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium text-gray-600">
-                          Status
-                        </Label>
-                        <div>
-                          {getStatusBadge(
-                            applicationData.businessLicense.status
-                          )}
-                        </div>
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium text-gray-600">
-                          Issue Date
-                        </Label>
-                        <p className="text-gray-800">
-                          {applicationData.businessLicense.issueDate}
-                        </p>
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium text-gray-600">
-                          Expiry Date
-                        </Label>
-                        <p className="text-gray-800">
-                          {applicationData.businessLicense.expiryDate}
-                        </p>
-                      </div>
-                      <div className="md:col-span-2">
-                        <Label className="text-sm font-medium text-gray-600">
-                          Issuing Authority
-                        </Label>
-                        <p className="text-gray-800">
-                          {applicationData.businessLicense.issuingAuthority}
-                        </p>
-                      </div>
-                    </div>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm font-medium text-gray-600">
+                      Legal Name
+                    </Label>
+                    <p className="text-gray-800 font-semibold">
+                      {applicationData.businessInfo?.legalName}
+                    </p>
                   </div>
-                )}
+                  <div>
+                    <Label className="text-sm font-medium text-gray-600">
+                      Business Type
+                    </Label>
+                    <p className="text-gray-800">
+                      {applicationData.businessInfo?.typeOfBusiness}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium text-gray-600">
+                      Tax Code
+                    </Label>
+                    <p className="text-gray-800 font-mono flex items-center gap-1">
+                      <Hash size={14} />
+                      {applicationData.businessInfo?.taxCode}
+                    </p>
+                  </div>
+                  {applicationData.businessInfo?.dateOfIssue && (
+                    <div>
+                      <Label className="text-sm font-medium text-gray-600">
+                        Issue Date
+                      </Label>
+                      <p className="text-gray-800">
+                        {formatDate(
+                          applicationData.businessInfo?.dateOfIssue
+                        ) ?? "N/A"}
+                      </p>
+                    </div>
+                  )}
+                  <div className="md:col-span-2">
+                    <Label className="text-sm font-medium text-gray-600">
+                      Business Address
+                    </Label>
+                    <p className="text-gray-800 flex items-center gap-1">
+                      <MapPin size={14} />
+                      {applicationData.businessInfo?.address}
+                    </p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label className="text-sm font-medium text-gray-600">
+                      Place of Issue
+                    </Label>
+                    <p className="text-gray-800">
+                      {applicationData.businessInfo?.placeOfIssue}
+                    </p>
+                  </div>
+                </div>
               </SectionCard>
-            </div>
+            )}
 
-            {/* Event Permit */}
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+            {/* Event Permit Information */}
+            {!isEmptyObject(applicationData.eventPermitInfo) && (
               <SectionCard
-                title="Event Permit"
+                title="Event Permit Information"
                 icon={Calendar}
                 isExpanded={expandedSections.permit}
                 onToggle={() => toggleSection("permit")}
-                badge={getStatusBadge(applicationData.eventPermit.status)}
               >
-                {expandedSections.permit && (
-                  <div className="p-6 space-y-4">
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <Label className="text-sm font-medium text-gray-600">
-                          Permit Number
-                        </Label>
-                        <p className="text-gray-800 font-mono">
-                          {applicationData.eventPermit.number}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Status
-                        </label>
-                        <div>
-                          {getStatusBadge(applicationData.eventPermit.status)}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Issue Date
-                        </label>
-                        <p className="text-gray-800">
-                          {applicationData.eventPermit.issueDate}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Expiry Date
-                        </label>
-                        <p className="text-gray-800">
-                          {applicationData.eventPermit.expiryDate}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Max Capacity
-                        </label>
-                        <p className="text-gray-800">
-                          {applicationData.eventPermit.maxCapacity}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Event Types
-                        </label>
-                        <div className="flex flex-wrap gap-2 mt-1">
-                          {applicationData.eventPermit.eventTypes.map(
-                            (type, index) => (
-                              <span
-                                key={index}
-                                className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
-                              >
-                                {type}
-                              </span>
-                            )
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm font-medium text-gray-600">
+                      Permit Number
+                    </Label>
+                    <p className="text-gray-800 font-mono">
+                      {applicationData.eventPermitInfo?.permitNumber}
+                    </p>
                   </div>
-                )}
+                  <div>
+                    <Label className="text-sm font-medium text-gray-600">
+                      Issue Date
+                    </Label>
+                    <p className="text-gray-800">
+                      {formatDate(applicationData.eventPermitInfo?.issueDate) ??
+                        "N/A"}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium text-gray-600">
+                      Issuse Date
+                    </Label>
+                    <p className="text-gray-800">
+                      {formatDate(applicationData.eventPermitInfo?.issueDate) ??
+                        "N/A"}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium text-gray-600">
+                      Issused By
+                    </Label>
+                    <p className="text-gray-800">
+                      {applicationData.eventPermitInfo?.issuedBy} people
+                    </p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label className="text-sm font-medium text-gray-600">
+                      Event Location
+                    </Label>
+                    <p className="text-gray-800 flex items-center gap-1">
+                      <MapPin size={14} />
+                      {applicationData.eventPermitInfo?.location}
+                    </p>
+                  </div>
+                </div>
               </SectionCard>
-            </div>
+            )}
 
             {/* Documents */}
             <SectionCard
               title="Uploaded Documents"
               icon={FileText}
-              count={applicationData.documents.length}
+              count={applicationData.documents?.length}
               isExpanded={expandedSections.documents}
               onToggle={() => toggleSection("documents")}
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {applicationData.documents.map((doc, index) => (
-                  <DocumentItem key={index} doc={doc} />
+                {applicationData.documents?.map((doc, index) => (
+                  <DocumentItem
+                    key={index}
+                    doc={{
+                      documentType: doc.documentType,
+                      documentName: doc.documentName,
+                      fileUrl: doc.fileUrl,
+                    }}
+                  />
                 ))}
               </div>
             </SectionCard>
@@ -519,57 +459,64 @@ const EventOrganizerAdmin = () => {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Moderation Status */}
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-              <SectionCard
-                title="Moderation Status"
-                icon={Shield}
-                isExpanded={expandedSections.moderation}
-                onToggle={() => toggleSection("moderation")}
-              >
-                {expandedSections.moderation && (
-                  <div className="p-6 space-y-4">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-600">
-                          Risk Level
-                        </span>
-                        {getStatusBadge(applicationData.moderation.riskLevel)}
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-600">
-                          Background Check
-                        </span>
-                        {getStatusBadge(
-                          applicationData.moderation.backgroundCheck
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-600">
-                          Previous Violations
-                        </span>
-                        <span className="font-semibold text-green-600">
-                          {applicationData.moderation.previousViolations}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-600">
-                          Credit Score
-                        </span>
-                        {getStatusBadge(applicationData.moderation.creditScore)}
-                      </div>
-                    </div>
-                    <div className="pt-4 border-t">
-                      <label className="text-sm font-medium text-gray-600">
-                        Review Notes
-                      </label>
-                      <p className="text-sm text-gray-800 mt-1">
-                        {applicationData.moderation.reviewNotes}
-                      </p>
-                    </div>
+            <SectionCard
+              title="Moderation Status"
+              icon={Shield}
+              isExpanded={expandedSections.moderation}
+              onToggle={() => toggleSection("moderation")}
+            >
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-sm font-medium text-gray-600">
+                    Requires Admin Approval
+                  </Label>
+                  <p className="text-sm text-gray-800 mt-1">
+                    {applicationData.moderation.requiresAdminApproval
+                      ? "Yes"
+                      : "No"}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-gray-600">
+                    Rejection Count
+                  </Label>
+                  <p className="text-sm text-gray-800 mt-1">
+                    {applicationData.moderation.rejectCount}
+                  </p>
+                </div>
+                {applicationData.moderation.rejectionReason && (
+                  <div>
+                    <Label className="text-sm font-medium text-gray-600">
+                      Last Rejection Reason
+                    </Label>
+                    <p className="text-sm text-gray-800 mt-1">
+                      {applicationData.moderation.rejectionReason}
+                    </p>
                   </div>
                 )}
-              </SectionCard>
-            </div>
+                {applicationData.moderation.reviewedBy && (
+                  <div>
+                    <Label className="text-sm font-medium text-gray-600">
+                      Reviewed By
+                    </Label>
+                    <p className="text-sm text-gray-800 mt-1">
+                      {applicationData.moderation.reviewedBy.toLocaleUpperCase()}
+                    </p>
+                  </div>
+                )}
+                {applicationData.moderation.reviewedAt && (
+                  <div>
+                    <Label className="text-sm font-medium text-gray-600">
+                      Reviewed At
+                    </Label>
+                    <p className="text-sm text-gray-800 mt-1">
+                      {formatDate(applicationData.moderation.reviewedAt) ??
+                        "N/A"}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </SectionCard>
 
             {/* Action Buttons */}
             <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
@@ -578,7 +525,7 @@ const EventOrganizerAdmin = () => {
                 Admin Actions
               </h3>
 
-              {!showRejectForm ? (
+              {!showRejectForm && !showBanForm ? (
                 <div className="space-y-3">
                   <Button
                     onClick={handleApprove}
@@ -587,6 +534,19 @@ const EventOrganizerAdmin = () => {
                     <CheckCircle size={18} />
                     Approve Application
                   </Button>
+
+                  <Button
+                    onClick={isBlocked ? handleUnlock : handleLock}
+                    className={
+                      isBlocked
+                        ? "w-full bg-gradient-to-r from-blue-500 to-blue-500 hover:from-blue-600 hover:to-blue-600 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-l"
+                        : "w-full bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-lg"
+                    }
+                  >
+                    <Lock size={18} />
+                    {isBlocked ? "Unlock" : "Lock"}
+                  </Button>
+
                   <Button
                     onClick={() => setShowRejectForm(true)}
                     className="w-full bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-lg"
@@ -594,14 +554,21 @@ const EventOrganizerAdmin = () => {
                     <XCircle size={18} />
                     Reject Application
                   </Button>
+                  <Button
+                    onClick={() => setShowBanForm(true)}
+                    className="w-full bg-red-700 hover:bg-red-800 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-lg"
+                  >
+                    <Shield size={18} />
+                    Ban Permanently
+                  </Button>
                 </div>
-              ) : (
+              ) : showRejectForm ? (
                 <div className="space-y-4">
                   <div>
                     <Label className="block text-sm font-medium text-gray-700 mb-2">
                       Rejection Reason <span className="text-red-500">*</span>
                     </Label>
-                    <Textarea
+                    <textarea
                       value={rejectionReason}
                       onChange={(e) => setRejectionReason(e.target.value)}
                       placeholder="Please provide a detailed reason for rejection..."
@@ -613,44 +580,56 @@ const EventOrganizerAdmin = () => {
                     <Button
                       onClick={handleReject}
                       disabled={!rejectionReason.trim()}
-                      className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:cursor-not-allowed"
+                      className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white font-semibold py-2 px-4 rounded-lg"
                     >
                       Confirm Reject
                     </Button>
                     <Button
+                      onClick={() => setShowRejectForm(false)}
+                      className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <Label className="block text-sm font-medium text-gray-700 mb-2">
+                      Permanent Ban Reason{" "}
+                      <span className="text-red-500">*</span>
+                    </Label>
+                    <textarea
+                      value={banReason}
+                      onChange={(e) => setBanReason(e.target.value)}
+                      placeholder="This action is irreversible. Clearly state the reason for the permanent ban..."
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-700 focus:border-red-700 resize-none"
+                      rows={4}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
                       onClick={() => {
-                        setShowRejectForm(false);
-                        setRejectionReason("");
+                        if (banReason.trim()) {
+                          alert("User banned permanently");
+                          setShowBanForm(false);
+                          setBanReason("");
+                        }
                       }}
-                      className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                      disabled={!banReason.trim()}
+                      className="flex-1 bg-red-800 hover:bg-red-900 disabled:bg-gray-400 text-white font-semibold py-2 px-4 rounded-lg"
+                    >
+                      Confirm Ban
+                    </Button>
+                    <Button
+                      onClick={() => setShowBanForm(false)}
+                      className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg"
                     >
                       Cancel
                     </Button>
                   </div>
                 </div>
               )}
-            </div>
-
-            {/* Quick Stats */}
-            <div className="bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-xl shadow-lg p-6">
-              <h3 className="font-semibold mb-4 flex items-center gap-2">
-                <Star size={18} />
-                Application Summary
-              </h3>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-blue-100">Documents Verified:</span>
-                  <span className="font-semibold">4/5</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-blue-100">Risk Assessment:</span>
-                  <span className="font-semibold">Low Risk</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-blue-100">Processing Time:</span>
-                  <span className="font-semibold">7 days</span>
-                </div>
-              </div>
             </div>
           </div>
         </div>

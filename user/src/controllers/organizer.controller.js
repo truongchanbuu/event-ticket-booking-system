@@ -115,7 +115,9 @@ export default class UserController {
 
     async getApplicationByID(req, res) {
         const appID = req.params.applicationID;
-        const application = this.organizerService.getApplicationByAppID(appID);
+        const application =
+            await this.organizerService.getApplicationByAppID(appID);
+
         return res.status(200).json({ sucess: true, data: application });
     }
 
@@ -136,7 +138,7 @@ export default class UserController {
     async deleteApplication(req, res) {
         const force = req.query.force;
         const appID = req.params.applicationID;
-        const reason = req.body.reason;
+        const reason = req.body?.reason;
 
         if (force) {
             await this.organizerService.deleteApplication(appID);
@@ -172,6 +174,8 @@ export default class UserController {
     async getMyApplicationDetail(req, res) {
         const appID = req.params.applicationID;
         const app = await this.organizerService.getApplicationByID(appID);
+
+        console.log(`appid ${appID} - app: ${JSON.stringify(app)}`);
 
         if (app.userID !== uid) {
             return res.status(403).json({
@@ -261,7 +265,11 @@ export default class UserController {
 
     async checkApplication(req, res) {
         const appID = req.params.applicationID;
-        const { status, reviewedBy, rejectionReason } = req.body;
+        const status = req.params.status;
+
+        console.log(`appID: ${appID} - ${status}`);
+
+        const { reviewedBy, rejectionReason } = req.body;
 
         const application =
             await this.organizerService.getApplicationByAppID(appID);
@@ -270,6 +278,13 @@ export default class UserController {
             return res
                 .status(404)
                 .json({ success: false, message: "There is no application" });
+        }
+
+        if (application.status === APPLY_STATUS.PROCESSING) {
+            return res.status(400).json({
+                success: false,
+                message: "Your application is being processing. Please wait.",
+            });
         }
 
         await this.organizerService.updateApplicationStatus(
@@ -295,20 +310,7 @@ export default class UserController {
             }).catch((e) => console.error("failed to send role changed: ", e));
         }
 
-        const eventType =
-            status === APPLY_STATUS.APPROVED
-                ? EVENT_TYPES.APPLICATION_APPROVED
-                : EVENT_TYPES.APPLICATION_REJECTED;
-
-        sendAppStatusChanged(
-            {
-                ...application,
-                status,
-                reviewedBy,
-                rejectionReason,
-            },
-            eventType,
-        ).catch((e) => console.error("send application changed failed: ", e));
+        // TODO: Nên thêm 1 hàm send email + thông báo (notification-serivce)
 
         return res.status(200).json({
             success: true,

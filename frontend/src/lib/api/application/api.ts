@@ -1,4 +1,6 @@
+import { ApplicationsApiResponse, Application } from "@/schema";
 import { fetchAPI } from "../base";
+import { boolean } from "zod";
 
 async function fetchApplications<T>(
   path: string,
@@ -7,7 +9,9 @@ async function fetchApplications<T>(
   return fetchAPI<T>(`${path}`, options);
 }
 
-export async function fetchAllApplications(options = {}) {
+export async function fetchAllApplications(
+  options = {}
+): Promise<ApplicationsApiResponse> {
   const params = new URLSearchParams();
 
   Object.entries(options).forEach(([key, value]) => {
@@ -19,10 +23,58 @@ export async function fetchAllApplications(options = {}) {
   return await fetchApplications(`/organizers/applications?${params}`);
 }
 
-export async function approveApplication() {}
+// Edit Application
+export async function setEditingApplication(applicationId: string) {
+  return fetchAPI(`/organizers/applications/${applicationId}/editing`, {
+    method: "PATCH",
+  });
+}
 
-export async function rejectApplication() {}
+// ✅ Approve Application
+export async function approveApplication(applicationId: string) {
+  return fetchAPI(`/organizers/applications/${applicationId}/approve`, {
+    method: "PATCH",
+  });
+}
 
-export async function permanentRejectApplication() {}
+// ✅ Reject Application (tạm thời)
+export async function rejectApplication(
+  applicationId: string,
+  reason?: string
+) {
+  return fetchAPI(`/organizers/applications/${applicationId}/reject`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason }),
+  });
+}
 
-export async function markApplicationProcessing() {}
+// ✅ Reject vĩnh viễn
+export async function permanentRejectApplication(
+  applicationId: string,
+  reason?: string
+) {
+  return fetchAPI(
+    `/organizers/applications/${applicationId}/permanent-reject`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason }),
+    }
+  );
+}
+
+// ✅ Mark as Processing
+export async function markApplicationProcessing(applicationId: string) {
+  return fetchAPI(`/organizers/applications/${applicationId}/processing`, {
+    method: "PATCH",
+  });
+}
+
+export async function fetchApplicationById(appId: string): Promise<any> {
+  return await fetchApplications(`/organizers/applications/${appId}`);
+}
+
+export async function getLastApplication(): Promise<any> {
+  return await fetchApplications("/me/applications");
+}

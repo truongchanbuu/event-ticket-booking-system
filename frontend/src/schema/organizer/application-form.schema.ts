@@ -36,22 +36,22 @@ export const createApplyOrganizerStep2Schema = (
             "Business license is required."
           )
         : OptionalFileSchema,
-    eventLicense: OptionalFileSchema,
+    // eventLicense: OptionalFileSchema,
   });
 };
 
 // === STEP 3: FACTORY FUNCTION CHO SCHEMA XÁC NHẬN ===
 export const createApplyOrganizerStep3Schema = (
-  organizationType: OrganizerType,
-  hasEventLicense: boolean
+  organizationType: OrganizerType
+  // hasEventLicense: boolean
 ) => {
   let schema = ExtractedIdCardSchema;
   if (organizationType === "business") {
     schema = schema.merge(ExtractedBusinessLicenseSchema);
   }
-  if (hasEventLicense) {
-    schema = schema.merge(ExtractedEventPermitSchema);
-  }
+  // if (hasEventLicense) {
+  //   schema = schema.merge(ExtractedEventPermitSchema);
+  // }
   return schema;
 };
 
@@ -71,19 +71,18 @@ const BusinessApplicationSchema = ApplyOrganizerStep1Schema.merge(
   .extend({ type: z.literal("business") }); // Ghi đè type
 
 // 3. Sử dụng discriminatedUnion với các schema đã được xây dựng hoàn chỉnh
-export const ApplyOrganizerFormSchema = z
-  .discriminatedUnion("type", [
-    PersonalApplicationSchema,
-    BusinessApplicationSchema,
-  ])
-  .superRefine((data, ctx) => {
-    if (data.eventLicense) {
-      const result = ExtractedEventPermitSchema.safeParse(data);
-      if (!result.success) {
-        result.error.issues.forEach((issue) => ctx.addIssue(issue));
-      }
-    }
-  });
+export const ApplyOrganizerFormSchema = z.discriminatedUnion("type", [
+  PersonalApplicationSchema,
+  BusinessApplicationSchema,
+]);
+// .superRefine((data, ctx) => {
+//   if (data.eventLicense) {
+//     const result = ExtractedEventPermitSchema.safeParse(data);
+//     if (!result.success) {
+//       result.error.issues.forEach((issue) => ctx.addIssue(issue));
+//     }
+//   }
+// });
 
 export type ApplyOrganizerStep1Data = z.infer<typeof ApplyOrganizerStep1Schema>;
 

@@ -10,7 +10,7 @@ export function ClientProviders({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <UserManagementProvider>
-        <TooltipProvider>
+        <TooltipProvider delayDuration={200}>
           <Toaster />
           {children}
         </TooltipProvider>

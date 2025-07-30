@@ -433,9 +433,9 @@ export default class OrganizerService {
         };
     }
 
-    async updateApplication(applicationID, updateData, isAdmin = false) {
+    async updateApplication(batch, applicationID, updateData, isAdmin = false) {
         const docRef = this.orgCollection.doc(applicationID);
-        const existingApp = this.getApplicationByAppID(applicationID);
+        const existingApp = await this.getApplicationByAppID(applicationID);
 
         const blockedStatuses = [
             APPLY_STATUS.APPROVED,
@@ -499,7 +499,7 @@ export default class OrganizerService {
             }
         }
 
-        await docRef.set(mergedData, { merge: true });
+        batch.set(docRef, mergedData, { merge: true });
 
         this.logger?.log(
             `[Cache Invalidate] Deleting caches for app ${applicationID} and user ${existingApp.userID}`,
@@ -509,14 +509,11 @@ export default class OrganizerService {
             this._getUserAppsCacheKey(existingApp.userID, {}),
         ]);
 
-        return {
-            success: true,
-            message: "Application updated successfully",
-            application: mergedData,
-        };
+        return mergedData;
     }
 
     async updateApplicationStatus(
+        batch,
         applicationID,
         status,
         userID,
@@ -526,14 +523,14 @@ export default class OrganizerService {
         const updateData = {
             status,
             updatedAt: new Date().toISOString(),
-            ...(reviewedBy && {
-                reviewedBy,
-                reviewedAt: new Date().toISOString(),
-            }),
-            ...(rejectionReason && { rejectionReason }),
         };
-
-        await this.orgCollection.doc(applicationID).update(updateData);
+        if (reviewedBy) {
+            updateData.reviewedBy = reviewedBy;
+            updateData.reviewedAt = new Date().toISOString();
+        }
+        if (rejectionReason) {
+            updateData.rejectionReason = rejectionReason;
+        }
 
         const application = await this.getApplicationByAppID(applicationID);
         if (application.userID !== userID) {
@@ -544,6 +541,11 @@ export default class OrganizerService {
             });
         }
 
+        const appRef = this.orgCollection.doc(applicationID);
+        const userRef = this.userCollection.doc(userID);
+
+        batch.update(appRef, updateData);
+
         const userOrganizerStatus =
             {
                 [APPLY_STATUS.APPROVED]: ORGANIZER_STATUS.APPROVED,
@@ -552,7 +554,7 @@ export default class OrganizerService {
                 [APPLY_STATUS.CANCELLED]: ORGANIZER_STATUS.NONE,
             }[status] || ORGANIZER_STATUS.PENDING;
 
-        await this.userCollection.doc(userID).update({
+        batch.update(userRef, {
             organizerStatus: userOrganizerStatus,
             updatedAt: new Date().toISOString(),
         });
@@ -561,18 +563,15 @@ export default class OrganizerService {
             this._getAppCacheKey(applicationID),
             this._getUserAppsCacheKey(userID, {}),
         ]);
+
         this.logger?.log(
             `[Cache Invalidate] Deleting caches for app ${applicationID} and user ${userID}`,
         );
-
-        return { success: true, applicationID, status };
     }
 
     async deleteApplication(applicationID) {
-        // [CACHE] Đọc dữ liệu từ cache/DB trước để lấy userID
         const appToDelete = await this.getApplicationByAppID(applicationID);
 
-        // Nếu không có đơn hoặc không có userID, không cần làm gì thêm
         if (!appToDelete || !appToDelete.userID) {
             this.logger?.warn(
                 `[deleteApplication] Application ${applicationID} not found or has no userID. Nothing to delete or invalidate.`,

@@ -84,7 +84,7 @@ export default function UserMenu({
 
           {effectiveRole !== ROLE.GUEST && (
             <Link
-              href="/profile/applications"
+              href="/profile/application"
               className={dropdownItemCls(variant)}
               onClick={closeMenu}
             >

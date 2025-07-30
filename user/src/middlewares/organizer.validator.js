@@ -117,26 +117,27 @@ export default class OrganizerValidator extends BaseValidator {
                 .notEmpty()
                 .withMessage("Business address is required."),
 
-            // --- 5. Validate 'documentUrls' object ---
-            body("documentUrls")
-                .isObject()
-                .withMessage("documentUrls must be an object."),
-            body("documentUrls.identityCardFront")
+            // --- 5. Validate 'documents' object ---
+            body("documents")
+                .isArray({ min: 1 })
+                .withMessage("Documents must be a non-empty array."),
+            body("documents.*.documentName")
+                .isString()
+                .withMessage("documentName must be a string.")
+                .notEmpty()
+                .withMessage("documentName is required."),
+            body("documents.*.documentType")
+                .isString()
+                .withMessage("documentType must be a string.")
+                .notEmpty()
+                .withMessage("documentType is required."),
+            body("documents.*.fileUrl")
+                .isString()
+                .withMessage("fileUrl must be a string.")
+                .notEmpty()
+                .withMessage("fileUrl is required.")
                 .isURL()
-                .withMessage(
-                    "Front side ID card URL is required and must be valid.",
-                ),
-            body("documentUrls.identityCardBack")
-                .isURL()
-                .withMessage(
-                    "Back side ID card URL is required and must be valid.",
-                ),
-            body("documentUrls.businessLicense")
-                .if(body("applyType").equals("business"))
-                .isURL()
-                .withMessage(
-                    "Business license URL is required for business applications.",
-                ),
+                .withMessage("fileUrl must be a valid URL."),
 
             // --- 6. Validate 'eventPermitInfo' (CONDITIONAL: only if object is not empty) ---
             body("eventPermitInfo.eventName")

@@ -23,3 +23,10 @@ export function cleanEmptyFields(obj: Record<string, any>) {
     Object.entries(obj).filter(([_, value]) => value !== "" && value !== null)
   );
 }
+
+export function isEmptyObject(
+  obj: Record<string, any> | undefined | null
+): boolean {
+  if (!obj || typeof obj !== "object") return true;
+  return Object.values(obj).every((value) => value == null || value === "");
+}

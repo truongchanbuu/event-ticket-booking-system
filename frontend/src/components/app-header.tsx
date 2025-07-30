@@ -220,6 +220,19 @@ export default function AppHeader({
             </Link>
           )}
 
+          {effectiveRole !== ROLE.GUEST && (
+            <Link
+              href="/profile/application"
+              className={dropdownItemCls(variant)}
+              onClick={closeMenus}
+            >
+              <div className="flex items-center space-x-2">
+                <FileText className="w-4 h-4" />
+                <span>Applications</span>
+              </div>
+            </Link>
+          )}
+
           {effectiveRole === ROLE.ADMIN && (
             <>
               <Link

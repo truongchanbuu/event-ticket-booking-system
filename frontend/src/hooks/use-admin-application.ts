@@ -8,6 +8,8 @@ import {
 } from "@/lib/api/application/api";
 import { APPLICATION_QUERY_KEYS } from "@/constants/applications";
 import { useToast } from "./use-toast";
+import { ApplicationsApiResponse } from "@/schema";
+import { useEffect } from "react";
 
 export function useAdminApplication(params?: {
   sortBy?: string;
@@ -22,10 +24,24 @@ export function useAdminApplication(params?: {
   const queryKey = APPLICATION_QUERY_KEYS.adminApplications(params);
 
   // 📥 Fetch all applications
-  const applicationsQuery = useQuery({
+  const applicationsQuery = useQuery<ApplicationsApiResponse>({
     queryKey: queryKey,
     queryFn: () => fetchAllApplications(params),
   });
+
+  useEffect(() => {
+    if (applicationsQuery.isSuccess) {
+      toast({ variant: "success", title: "Loaded application" });
+
+      const result = applicationsQuery.data;
+      result.data.forEach((app) => {
+        queryClient.setQueryData(
+          APPLICATION_QUERY_KEYS.applicationDetail(app.applicationID),
+          app
+        );
+      });
+    }
+  }, [applicationsQuery.isSuccess]);
 
   // ✅ Approve
   const approve = useMutation({

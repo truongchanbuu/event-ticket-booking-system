@@ -58,15 +58,16 @@ export default class OrganizerRoutes {
             this.organizerController.deleteApplication,
         );
 
-        this.router.get(
-            "/:orgID",
-            this.organizerController.getOrganizerProfile,
-        );
         this.router.patch(
-            "/:applicationID/status",
+            "/applications/:applicationID/:status",
             verifyToken,
             checkAdmin,
             this.organizerController.checkApplication,
+        );
+
+        this.router.get(
+            "/:orgID",
+            this.organizerController.getOrganizerProfile,
         );
 
         this.router.get(

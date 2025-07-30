@@ -43,11 +43,11 @@ export const Step2FormDocuments = () => {
           </motion.div>
         )}
 
-        <ControlledDocumentUploader
+        {/* <ControlledDocumentUploader
           name="eventLicense"
           label="Event Organization Permit (Optional)"
           required={false}
-        />
+        /> */}
       </div>
     </FormSection>
   );
