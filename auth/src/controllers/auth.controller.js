@@ -1,11 +1,11 @@
 import { admin, catchAsync, ROLE } from "@event_ticket_booking_system/shared";
 import REVOKE_REASON from "../enums/revoke_reason.enum.js";
-import { sendUserDeleted } from "../kafka/auth.event.js";
-import config from "../config/index.js";
+// import { sendUserDeleted } from "../kafka/auth.event.js";
 import { COOKIE_NAME, SESSION_EXPIRE_MS } from "../config/constants.js";
 
-export default class AuthController {
-    constructor({ authService }) {
+export class AuthController {
+    constructor({ authService, config }) {
+        this.config = config;
         this.authService = authService;
 
         this.verifyToken = catchAsync(this.verifyToken.bind(this));
@@ -92,9 +92,9 @@ export default class AuthController {
                 .json({ success: false, message: "failed to delete user" });
         }
 
-        sendUserDeleted({ userID: uid }).catch((err) => {
-            console.error("Kafka sendUserDeleted error:", err);
-        });
+        // sendUserDeleted({ userID: uid }).catch((err) => {
+        //     console.error("Kafka sendUserDeleted error:", err);
+        // });
         return res.status(200).json({ success: true, data: deletedUID });
     }
 
@@ -109,7 +109,7 @@ export default class AuthController {
             name: "session",
             value: "",
             httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
+            secure: this.config.app.node_env === "production",
             path: "/",
             maxAge: 0,
         });
@@ -139,7 +139,7 @@ export default class AuthController {
             res.cookie(COOKIE_NAME || "__session", sessionCookie, {
                 maxAge: SESSION_EXPIRE_MS,
                 httpOnly: true,
-                secure: config.node_env === "production",
+                secure: this.config.app.node_env === "production",
                 path: "/",
                 sameSite: "lax",
             });

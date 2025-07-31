@@ -1,5 +1,4 @@
 import config from './config/index.js';
-import rootLogger from '@event_ticket_booking_system/shared/logger';
 import { createContainer, asValue, asFunction } from 'awilix';
 import { loadNotificationConfig } from './utils/config.loader';
 import createSmsService from './services/sms.service';

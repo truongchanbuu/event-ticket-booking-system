@@ -1,5 +1,6 @@
 import { Kafka } from "kafkajs";
-import rootLogger, {
+import {
+  rootLogger,
   createChildLogger,
   toPinoLogLevel,
 } from "../logger/index.js";

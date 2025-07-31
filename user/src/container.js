@@ -1,6 +1,5 @@
 import { createContainer, asValue, asClass, asFunction } from "awilix";
 
-import rootLogger from "@event_ticket_booking_system/shared/logger/index.js";
 import config from "./config/index.js";
 
 import { createKafkaService } from "./services/kafka.service.js";
@@ -20,6 +19,7 @@ import { ProfileRoutes } from "./routes/profile.routes.js";
 import {
     createRedisClient,
     RedisService,
+    rootLogger,
 } from "@event_ticket_booking_system/shared";
 
 /**
@@ -43,13 +43,13 @@ export async function configureContainer() {
 
         // Services (thường là singleton)
         redisService: asClass(RedisService).singleton(),
-        userService: asClass(UserService).singleton(), // <--- Sửa thành singleton
-        organizerService: asClass(OrganizerService).singleton(), // <--- Sửa thành singleton
-        applicationEventService: asClass(ApplicationEventService).singleton(), // Dùng asClass nếu constructor của nó DI-friendly
+        userService: asClass(UserService).singleton(),
+        organizerService: asClass(OrganizerService).singleton(),
+        applicationEventService: asClass(ApplicationEventService).singleton(),
 
         // Controllers (luôn là scoped)
-        userController: asClass(UserController).scoped(), // <--- Sửa thành scoped
-        organizerController: asClass(OrganizerController).scoped(), // <--- Sửa thành scoped
+        userController: asClass(UserController).scoped(),
+        organizerController: asClass(OrganizerController).scoped(),
 
         // Routes (luôn là singleton)
         userRoutes: asClass(UserRoutes).singleton(),

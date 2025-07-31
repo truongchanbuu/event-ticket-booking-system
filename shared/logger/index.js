@@ -22,7 +22,7 @@ const developmentTransport = {
  * - Trong production, nó sẽ xuất ra định dạng JSON hiệu suất cao.
  * - Trong development, nó sẽ dùng pino-pretty để hiển thị đẹp mắt.
  */
-const rootLogger = pino({
+export const rootLogger = pino({
   // Đặt tên cho dịch vụ, lấy từ biến môi trường hoặc đặt mặc định.
   name: process.env.SERVICE_NAME || "my-app",
 
@@ -38,10 +38,6 @@ const rootLogger = pino({
   transport:
     process.env.NODE_ENV === "production" ? undefined : developmentTransport,
 });
-
-// Xuất logger gốc để sử dụng cho các log chung của ứng dụng
-// (ví dụ: log khi khởi động, kết nối DB,...)
-export default rootLogger;
 
 // === STEP 2: Hàm tạo Child Logger ===
 

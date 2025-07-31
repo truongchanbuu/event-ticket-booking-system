@@ -8,11 +8,8 @@ export class ApiRoutes {
      * @param {UserRoutes} dependencies.userRoutes - Instance của UserRoutes.
      * @param {OrganizerRoutes} dependencies.organizerRoutes - Instance của OrganizerRoutes.
      */
-    constructor({ profileRoutes, userRoutes, organizerRoutes }) {
+    constructor({ authRoutes }) {
         this.router = express.Router();
-
-        this.router.use("/me", profileRoutes.router);
-        this.router.use("/users", userRoutes.router);
-        this.router.use("/organizers", organizerRoutes.router);
+        this.router.use("/auth", authRoutes.router);
     }
 }

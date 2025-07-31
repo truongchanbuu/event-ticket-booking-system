@@ -1,42 +1,44 @@
-import createApp from "./app.js";
-import { ENV } from "./config/env.js";
-import kafkaService from "./services/kafka.service.js";
+import { createApp } from "./app.js";
+import { configureContainer } from "./container.js";
 
 let server;
 
 async function bootstrap() {
     try {
+        const container = await configureContainer();
+
+        const config = container.resolve("config");
+        const rootLogger = container.resolve("logger");
+
         // Initialize Kafka
-        console.log("🔌 Initializing Kafka connection...");
-        await kafkaService.initialize();
-        console.log("✅ Kafka connection established");
+        const kafkaService = container.resolve("kafkaService");
 
         // Create and start the app
-        const app = await createApp();
-        const PORT = ENV.PORT || 3000;
+        const app = createApp({ container, config, rootLogger });
+        const PORT = config.app.port;
 
         server = app.listen(PORT, () => {
-            console.log(`🚀 User service running on port ${PORT}`);
-            console.log(`📊 Environment: ${ENV.NODE_ENV}`);
+            rootLogger.debug(`🚀 Auth service running on port ${PORT}`);
+            rootLogger.debug(`📊 Environment: ${config.node_env}`);
         });
 
         // Graceful shutdown handling
         const gracefulShutdown = async (signal) => {
-            console.log(
+            rootLogger.debug(
                 `\n🛑 Received ${signal}. Starting graceful shutdown...`,
             );
 
             if (server) {
                 server.close(() => {
-                    console.log("✅ HTTP server closed");
+                    rootLogger.debug("✅ HTTP server closed");
                 });
             }
 
             try {
                 await kafkaService.disconnect();
-                console.log("✅ Kafka connections closed");
+                rootLogger.debug("✅ Kafka connections closed");
             } catch (error) {
-                console.error("❌ Error closing Kafka connections:", error);
+                rootLogger.error("❌ Error closing Kafka connections:", error);
             }
 
             process.exit(0);
@@ -46,12 +48,9 @@ async function bootstrap() {
         process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
         process.on("SIGINT", () => gracefulShutdown("SIGINT"));
     } catch (error) {
-        console.error("❌ Failed to start the auth service:", error);
+        console.error("❌ Failed to start the Auth service:", error);
         process.exit(1);
     }
 }
 
-bootstrap().catch((e) => {
-    console.error("❌ Failed to start the auth service", e);
-    process.exit(1);
-});
+bootstrap();

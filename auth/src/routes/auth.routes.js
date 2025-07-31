@@ -6,7 +6,7 @@ import {
     checkOwnerOrAdmin,
 } from "@event_ticket_booking_system/shared";
 
-export default class AuthRoutes {
+export class AuthRoutes {
     constructor({ authController }) {
         this.router = express.Router();
         this.authController = authController;
@@ -60,9 +60,5 @@ export default class AuthRoutes {
             AuthValidator.handleValidationErrors,
             this.authController.setClaims,
         );
-    }
-
-    get authRouter() {
-        return this.router;
     }
 }

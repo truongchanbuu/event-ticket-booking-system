@@ -14,7 +14,7 @@ async function bootstrap() {
         const kafkaService = container.resolve("kafkaService");
 
         // Create and start the app
-        const app = createApp({ container });
+        const app = createApp({ container, config, rootLogger });
         const PORT = config.app.port;
 
         server = app.listen(PORT, () => {

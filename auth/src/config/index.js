@@ -1,6 +1,10 @@
 import "dotenv/config";
 export default {
-    node_env: process.env.NODE_ENV,
+    app: {
+        port: process.env.PORT,
+        node_env: process.env.NODE_ENV,
+    },
+
     redis: {
         prefix: process.env.REDIS_PREFIX || "app",
         defaultTTL: process.env.REDIS_TTL || 300,

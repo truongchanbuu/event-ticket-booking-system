@@ -1,8 +1,7 @@
 import admin from "firebase-admin";
 import REVOKE_REASON from "../enums/revoke_reason.enum.js";
-import { sendTokenRevoked } from "../kafka/auth.event.js";
 
-export default class AuthService {
+export class AuthService {
     constructor({ logger }) {
         this.logger = logger;
     }
@@ -10,12 +9,12 @@ export default class AuthService {
     async revokeToken(uid, reason = REVOKE_REASON.SYSTEM, actor = {}) {
         try {
             await admin.auth().revokeRefreshTokens(uid);
-            await sendTokenRevoked({
-                uid,
-                actor,
-                reason,
-                timestamp: new Date().toISOString(),
-            });
+            // await sendTokenRevoked({
+            //     uid,
+            //     actor,
+            //     reason,
+            //     timestamp: new Date().toISOString(),
+            // });
         } catch (e) {
             this.logger.error("Failed to revoke token:", e);
             throw e;
