@@ -3,7 +3,7 @@ import OrganizerValidator from "../middlewares/organizer.validator.js";
 import UserValidator from "../middlewares/user.validator.js";
 import { verifyToken } from "@event_ticket_booking_system/shared";
 
-export default class Profileroutes {
+export class ProfileRoutes {
     constructor({ userController, organizerController }) {
         this.router = express.Router();
         this.userController = userController;
@@ -77,9 +77,5 @@ export default class Profileroutes {
             UserValidator.handleValidationErrors,
             this.userController.softDeleteUser,
         );
-    }
-
-    get profileRouter() {
-        return this.router;
     }
 }

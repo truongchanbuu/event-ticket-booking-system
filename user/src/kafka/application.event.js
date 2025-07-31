@@ -1,25 +1,43 @@
-import kafkaService from "./KafkaService.js";
-import { APPLICATION_EVENT } from "../constants/topics.js";
 import {
     APPLICATION_APPROVED,
+    APPLICATION_EVENT,
     APPLICATION_PERMANENTLY_REJECTED,
     APPLICATION_REJECTED,
 } from "@event_ticket_booking_system/shared";
 
-export const sendApplicationApprovedEvent = kafkaService.createTopicSender(
-    APPLICATION_EVENT,
-    APPLICATION_APPROVED,
-);
+export class ApplicationEventService {
+    #sendApproved;
+    #sendRejected;
+    #sendPermanentlyRejected;
 
-// ===> SENDER MỚI CHO VIỆC TỪ CHỐI TẠM THỜI <===
-export const sendApplicationRejectedEvent = kafkaService.createTopicSender(
-    APPLICATION_EVENT,
-    APPLICATION_REJECTED,
-);
+    constructor({ kafkaService }) {
+        this.#sendApproved = kafkaService.createTopicSender(
+            APPLICATION_EVENT,
+            APPLICATION_APPROVED,
+        );
 
-// ===> SENDER MỚI CHO VIỆC TỪ CHỐI VĨNH VIỄN <===
-export const sendApplicationPermanentlyRejectedEvent =
-    kafkaService.createTopicSender(
-        APPLICATION_EVENT,
-        APPLICATION_PERMANENTLY_REJECTED,
-    );
+        this.#sendRejected = kafkaService.createTopicSender(
+            APPLICATION_EVENT,
+            APPLICATION_REJECTED,
+        );
+
+        this.#sendPermanentlyRejected = kafkaService.createTopicSender(
+            APPLICATION_EVENT,
+            APPLICATION_PERMANENTLY_REJECTED,
+        );
+    }
+
+    // Cung cấp các phương thức public rõ ràng
+    async sendApplicationApproved(payload) {
+        // payload là dữ liệu bạn muốn gửi, vd: { applicationId: 123, userId: 456 }
+        return this.#sendApproved(payload);
+    }
+
+    async sendApplicationRejected(payload) {
+        return this.#sendRejected(payload);
+    }
+
+    async sendApplicationPermanentlyRejected(payload) {
+        return this.#sendPermanentlyRejected(payload);
+    }
+}

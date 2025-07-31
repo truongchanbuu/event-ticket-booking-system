@@ -1,0 +1,29 @@
+{
+  "id": "application_approved",
+  "type": "success",
+  "priority": "high",
+  "title": "Event Application Approved! 🥳",
+  "message": "Your application to host '{{event_name}}' has been approved!",
+  "actions": [
+    {
+      "label": "View Dashboard",
+      "action": "navigate",
+      "target": "/organizer/events/{{event_id}}/dashboard",
+      "style": "primary"
+    },
+    {
+      "label": "View Event Page",
+      "action": "navigate",
+      "target": "/events/{{event_id}}",
+      "style": "secondary"
+    }
+  ],
+  "icon": "🥳",
+  "color": "#f59e0b",
+  "dismissible": true,
+  "autoHide": false,
+  "metadata": {
+    "event_id": "{{event_id}}",
+    "event_name": "{{event_name}}"
+  }
+}

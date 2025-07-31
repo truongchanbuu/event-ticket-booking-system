@@ -18,7 +18,7 @@ import {
 const NOTIFICATIONS_COLLECTION = "notifcations";
 const ORGANIZERS_COLLECTION = "followedOrganizers";
 
-export default class UserService {
+export class UserService {
     constructor({ logger, redisService }) {
         this.logger = logger;
         this.userCollection = db.collection("users");

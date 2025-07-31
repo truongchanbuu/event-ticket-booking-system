@@ -1,5 +1,13 @@
-import KafkaService from "@event_ticket_booking_system/shared/kafka/kafka.service.js";
-import config from "../config/index.js";
+import { KafkaService } from "@event_ticket_booking_system/shared";
 
-const kafkaService = new KafkaService(config.kafka);
-export default kafkaService;
+export const createKafkaService = async ({ config, logger }) => {
+    const kafkaConfig = config.kafka;
+    const service = new KafkaService({ config: kafkaConfig });
+
+    logger.info("[Kafka] Initializing connection...");
+    await service.initialize();
+    await service.listTopics();
+    logger.info("[Kafka] Connection initialized successfully.");
+
+    return service;
+};

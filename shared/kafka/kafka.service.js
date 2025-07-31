@@ -1,7 +1,10 @@
 import { Kafka } from "kafkajs";
-import rootLogger, { createChildLogger, toPinoLogLevel } from "../logger/index.js";
+import rootLogger, {
+  createChildLogger,
+  toPinoLogLevel,
+} from "../logger/index.js";
 
-export default class KafkaService {
+export class KafkaService {
   /** @private */
   kafka;
   /** @private */
@@ -16,16 +19,16 @@ export default class KafkaService {
   /** @private @type {Promise<void> | null} */
   connectionPromise = null;
 
-  constructor(kafkaConfig) {
+  constructor({ config }) {
     this.kafka = new Kafka({
-      ...kafkaConfig,
+      ...config,
       logCreator: (logLevel) => {
         const pinoLevel = toPinoLogLevel(logLevel);
         return ({ namespace, level, label, log }) => {
           const { message, ...extra } = log;
           rootLogger[pinoLevel](
             { kafka: { namespace, label, ...extra } },
-            message // Message chính để hiển thị
+            message
           );
         };
       },
@@ -38,7 +41,7 @@ export default class KafkaService {
     });
 
     this.admin = this.kafka.admin();
-    this.logger = console;
+    this.logger = rootLogger.child({ service: "KafkaService" });
   }
 
   /**

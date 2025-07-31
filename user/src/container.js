@@ -1,36 +1,64 @@
-import { createContainer, asValue, asClass } from "awilix";
-// import { createLogger } from "@event_ticket_booking_system/shared";
+import { createContainer, asValue, asClass, asFunction } from "awilix";
 
-import config from "./config/index.js";
-import UserService from "../src/services/user.service.js";
-import UserController from "../src/controllers/user.controller.js";
-import OrganizerController from "../src/controllers/organizer.controller.js";
-import OrganizerService from "../src/services/organizer.service.js";
-import UserRoutes from "../src/routes/user.routes.js";
-import OrganizerRoutes from "./routes/organizer.routes.js";
-import { RedisService } from "@event_ticket_booking_system/shared";
-import Profileroutes from "./routes/profile.routes.js";
-import redisClient from "@event_ticket_booking_system/shared/redis/main.js";
 import rootLogger from "@event_ticket_booking_system/shared/logger/index.js";
+import config from "./config/index.js";
 
-const container = createContainer();
+import { createKafkaService } from "./services/kafka.service.js";
 
-// Logger
-// const loggerInstance = createLogger();
+import { UserService } from "./services/user.service.js";
+import { OrganizerService } from "./services/organizer.service.js";
+import { ApplicationEventService } from "./kafka/application.event.js";
 
-container.register({
-    logger: asValue(rootLogger),
-    prefix: asValue(config.redis.prefix),
-    defaultTTL: asValue(config.redis.defaultTTL),
-    client: asValue(redisClient),
-    redisService: asClass(RedisService).singleton(),
-    userService: asClass(UserService).scoped(),
-    organizerService: asClass(OrganizerService).scoped(),
-    userController: asClass(UserController).singleton(),
-    organizerController: asClass(OrganizerController).singleton(),
-    userRoutes: asClass(UserRoutes).singleton(),
-    organizerRoutes: asClass(OrganizerRoutes).singleton(),
-    profileRoutes: asClass(Profileroutes).singleton(),
-});
+import { UserController } from "./controllers/user.controller.js";
+import { OrganizerController } from "./controllers/organizer.controller.js";
 
-export default container;
+import { ApiRoutes } from "./routes/api.routes.js";
+import { UserRoutes } from "./routes/user.routes.js";
+import { OrganizerRoutes } from "./routes/organizer.routes.js";
+import { ProfileRoutes } from "./routes/profile.routes.js";
+
+import {
+    createRedisClient,
+    RedisService,
+} from "@event_ticket_booking_system/shared";
+
+/**
+ * Hàm factory để tạo, đăng ký, và khởi động DI container.
+ */
+export async function configureContainer() {
+    const logger = rootLogger;
+
+    logger.info("Pre-initializing critical async services...");
+    const kafkaServiceInstance = await createKafkaService({ config, logger });
+    logger.info("✅ Kafka service instance created successfully.");
+
+    const container = createContainer();
+    container.register({
+        // Values & Clients (luôn là singleton)
+        logger: asValue(logger),
+        config: asValue(config),
+
+        kafkaService: asValue(kafkaServiceInstance),
+        redisClient: asFunction(createRedisClient).singleton(),
+
+        // Services (thường là singleton)
+        redisService: asClass(RedisService).singleton(),
+        userService: asClass(UserService).singleton(), // <--- Sửa thành singleton
+        organizerService: asClass(OrganizerService).singleton(), // <--- Sửa thành singleton
+        applicationEventService: asClass(ApplicationEventService).singleton(), // Dùng asClass nếu constructor của nó DI-friendly
+
+        // Controllers (luôn là scoped)
+        userController: asClass(UserController).scoped(), // <--- Sửa thành scoped
+        organizerController: asClass(OrganizerController).scoped(), // <--- Sửa thành scoped
+
+        // Routes (luôn là singleton)
+        userRoutes: asClass(UserRoutes).singleton(),
+        organizerRoutes: asClass(OrganizerRoutes).singleton(),
+        profileRoutes: asClass(ProfileRoutes).singleton(),
+        apiRoutes: asClass(ApiRoutes).singleton(),
+    });
+
+    logger.info("✅ All dependencies registered. Container is ready.");
+
+    return container;
+}

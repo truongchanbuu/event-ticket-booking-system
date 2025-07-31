@@ -3,7 +3,7 @@ import OrganizerValidator from "../middlewares/organizer.validator.js";
 import UserValidator from "../middlewares/user.validator.js";
 import { checkAdmin, verifyToken } from "@event_ticket_booking_system/shared";
 
-export default class OrganizerRoutes {
+export class OrganizerRoutes {
     constructor({ organizerController }) {
         this.router = express.Router();
         this.organizerController = organizerController;
@@ -78,9 +78,5 @@ export default class OrganizerRoutes {
             UserValidator.handleValidationErrors,
             this.organizerController.getOrganizers,
         );
-    }
-
-    get organizerRouter() {
-        return this.router;
     }
 }

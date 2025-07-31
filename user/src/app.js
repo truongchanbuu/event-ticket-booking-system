@@ -2,23 +2,21 @@ import express from "express";
 import cors from "cors";
 import { scopePerRequest } from "awilix-express";
 
-import container from "./container.js";
-import { ENV } from "../src/config/env.js";
 import healthRouter from "./routes/health.js";
 import { errorHandler } from "@event_ticket_booking_system/shared";
 import { ERROR_CODE } from "@event_ticket_booking_system/shared";
 import { AppError } from "@event_ticket_booking_system/shared";
 import checkJson from "@event_ticket_booking_system/shared/validator/helpers/syntax.validator.js";
 
-export default async function createApp() {
+export function createApp({ container }) {
     const app = express();
 
     // TODO: Test Config: Custom when production
-    if (ENV.NODE_ENV == "development") app.use(cors());
+    if (process.env.NODE_ENV == "development") app.use(cors());
 
-    // Add logging middleware
+    const logger = container.resolve("logger");
     app.use((req, res, next) => {
-        console.log(
+        logger?.debug(
             `📨 ${req.method} ${req.url} - ${new Date().toISOString()}`,
         );
         next();
@@ -31,13 +29,8 @@ export default async function createApp() {
 
     app.use(scopePerRequest(container));
 
-    const userRoutes = container.resolve("userRoutes");
-    const organizerRoutes = container.resolve("organizerRoutes");
-    const profileRoutes = container.resolve("profileRoutes");
-
-    app.use("/api/me", profileRoutes.profileRouter);
-    app.use("/api/users", userRoutes.userRouter);
-    app.use("/api/organizers", organizerRoutes.organizerRouter);
+    const apiRoutes = container.resolve("apiRoutes");
+    app.use("/api", apiRoutes.apiRouter);
 
     app.use((req, res, next) => {
         next(new AppError("Not Found", 404, ERROR_CODE.NOT_FOUND));

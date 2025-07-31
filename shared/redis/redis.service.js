@@ -7,17 +7,20 @@ import { serialize, deserialize } from "./serialize.js";
  * - Tự động phát hiện và tương thích ngược với ioredis để không gây lỗi ở môi trường development.
  */
 export class RedisService {
-  constructor({ prefix = "app", defaultTTL = 300, logger = console, client }) {
-    this.prefix = prefix;
-    this.defaultTTL = defaultTTL;
-    this.logger = logger;
-    this.client = client;
+  constructor({ config, logger, redisClient }) {
+    // Lấy các giá trị config cụ thể mà service này cần
+    this.prefix = config.redis.prefix || "app";
+    this.defaultTTL = config.redis.defaultTTL || 300;
 
-    if (!this.client || typeof this.client.get !== "function") {
+    // Lưu lại các dependency
+    this.logger = logger;
+    this.redisClient = redisClient;
+
+    // Chỉ cần log cảnh báo nếu client không có sẵn
+    if (!this.redisClient) {
       this.logger.warn(
-        "[RedisService] Redis client is not available or is mocked. Caching is disabled."
+        "[RedisService] Redis client is not available. Caching will be disabled."
       );
-      this.client = null;
     }
   }
 
@@ -28,9 +31,9 @@ export class RedisService {
   // --- Các hàm cơ bản với serialize/deserialize rõ ràng ---
 
   async get(key) {
-    if (!this.client) return null;
+    if (!this.redisClient) return null;
     try {
-      const val = await this.client.get(this._key(key));
+      const val = await this.redisClient.get(this._key(key));
       return deserialize(val);
     } catch (err) {
       this.logger.error(`[RedisService] GET error`, {
@@ -42,9 +45,9 @@ export class RedisService {
   }
 
   async set(key, value, ttl = this.defaultTTL) {
-    if (!this.client) return false;
+    if (!this.redisClient) return false;
     try {
-      await this.client.set(this._key(key), serialize(value), { EX: ttl });
+      await this.redisClient.set(this._key(key), serialize(value), { EX: ttl });
       return true;
     } catch (err) {
       this.logger.error(`[RedisService] SET error`, {
@@ -56,13 +59,13 @@ export class RedisService {
   }
 
   async del(keys) {
-    if (!this.client) return 0;
+    if (!this.redisClient) return 0;
     const keysToDelete = (Array.isArray(keys) ? keys : [keys]).map((k) =>
       this._key(k)
     );
     if (keysToDelete.length === 0) return 0;
     try {
-      return await this.client.del(keysToDelete);
+      return await this.redisClient.del(keysToDelete);
     } catch (err) {
       this.logger.error(`[RedisService] DEL error`, {
         keys: keysToDelete.join(", "),
@@ -88,17 +91,17 @@ export class RedisService {
    * [HYBRID] Hỗ trợ cả `mget(...keys)` của Upstash và `mget(keysArray)` của ioredis.
    */
   async mget(keys = []) {
-    if (!this.client || keys.length === 0) return [];
+    if (!this.redisClient || keys.length === 0) return [];
     const fullKeys = keys.map((k) => this._key(k));
     try {
       // Kiểm tra xem client có hỗ trợ `mget` nhận một mảng không (chuẩn của ioredis)
       // `mget.length` sẽ là 1 cho hàm `function(arg1){...}`
-      if (this.client.mget.length === 1) {
-        const results = await this.client.mget(fullKeys);
+      if (this.redisClient.mget.length === 1) {
+        const results = await this.redisClient.mget(fullKeys);
         return results.map(deserialize);
       }
       // Mặc định, dùng cú pháp của Upstash
-      const results = await this.client.mget(...fullKeys);
+      const results = await this.redisClient.mget(...fullKeys);
       return results.map(deserialize);
     } catch (err) {
       this.logger.error(`[RedisService] MGET error`, { error: err.message });
@@ -111,19 +114,19 @@ export class RedisService {
    * Cung cấp fallback cho các trường hợp khác để đảm bảo không lỗi.
    */
   async pipelineOps(ops = []) {
-    if (!this.client || ops.length === 0) return;
+    if (!this.redisClient || ops.length === 0) return;
 
     // Ưu tiên `pipeline()`
-    if (typeof this.client.pipeline === "function") {
-      const queue = this.client.pipeline();
+    if (typeof this.redisClient.pipeline === "function") {
+      const queue = this.redisClient.pipeline();
       ops.forEach((op) => this._addOpToQueue(queue, op));
       await queue.exec();
       return;
     }
 
     // Fallback cho `multi()`
-    if (typeof this.client.multi === "function") {
-      const queue = this.client.multi();
+    if (typeof this.redisClient.multi === "function") {
+      const queue = this.redisClient.multi();
       ops.forEach((op) => this._addOpToQueue(queue, op));
       await queue.exec();
       return;

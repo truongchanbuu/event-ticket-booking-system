@@ -17,7 +17,7 @@ const ORG_APPLICATION_COLLECTION = "orgApplications";
 const USER_COLLECTION = "users";
 const LIMIT_APPLY = 5;
 
-export default class OrganizerService {
+export class OrganizerService {
     constructor({ logger, redisService }) {
         this.logger = logger;
         this.redisService = redisService;
@@ -146,7 +146,7 @@ export default class OrganizerService {
         return this.redisService.getOrSet(
             cacheKey,
             async () => {
-                this.logger?.log(
+                this.logger?.debug(
                     `[DB Read] Fetching application ${appID} from Firestore.`,
                 );
                 const applicationSnap = await this.orgCollection
@@ -180,7 +180,7 @@ export default class OrganizerService {
         return this.redisService.getOrSet(
             cacheKey,
             async () => {
-                this.logger?.log(
+                this.logger?.debug(
                     `[DB Read] Fetching applications for user ${userID} from Firestore.`,
                 );
                 const { orderBy = "desc", sortBy = "submittedAt" } = options;
@@ -203,11 +203,11 @@ export default class OrganizerService {
 
     async canApplyOrganizer(userID) {
         try {
-            this.logger?.log(`[canApplyOrganizer] Checking user ${userID}`);
+            this.logger?.debug(`[canApplyOrganizer] Checking user ${userID}`);
 
             const userSnap = await this.userCollection.doc(userID).get();
             if (!userSnap.exists) {
-                this.logger?.log(
+                this.logger?.debug(
                     `[canApplyOrganizer] User not found: ${userID}`,
                 );
                 return {
@@ -218,7 +218,7 @@ export default class OrganizerService {
             }
 
             const user = userSnap.data();
-            this.logger?.log(`[canApplyOrganizer] User data:`, user);
+            this.logger?.debug(`[canApplyOrganizer] User data:`, user);
 
             // Check if account is deleted
             if (user?.isDeleted || user?.deletedAt) {
@@ -260,7 +260,7 @@ export default class OrganizerService {
 
             // Check existing applications
             const applications = await this.getApplicationsByUserID(userID);
-            this.logger?.log(
+            this.logger?.debug(
                 `[canApplyOrganizer] Found ${applications.length} applications`,
             );
 
@@ -348,10 +348,10 @@ export default class OrganizerService {
     async createApplication(applicationData) {
         const userID = applicationData.userID;
 
-        this.logger?.log(`[createApplication] Start for user: ${userID}`);
+        this.logger?.debug(`[createApplication] Start for user: ${userID}`);
 
         const canApplyResult = await this.canApplyOrganizer(userID);
-        this.logger?.log(
+        this.logger?.debug(
             `[createApplication] canApply result:`,
             canApplyResult,
         );
@@ -371,7 +371,7 @@ export default class OrganizerService {
             user,
         );
 
-        this.logger?.log(
+        this.logger?.debug(
             `[createApplication] Admin approval check:`,
             adminApprovalCheck,
         );
@@ -396,7 +396,7 @@ export default class OrganizerService {
             },
         };
 
-        this.logger?.log(
+        this.logger?.debug(
             `[createApplication] New application:`,
             newApplication,
         );
@@ -411,11 +411,11 @@ export default class OrganizerService {
 
         await batch.commit();
 
-        this.logger?.log(
+        this.logger?.debug(
             `[createApplication] Application committed: ${applicationID}`,
         );
 
-        this.logger?.log(
+        this.logger?.debug(
             `[Cache Invalidate] Deleting user apps list cache for user ${userID}`,
         );
         await this.redisService.del(this._getUserAppsCacheKey(userID, {}));
@@ -513,7 +513,7 @@ export default class OrganizerService {
 
         batch.set(docRef, mergedData, { merge: true });
         await batch.commit();
-        this.logger?.log(
+        this.logger?.debug(
             `[Cache Invalidate] Deleting caches for app ${applicationID} and user ${existingApp.userID}`,
         );
         await this.redisService.del([
@@ -578,7 +578,7 @@ export default class OrganizerService {
             this._getUserAppsCacheKey(userID, {}),
         ]);
 
-        this.logger?.log(
+        this.logger?.debug(
             `[Cache Invalidate] Deleting caches for app ${applicationID} and user ${userID}`,
         );
     }
@@ -597,7 +597,7 @@ export default class OrganizerService {
         await this.orgCollection.doc(applicationID).delete();
 
         // [CACHE] Xóa cache của đơn này VÀ danh sách đơn của người dùng
-        this.logger?.log(
+        this.logger?.debug(
             `[Cache Invalidate] Deleting caches for app ${applicationID} and user ${appToDelete.userID}`,
         );
         await this.redisService.del([

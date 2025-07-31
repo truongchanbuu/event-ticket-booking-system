@@ -1,0 +1,31 @@
+{
+  "id": "application_permanently_rejected",
+  "type": "error",
+  "priority": "critical",
+  "title": "Application Permanently Rejected",
+  "message": "Your application has been permanently rejected and cannot be resubmitted.",
+  "actions": [
+    {
+      "label": "View Details",
+      "action": "navigate",
+      "target": "/organizer/applications/{{application_id}}",
+      "style": "primary"
+    },
+    {
+      "label": "Contact Support",
+      "action": "external_link",
+      "target": "{{support_url}}",
+      "style": "secondary"
+    }
+  ],
+  "icon": "⚠️",
+  "color": "#7c2d12",
+  "dismissible": false,
+  "autoHide": false,
+  "metadata": {
+    "application_id": "{{application_id}}",
+    "event_name": "{{event_name}}",
+    "rejection_reason": "{{rejection_reason}}",
+    "is_permanent": true
+  }
+}

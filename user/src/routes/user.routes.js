@@ -2,7 +2,7 @@ import express from "express";
 import UserValidator from "../middlewares/user.validator.js";
 import { checkAdmin, verifyToken } from "@event_ticket_booking_system/shared";
 
-export default class UserRoutes {
+export class UserRoutes {
     constructor({ userController }) {
         this.router = express.Router();
         this.userController = userController;
@@ -47,9 +47,5 @@ export default class UserRoutes {
             UserValidator.handleValidationErrors,
             this.userController.deleteUser,
         );
-    }
-
-    get userRouter() {
-        return this.router;
     }
 }

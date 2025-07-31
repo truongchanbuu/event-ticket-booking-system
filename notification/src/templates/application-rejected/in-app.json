@@ -1,0 +1,30 @@
+{
+  "id": "application_rejected",
+  "type": "warning",
+  "priority": "high",
+  "title": "Application Rejected ❌",
+  "message": "Your application was rejected. Please review and try again.",
+  "actions": [
+    {
+      "label": "View Details",
+      "action": "navigate",
+      "target": "/organizer/applications/{{application_id}}",
+      "style": "primary"
+    },
+    {
+      "label": "Submit New Application",
+      "action": "navigate",
+      "target": "/organizer/apply",
+      "style": "secondary"
+    }
+  ],
+  "icon": "❌",
+  "color": "#ef4444",
+  "dismissible": true,
+  "autoHide": false,
+  "metadata": {
+    "application_id": "{{application_id}}",
+    "event_name": "{{event_name}}",
+    "rejection_reason": "{{rejection_reason}}"
+  }
+}

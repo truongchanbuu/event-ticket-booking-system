@@ -4,17 +4,18 @@ import {
     ROLE,
     USER_APPROVED_AS_ORGANIZER,
 } from "@event_ticket_booking_system/shared";
-import {
-    sendApplicationApprovedEvent,
-    sendApplicationPermanentlyRejectedEvent,
-    sendApplicationRejectedEvent,
-} from "../kafka/application.event.js";
 
-export default class UserController {
-    constructor({ userService, organizerService, logger }) {
+export class OrganizerController {
+    constructor({
+        userService,
+        organizerService,
+        applicationEventService,
+        logger,
+    }) {
         this.logger = logger;
         this.userService = userService;
         this.organizerService = organizerService;
+        this.applicationEventService = applicationEventService;
 
         this.getOrganizers = catchAsync(this.getOrganizers.bind(this));
         this.getPublicOrganizers = catchAsync(
@@ -336,7 +337,6 @@ export default class UserController {
 
         // TODO: Có thể thêm 1 transition validation (Giữ nguyên theo yêu cầu)
 
-        // 7. Thực hiện cập nhật sau khi đã qua tất cả các bước kiểm tra
         await this.organizerService.updateApplicationStatus(
             applicationID,
             status,
@@ -346,13 +346,11 @@ export default class UserController {
         );
 
         const baseEventPayload = {
-            key: uid,
+            key: application.userID,
             value: {
-                userID: uid,
-                email: user.email,
-                fullName: user.fullName,
+                userID: application.userID,
                 applicationId: application.applicationID,
-                processedBy: adminId, // Người xử lý (admin)
+                processedBy: uid,
             },
         };
 
@@ -364,20 +362,22 @@ export default class UserController {
                 organizerStatus: status,
             });
 
-            sendApplicationApprovedEvent({
+            this.applicationEventService.sendApplicationApprovedEvent({
                 key: baseEventPayload.key,
                 value: {
                     ...baseEventPayload.value,
+                    action: "approved",
                     approvedAt: new Date().toISOString(),
                 },
             });
         }
 
         if (status === APPLY_STATUS.REJECTED) {
-            sendApplicationRejectedEvent({
+            this.applicationEventService.sendApplicationRejectedEvent({
                 key: baseEventPayload.key,
                 value: {
                     ...baseEventPayload.value,
+                    action: "rejected",
                     rejectedAt: new Date().toISOString(),
                     reason: rejectionReason,
                 },
@@ -385,21 +385,24 @@ export default class UserController {
         }
 
         if (status === APPLY_STATUS.PERMANENT_REJECTED) {
-            sendApplicationPermanentlyRejectedEvent({
-                key: baseEventPayload.key,
-                value: {
-                    ...baseEventPayload.value,
-                    rejectedAt: new Date().toISOString(),
-                    reason: rejectionReason, // <-- Rất quan trọng!
+            this.applicationEventService.sendApplicationPermanentlyRejectedEvent(
+                {
+                    key: baseEventPayload.key,
+                    value: {
+                        ...baseEventPayload.value,
+                        action: "permantly_rejected",
+                        rejectedAt: new Date().toISOString(),
+                        reason: rejectionReason,
+                    },
                 },
-            });
+            );
         }
 
         return res.status(200).json({
             success: true,
             message: `Application status successfully updated to ${status}.`,
             data: {
-                applicationID: applicationID,
+                applicationID: application.applicationID,
                 status,
             },
         });

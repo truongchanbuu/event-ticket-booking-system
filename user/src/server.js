@@ -1,23 +1,25 @@
-import rootLogger from "@event_ticket_booking_system/shared/logger/index.js";
-import createApp from "./app.js";
-import { ENV } from "./config/env.js";
-import kafkaService from "./services/kafka.service.js";
+import { createApp } from "./app.js";
+import { configureContainer } from "./container.js";
 
 let server;
 
 async function bootstrap() {
     try {
+        const container = await configureContainer();
+
+        const config = container.resolve("config");
+        const rootLogger = container.resolve("logger");
+
         // Initialize Kafka
-        await kafkaService.initialize();
-        await kafkaService.listTopics();
+        const kafkaService = container.resolve("kafkaService");
 
         // Create and start the app
-        const app = await createApp();
-        const PORT = ENV.PORT || 3000;
+        const app = createApp({ container });
+        const PORT = config.app.port;
 
         server = app.listen(PORT, () => {
             rootLogger.debug(`🚀 User service running on port ${PORT}`);
-            rootLogger.debug(`📊 Environment: ${ENV.NODE_ENV}`);
+            rootLogger.debug(`📊 Environment: ${config.node_env}`);
         });
 
         // Graceful shutdown handling
@@ -36,7 +38,7 @@ async function bootstrap() {
                 await kafkaService.disconnect();
                 rootLogger.debug("✅ Kafka connections closed");
             } catch (error) {
-                console.error("❌ Error closing Kafka connections:", error);
+                rootLogger.error("❌ Error closing Kafka connections:", error);
             }
 
             process.exit(0);
@@ -51,7 +53,4 @@ async function bootstrap() {
     }
 }
 
-bootstrap().catch((e) => {
-    console.error("❌ Failed to start the user service", e);
-    process.exit(1);
-});
+bootstrap();

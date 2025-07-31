@@ -7,23 +7,31 @@
     "test": "tests"
   },
   "scripts": {
-    "start": "node src/app.js",
-    "dev": "node --watch src/app.js",
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
     "test": "jest --detectOpenHandles",
     "test:watch": "jest --watch",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "docker:build": "docker build -t auth-service .",
-    "docker:run": "docker run -p 3000:3000 auth-service"
+    "docker:build": "docker build -t user-service .",
+    "docker:run": "docker run -p 3000:3000 user-service"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "dotenv": "^16.5.0",
-    "express": "^5.1.0"
+    "@event_ticket_booking_system/shared": "file:../shared",
+    "awilix-express": "^9.0.2",
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "firebase-admin": "^13.4.0",
+    "handlebars": "^4.7.8",
+    "kafkajs": "^2.2.4",
+    "nodemailer": "^7.0.5",
+    "twilio": "^5.8.0",
+    "yaml": "^2.8.0"
   },
   "devDependencies": {
     "eslint": "^9.27.0",

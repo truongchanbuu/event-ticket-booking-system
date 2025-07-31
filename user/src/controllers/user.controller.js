@@ -1,7 +1,7 @@
 import { catchAsync } from "@event_ticket_booking_system/shared";
 import { normalizeFirebaseUser } from "../utils/sanitize.js";
 
-export default class UserController {
+export class UserController {
     constructor({ userService }) {
         this.userService = userService;
 

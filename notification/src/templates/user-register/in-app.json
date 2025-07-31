@@ -1,0 +1,25 @@
+{
+  "id": "user_registered_welcome",
+  "type": "welcome",
+  "priority": "high",
+  "title": "Welcome to EventHub! 🎉",
+  "message": "Explore amazing events or become an organizer to create your own.",
+  "actions": [
+    {
+      "label": "Explore Events",
+      "action": "navigate",
+      "target": "/events",
+      "style": "primary"
+    },
+    {
+      "label": "Become Organizer",
+      "action": "navigate",
+      "target": "/organizer/apply",
+      "style": "secondary"
+    }
+  ],
+  "icon": "🎉",
+  "color": "#667eea",
+  "dismissible": true,
+  "autoHide": false
+}
