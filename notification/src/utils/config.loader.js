@@ -6,9 +6,7 @@ import yaml from 'yaml';
  * Load and parse YAML notification config
  * @returns {object} Parsed config object
  */
-export function loadNotificationConfig() {
-  const filePath = path.resolve('config', 'notification.config.yaml');
-
+export function loadNotificationConfig(filePath) {
   if (!fs.existsSync(filePath)) {
     throw new Error(`❌ Notification config file not found at: ${filePath}`);
   }

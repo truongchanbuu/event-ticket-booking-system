@@ -28,8 +28,6 @@ export class RedisService {
     return `${this.prefix}:${key}`;
   }
 
-  // --- Các hàm cơ bản với serialize/deserialize rõ ràng ---
-
   async get(key) {
     if (!this.redisClient) return null;
     try {
@@ -67,7 +65,7 @@ export class RedisService {
     try {
       return await this.redisClient.del(keysToDelete);
     } catch (err) {
-      this.logger.error(`[RedisService] DEL error`, {
+      console.error(`[RedisService] DEL error`, {
         keys: keysToDelete.join(", "),
         error: err.message,
       });

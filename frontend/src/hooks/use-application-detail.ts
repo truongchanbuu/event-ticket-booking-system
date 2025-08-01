@@ -20,11 +20,13 @@ export const useApplicationDetail = (appId: string) => {
     enabled: Boolean(appId),
   });
 
-  const onMutationSuccess = (toastTitle: string) => {
+  const onMutationSuccess = (toastTitle: string, data) => {
+    console.log("Data: ", data);
     toast({ variant: "success", title: toastTitle });
     queryClient.invalidateQueries({
       queryKey: APPLICATION_QUERY_KEYS.applicationDetail(appId),
     });
+
     queryClient.invalidateQueries({
       queryKey: APPLICATION_QUERY_KEYS.adminApplications(),
     });
@@ -33,7 +35,7 @@ export const useApplicationDetail = (appId: string) => {
   // ✅ Approve
   const approve = useMutation({
     mutationFn: () => approveApplication(appId, "admin"),
-    onSuccess: () => onMutationSuccess("Approved successfully"),
+    onSuccess: (data) => onMutationSuccess("Approved successfully", data),
     onError: () =>
       toast({ title: "Failed to approve", variant: "destructive" }),
   });
@@ -42,7 +44,7 @@ export const useApplicationDetail = (appId: string) => {
   const reject = useMutation({
     mutationFn: ({ rejectionReason }: { rejectionReason: string }) =>
       rejectApplication(appId, rejectionReason, "admin", false),
-    onSuccess: () => onMutationSuccess("Rejected successfully"),
+    onSuccess: (data) => onMutationSuccess("Rejected successfully", data),
     onError: () => toast({ title: "Failed to reject", variant: "destructive" }),
   });
 
@@ -50,7 +52,7 @@ export const useApplicationDetail = (appId: string) => {
   const permanentReject = useMutation({
     mutationFn: ({ rejectionReason }: { rejectionReason: string }) =>
       rejectApplication(appId, rejectionReason, "admin", true),
-    onSuccess: () => onMutationSuccess("Permanently rejected"),
+    onSuccess: (data) => onMutationSuccess("Permanently rejected", data),
     onError: () =>
       toast({ title: "Failed to permanently reject", variant: "destructive" }),
   });
@@ -60,14 +62,14 @@ export const useApplicationDetail = (appId: string) => {
   // 🔐 Lock
   const lock = useMutation({
     mutationFn: () => lockApplication(appId, "admin"),
-    onSuccess: () => onMutationSuccess("Locked successfully"),
+    onSuccess: (data) => onMutationSuccess("Locked successfully", data),
     onError: () => toast({ title: "Failed to lock", variant: "destructive" }),
   });
 
   // ↩️ Revert to Pending
   const revertToPending = useMutation({
     mutationFn: () => revertApplicationToPending(appId),
-    onSuccess: () => onMutationSuccess("Reverted to pending"),
+    onSuccess: (data) => onMutationSuccess("Reverted to pending", data),
     onError: () => toast({ title: "Failed to revert", variant: "destructive" }),
   });
 

@@ -12,10 +12,10 @@ export function createApp({ container, config, logger }) {
     const app = express();
 
     // TODO: Test Config: Custom when production
-    if (config.app.node_env == "development") app.use(cors());
+    if (config.app.nodeEnv == "development") app.use(cors());
 
     app.use((req, res, next) => {
-        logger?.debug(
+        console.log(
             `📨 ${req.method} ${req.url} - ${new Date().toISOString()}`,
         );
         next();

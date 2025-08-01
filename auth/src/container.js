@@ -8,9 +8,9 @@ import { AuthController } from "./controllers/auth.controller.js";
 import { ApiRoutes } from "./routes/api.routes.js";
 
 import {
+    createLoggerFactory,
     createRedisClient,
     RedisService,
-    rootLogger,
 } from "@event_ticket_booking_system/shared";
 import { createKafkaService } from "./services/kafka.service.js";
 
@@ -18,7 +18,7 @@ import { createKafkaService } from "./services/kafka.service.js";
  * Hàm factory để tạo, đăng ký, và khởi động DI container.
  */
 export async function configureContainer() {
-    const logger = rootLogger;
+    const logger = createLoggerFactory(config.app).logger;
 
     logger.info("Pre-initializing critical async services...");
     const kafkaServiceInstance = await createKafkaService({ config, logger });

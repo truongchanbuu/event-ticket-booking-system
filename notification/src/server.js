@@ -1,22 +1,35 @@
-import createApp from './app.js';
-import { ENV } from './config/env.js';
-import { loadNotificationConfig } from './utils/config.loader.js';
+import { createApp } from './app.js';
+import { configureContainer } from './container.js';
+import { ConsumerOrchestrator } from './kafka/consumers/index.js';
 
 let server;
 
 async function bootstrap() {
   try {
+    const container = await configureContainer();
+
+    const config = container.resolve('config');
+    const rootLogger = container.resolve('logger');
+
     // Initialize Kafka
-    await kafkaService.initialize();
-    await kafkaService.listTopics();
+    const kafkaService = container.resolve('kafkaService');
+
+    const consumerOrchestrator = new ConsumerOrchestrator({
+      container: container,
+      kafkaService: kafkaService,
+      messageDispatcher: container.resolve('messageDispatcher'),
+      config: config,
+      logger: rootLogger,
+    });
+    await consumerOrchestrator.startAll();
 
     // Create and start the app
-    const app = await createApp();
-    const PORT = ENV.PORT || 3000;
+    const app = createApp({ container, config, rootLogger });
+    const PORT = config.app.port;
 
     server = app.listen(PORT, () => {
       rootLogger.debug(`🚀 Notification service running on port ${PORT}`);
-      rootLogger.debug(`📊 Environment: ${ENV.NODE_ENV}`);
+      rootLogger.debug(`📊 Environment: ${config.app.nodeEnv}`);
     });
 
     // Graceful shutdown handling
@@ -35,7 +48,7 @@ async function bootstrap() {
         await kafkaService.disconnect();
         rootLogger.debug('✅ Kafka connections closed');
       } catch (error) {
-        console.error('❌ Error closing Kafka connections:', error);
+        rootLogger.error('❌ Error closing Kafka connections:', error);
       }
 
       process.exit(0);
@@ -45,12 +58,9 @@ async function bootstrap() {
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
     process.on('SIGINT', () => gracefulShutdown('SIGINT'));
   } catch (error) {
-    console.error('❌ Failed to start the notification service:', error);
+    console.error('❌ Failed to start the Notification service:', error);
     process.exit(1);
   }
 }
 
-bootstrap().catch((e) => {
-  console.error('❌ Failed to start the notification service', e);
-  process.exit(1);
-});
+bootstrap();

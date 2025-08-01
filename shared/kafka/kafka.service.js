@@ -1,9 +1,4 @@
 import { Kafka } from "kafkajs";
-import {
-  rootLogger,
-  createChildLogger,
-  toPinoLogLevel,
-} from "../logger/index.js";
 
 export class KafkaService {
   /** @private */
@@ -20,19 +15,9 @@ export class KafkaService {
   /** @private @type {Promise<void> | null} */
   connectionPromise = null;
 
-  constructor({ config }) {
+  constructor({ config, logger }) {
     this.kafka = new Kafka({
       ...config,
-      logCreator: (logLevel) => {
-        const pinoLevel = toPinoLogLevel(logLevel);
-        return ({ namespace, level, label, log }) => {
-          const { message, ...extra } = log;
-          rootLogger[pinoLevel](
-            { kafka: { namespace, label, ...extra } },
-            message
-          );
-        };
-      },
     });
 
     this.producer = this.kafka.producer({
@@ -42,7 +27,7 @@ export class KafkaService {
     });
 
     this.admin = this.kafka.admin();
-    this.logger = rootLogger.child({ service: "KafkaService" });
+    this.logger = logger;
   }
 
   /**
@@ -57,7 +42,7 @@ export class KafkaService {
       return this.connectionPromise;
     }
 
-    this.logger.info("KafkaService is connecting...");
+    this.logger?.info("KafkaService is connecting...");
     this.connectionState = "CONNECTING";
 
     this.connectionPromise = (async () => {
@@ -65,10 +50,10 @@ export class KafkaService {
         await this.admin.connect();
         await this.producer.connect();
         this.connectionState = "CONNECTED";
-        this.logger.info("✅ KafkaService connected successfully.");
+        this.logger?.info("✅ KafkaService connected successfully.");
       } catch (error) {
         this.connectionState = "DISCONNECTED";
-        this.logger.error("❌ Failed to connect KafkaService.", {
+        this.logger?.error("❌ Failed to connect KafkaService.", {
           error: error.message,
         });
         throw error;
@@ -102,22 +87,13 @@ export class KafkaService {
         messages: kafkaMessages,
       });
     } catch (error) {
-      this.logger.error(`❌ Failed to send messages to topic '${topic}'`, {
+      this.logger?.error(`❌ Failed to send messages to topic '${topic}'`, {
         error: error.message,
       });
       throw error;
     }
   }
 
-  /**
-   * Tạo consumer và xử lý tin nhắn, tích hợp Dead Letter Queue (DLQ).
-   * @param {string} groupId - ID của consumer group.
-   * @param {string} topic - Topic để lắng nghe.
-   * @param {(value: any, payload: import('kafkajs').EachMessagePayload) => Promise<void>} handler - Hàm xử lý mỗi tin nhắn.
-   * @param {string} [dlqTopic] - (Tùy chọn) Topic cho Dead Letter Queue.
-   * @param {object} [consumerConfig={}] - (Tùy chọn) Cấu hình thêm cho consumer.
-   * @returns {Promise<void>}
-   */
   async createConsumer(
     groupId,
     topic,
@@ -138,36 +114,34 @@ export class KafkaService {
     });
 
     await consumer.connect();
-    await consumer.subscribe({ topic, fromBeginning: false });
+
+    const fromBeginning = process.env.NODE_ENV === "development";
+    await consumer.subscribe({ topic, fromBeginning });
 
     await consumer.run({
       eachMessage: async (payload) => {
-        const { topic, partition, message } = payload;
         try {
-          const value = JSON.parse(message.value.toString());
-          this.logger.info(`📨 Received message from topic '${topic}'`, {
-            partition,
-            offset: message.offset,
-            key: message.key?.toString(),
-          });
-          await handler(value, payload);
+          await handler(payload);
         } catch (error) {
-          this.logger.error(
-            "❌ Error processing message. Potentially moving to DLQ.",
+          const { topic, partition, message } = payload;
+          this.logger?.error(
+            "❌ Unhandled error from message handler. Moving to DLQ.",
             {
               topic,
               offset: message.offset,
               error: error.message,
+              stack: error.stack,
             }
           );
 
-          // LOGIC GỬI ĐẾN DEAD LETTER QUEUE
           if (dlqTopic) {
-            this.logger.info(`Moving failed message to DLQ topic: ${dlqTopic}`);
+            this.logger?.info(
+              `Moving failed message to DLQ topic: ${dlqTopic}`
+            );
             await this.send(dlqTopic, [
               {
                 key: message.key,
-                value: message.value, // Gửi lại message gốc (dạng buffer/string)
+                value: message.value,
                 headers: {
                   ...message.headers,
                   "x-original-topic": topic,
@@ -182,7 +156,7 @@ export class KafkaService {
     });
 
     this.consumers.set(groupId, consumer);
-    this.logger.info(
+    this.logger?.info(
       `✅ Consumer created for topic '${topic}' with group '${groupId}'`
     );
   }
@@ -194,25 +168,25 @@ export class KafkaService {
   async disconnect() {
     if (this.connectionState === "DISCONNECTED") return;
 
-    this.logger.info("KafkaService is disconnecting...");
+    this.logger?.info("KafkaService is disconnecting...");
     try {
       for (const [groupId, consumer] of this.consumers) {
         await consumer.disconnect();
-        this.logger.info(`✅ Consumer '${groupId}' disconnected.`);
+        this.logger?.info(`✅ Consumer '${groupId}' disconnected.`);
       }
       this.consumers.clear();
 
       await this.producer.disconnect();
-      this.logger.info("✅ Producer disconnected.");
+      this.logger?.info("✅ Producer disconnected.");
 
       await this.admin.disconnect();
-      this.logger.info("✅ Admin client disconnected.");
+      this.logger?.info("✅ Admin client disconnected.");
 
       this.connectionState = "DISCONNECTED";
       this.connectionPromise = null;
-      this.logger.info("✅ KafkaService disconnected completely.");
+      this.logger?.info("✅ KafkaService disconnected completely.");
     } catch (error) {
-      this.logger.error("❌ Error during Kafka disconnection.", {
+      this.logger?.error("❌ Error during Kafka disconnection.", {
         error: error.message,
       });
       throw error;
@@ -233,7 +207,7 @@ export class KafkaService {
     // Trả về một hàm async mới
     return async (payload) => {
       if (this.connectionState !== "CONNECTED") {
-        this.logger.error(
+        this.logger?.error(
           { eventSourceName, topic },
           "Cannot send event, Kafka is not connected."
         );
@@ -243,22 +217,23 @@ export class KafkaService {
       const { key, value, eventType } = payload;
 
       if (!eventType) {
-        this.logger.warn(
+        this.logger?.warn(
           { eventSourceName, topic },
           "Sending event without an 'eventType'. This is not recommended."
         );
       }
 
       // Tạo một child logger với context của event này
-      const eventLogger = createChildLogger({
-        eventSourceName,
-        topic,
-        eventType,
-        messageKey: key,
-      });
+      // const eventLogger = this.logger?.child({
+      //   eventSourceName,
+      //   topic,
+      //   eventType,
+      //   messageKey: key,
+      // });
+      const eventLogger = console;
 
       try {
-        eventLogger.info("Attempting to send event...");
+        eventLogger?.info("Attempting to send event...");
         await this.send(topic, [
           {
             key: key,
@@ -271,9 +246,9 @@ export class KafkaService {
           },
         ]);
 
-        eventLogger.info("✅ Event sent successfully.");
+        eventLogger?.info("✅ Event sent successfully.");
       } catch (error) {
-        eventLogger.error({ err: error }, "❌ Failed to send event.");
+        eventLogger?.error({ err: error }, "❌ Failed to send event.");
         throw error;
       }
     };

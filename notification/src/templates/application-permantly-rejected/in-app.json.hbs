@@ -1,0 +1,26 @@
+{
+  "userId": "{{userId}}",
+  "type": "error",
+  "priority": "critical",
+  "title": "Application Permanently Rejected",
+  "message": "Your application {{applicationId}} has been permanently rejected due to: {{reason}}. You cannot resubmit.",
+  "icon": "⚠️",
+  "color": "#7c2d12",
+  "dismissible": false,
+  "autoHide": null,
+  "actions": [
+    {
+      "label": "View Details",
+      "action": "navigate",
+      "target": "/profile/me",
+      "style": "secondary"
+    }
+  ],
+  "metadata": {
+    "applicationId": "{{applicationId}}",
+    "rejectionReason": "{{reason}}",
+    "isPermanent": true
+  },
+  "isRead": false,
+  "createdAt": "{{now}}"
+}

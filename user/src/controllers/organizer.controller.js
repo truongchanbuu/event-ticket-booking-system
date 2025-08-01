@@ -148,12 +148,14 @@ export class OrganizerController {
         if (force) {
             await this.organizerService.deleteApplication(appID);
         } else {
-            await this.organizerService.updateApplicationStatus(
-                appID,
-                APPLY_STATUS.CANCELLED,
-                "admin",
-                reason,
-            );
+            // TODO: Fix
+            // await this.organizerService.updateApplicationStatus(
+            //     appID,
+            //     APPLY_STATUS.CANCELLED,
+            //     req.user.uid,
+            //     "admin",
+            //     reason,
+            // );
         }
 
         return res.status(200).json({
@@ -180,7 +182,7 @@ export class OrganizerController {
         const appID = req.params.applicationID;
         const app = await this.organizerService.getApplicationByAppID(appID);
 
-        this.logger?.debug(`appid ${appID} - app: ${JSON.stringify(app)}`);
+        console.log(`appid ${appID} - app: ${JSON.stringify(app)}`);
 
         if (app.userID !== uid) {
             return res.status(403).json({
@@ -197,7 +199,7 @@ export class OrganizerController {
         const applicationID = req.params.applicationID;
         const updateData = req.body;
 
-        this.logger?.debug(`updated : ${JSON.stringify(updateData)}`);
+        console.log(`updated : ${JSON.stringify(updateData)}`);
 
         const app =
             await this.organizerService.getApplicationByAppID(applicationID);
@@ -272,14 +274,10 @@ export class OrganizerController {
     }
 
     async checkApplication(req, res) {
-        // 1. Lấy tất cả thông tin cần thiết từ request
-        const { uid, role } = req.user;
+        const { uid, role, email } = req.user;
         const { applicationID, status } = req.params;
         const { reviewedBy, rejectionReason } = req.body;
 
-        this.logger?.debug(`DATA: ${uid} - role: ${role}`);
-
-        // 2. Rào chắn bảo vệ: Kiểm tra dữ liệu đầu vào có hợp lệ không
         if (!Object.values(APPLY_STATUS).includes(status)) {
             return res.status(400).json({
                 success: false,
@@ -287,9 +285,9 @@ export class OrganizerController {
             });
         }
 
-        // 3. Lấy thông tin đơn ứng tuyển từ database
         const application =
             await this.organizerService.getApplicationByAppID(applicationID);
+
         if (!application) {
             return res
                 .status(404)
@@ -345,13 +343,18 @@ export class OrganizerController {
             rejectionReason,
         );
 
+        const applicationUser = await this.userService.getUserByID(
+            application.userID,
+        );
+
         const baseEventPayload = {
-            key: application.userID,
-            value: {
-                userID: application.userID,
-                applicationId: application.applicationID,
-                processedBy: uid,
-            },
+            applicationId: application.applicationID,
+            userID: applicationUser.userID,
+            username: applicationUser.username,
+            email: applicationUser.email,
+            processedBy: uid,
+            processedEmail: email,
+            submittedAt: application.submittedAt,
         };
 
         // Xử lý các tác vụ phụ khi đơn được chấp thuận
@@ -362,40 +365,23 @@ export class OrganizerController {
                 organizerStatus: status,
             });
 
-            this.applicationEventService.sendApplicationApprovedEvent({
-                key: baseEventPayload.key,
-                value: {
-                    ...baseEventPayload.value,
-                    action: "approved",
-                    approvedAt: new Date().toISOString(),
-                },
-            });
+            this.applicationEventService.sendApplicationApproved(
+                baseEventPayload,
+            );
         }
 
         if (status === APPLY_STATUS.REJECTED) {
-            this.applicationEventService.sendApplicationRejectedEvent({
-                key: baseEventPayload.key,
-                value: {
-                    ...baseEventPayload.value,
-                    action: "rejected",
-                    rejectedAt: new Date().toISOString(),
-                    reason: rejectionReason,
-                },
+            this.applicationEventService.sendApplicationRejected({
+                ...baseEventPayload,
+                reason: rejectionReason,
             });
         }
 
         if (status === APPLY_STATUS.PERMANENT_REJECTED) {
-            this.applicationEventService.sendApplicationPermanentlyRejectedEvent(
-                {
-                    key: baseEventPayload.key,
-                    value: {
-                        ...baseEventPayload.value,
-                        action: "permantly_rejected",
-                        rejectedAt: new Date().toISOString(),
-                        reason: rejectionReason,
-                    },
-                },
-            );
+            this.applicationEventService.sendApplicationPermanentlyRejected({
+                ...baseEventPayload,
+                reason: rejectionReason,
+            });
         }
 
         return res.status(200).json({

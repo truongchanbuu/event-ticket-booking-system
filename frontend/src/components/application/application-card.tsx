@@ -164,7 +164,10 @@ export default function ApplicationCard({
               <span className="px-3 py-1 text-xs font-mono rounded-full bg-gray-100 text-gray-700">
                 {application.applicationID}
               </span>
-              <StatusBadge type="status" value={application.status} />
+              <StatusBadge
+                type="status"
+                value={getStatusBadge(application.status)}
+              />
             </div>
 
             {/* Organization name */}
@@ -327,3 +330,23 @@ export default function ApplicationCard({
     </TooltipProvider>
   );
 }
+
+const ACTIVE_STATUSES = [APPLY_STATUS.APPROVED, APPLY_STATUS.EDITING];
+const INVALID_STATUSES = [
+  APPLY_STATUS.CANCELLED,
+  APPLY_STATUS.LOCKED_BY_ADMIN,
+  APPLY_STATUS.PENDING,
+  APPLY_STATUS.PENDING_ADMIN,
+];
+const SUSPENDED_STATUSES = [
+  APPLY_STATUS.REJECTED,
+  APPLY_STATUS.PERMANENT_REJECTED,
+];
+
+const getStatusBadge = (status: APPLY_STATUS) => {
+  return ACTIVE_STATUSES.includes(status)
+    ? "active"
+    : INVALID_STATUSES.includes(status)
+      ? "inactive"
+      : "suspended";
+};

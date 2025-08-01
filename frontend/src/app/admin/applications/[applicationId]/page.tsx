@@ -30,6 +30,8 @@ import { Button } from "@/components/ui/button";
 import { APPLY_STATUS } from "@/schema";
 import { useApplicationDetail } from "@/hooks/use-application-detail";
 import { Textarea } from "@/components/ui/textarea";
+import { StatusBadge } from "@/components/ui/status-badge";
+import EmptyStateUI from "@/components/reload";
 
 const canLockStatuses = [
   APPLY_STATUS.APPROVED,
@@ -42,7 +44,7 @@ const canLockStatuses = [
 const EventOrganizerAdmin = () => {
   const { applicationId } = useParams<{ applicationId: string }>();
   const {
-    query: { data, isLoading },
+    query: { data, isLoading, refetch },
     approve,
     reject,
     permanentReject,
@@ -50,6 +52,8 @@ const EventOrganizerAdmin = () => {
     revertToPending,
   } = useApplicationDetail(applicationId);
   const applicationData = data?.data;
+
+  console.log(`APPDATA: ${JSON.stringify(applicationData)}`);
 
   const [expandedSections, setExpandedSections] = useState({
     organization: true,
@@ -64,8 +68,12 @@ const EventOrganizerAdmin = () => {
   const [showBanForm, setShowBanForm] = useState(false);
   const [banReason, setBanReason] = useState("");
 
-  if (isLoading || !applicationData) {
+  if (isLoading) {
     return <LoadingPage />;
+  }
+
+  if (!applicationData) {
+    return <EmptyStateUI refetch={refetch} />;
   }
 
   const toggleSection = (section) => {
@@ -131,8 +139,21 @@ const EventOrganizerAdmin = () => {
             </div>
 
             {/* Application Type Badge */}
-            <div className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
-              {applicationData.applyType.toUpperCase()}
+            <div className="flex gap-2">
+              <StatusBadge
+                className="p-2"
+                type="organizerStatus"
+                value="verified"
+                label={applicationData.applyType.toUpperCase()}
+                content={applicationData.applyType.toUpperCase()}
+              />
+
+              <StatusBadge
+                type="status"
+                className="p-2"
+                value={getStatusBadge(applicationData.status)}
+                label={applicationData.status.toUpperCase()}
+              />
             </div>
           </div>
 
@@ -608,3 +629,23 @@ const EventOrganizerAdmin = () => {
 };
 
 export default EventOrganizerAdmin;
+
+const ACTIVE_STATUSES = [APPLY_STATUS.APPROVED, APPLY_STATUS.EDITING];
+const INVALID_STATUSES = [
+  APPLY_STATUS.CANCELLED,
+  APPLY_STATUS.LOCKED_BY_ADMIN,
+  APPLY_STATUS.PENDING,
+  APPLY_STATUS.PENDING_ADMIN,
+];
+const SUSPENDED_STATUSES = [
+  APPLY_STATUS.REJECTED,
+  APPLY_STATUS.PERMANENT_REJECTED,
+];
+
+const getStatusBadge = (status: APPLY_STATUS) => {
+  return ACTIVE_STATUSES.includes(status)
+    ? "active"
+    : INVALID_STATUSES.includes(status)
+      ? "inactive"
+      : "suspended";
+};

@@ -17,16 +17,17 @@ import { OrganizerRoutes } from "./routes/organizer.routes.js";
 import { ProfileRoutes } from "./routes/profile.routes.js";
 
 import {
+    createLoggerFactory,
     createRedisClient,
     RedisService,
-    rootLogger,
 } from "@event_ticket_booking_system/shared";
 
 /**
  * Hàm factory để tạo, đăng ký, và khởi động DI container.
  */
 export async function configureContainer() {
-    const logger = rootLogger;
+    const logger = console;
+    // const logger = createLoggerFactory(config.app).logger;
 
     logger.info("Pre-initializing critical async services...");
     const kafkaServiceInstance = await createKafkaService({ config, logger });
@@ -34,7 +35,6 @@ export async function configureContainer() {
 
     const container = createContainer();
     container.register({
-        // Values & Clients (luôn là singleton)
         logger: asValue(logger),
         config: asValue(config),
 

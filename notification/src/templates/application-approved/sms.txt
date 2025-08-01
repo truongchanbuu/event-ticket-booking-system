@@ -1,1 +1,1 @@
-Great news! 🥳 Your event application has been approved. View your event dashboard: https://eventhub.com/organizer/events/{{event_id}}
+Great news! 🥳 Your event application has been approved.

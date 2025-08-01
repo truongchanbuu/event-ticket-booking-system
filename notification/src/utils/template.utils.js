@@ -1,6 +1,6 @@
+import Handlebars from 'handlebars';
 import fs from 'fs';
 import path from 'path';
-import Handlebars from 'handlebars';
 
 export function loadEmailTemplate(fileName) {
   const templatePath = path.resolve('src/templates', fileName);
@@ -8,6 +8,17 @@ export function loadEmailTemplate(fileName) {
     throw new Error(`Template not found: ${fileName}`);
   }
   return fs.readFileSync(templatePath, 'utf8');
+}
+
+export function processJsonTemplateFile(filePath, variables) {
+  const raw = fs.readFileSync(filePath, 'utf-8');
+  const compiled = Handlebars.compile(raw);
+  const outputStr = compiled(variables);
+  try {
+    return JSON.parse(outputStr); // đảm bảo template hợp lệ JSON
+  } catch (e) {
+    throw new Error(`Template rendering không ra JSON hợp lệ: ${e.message}`);
+  }
 }
 
 export function processTemplate(template, variables) {
@@ -20,9 +31,6 @@ export function validateVariables(templateConfig, variables) {
   const missing = required.filter((key) => !(key in variables));
   return missing;
 }
-
-// HELPERS
-import Handlebars from 'handlebars';
 
 /**
  * Register common Handlebars helpers

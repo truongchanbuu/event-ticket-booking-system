@@ -1,8 +1,8 @@
 /**
- * @param {{ db: FirebaseFirestore.Firestore, logger: import('winston').Logger }} deps
+ * @param {{ db, logger }} deps
  */
 export function createInAppService({ db, logger }) {
-  const inAppLogger = logger.child({ service: 'InAppService' });
+  const inAppLogger = console;
 
   return {
     /**
@@ -10,26 +10,45 @@ export function createInAppService({ db, logger }) {
      * @param {string} userId
      * @param {{ title: string, body: string, type?: string }} data
      */
-    async store(userId, data) {
+    async store(userId, notificationPayload) {
       try {
-        const notification = {
-          ...data,
-          createdAt: new Date(),
+        inAppLogger.log('🔔 Storing notification for userId:', userId);
+        inAppLogger.log(
+          '📦 Notification raw data:',
+          JSON.stringify(notificationPayload),
+        );
+
+        if (!userId) {
+          throw new Error('❌ userId is missing');
+        }
+
+        if (!notificationPayload.title || !notificationPayload.message) {
+          throw new Error('❌ Missing title or message in notification data');
+        }
+
+        const notificationToStore = {
+          ...notificationPayload,
           read: false,
+          createdAt: new Date().toISOString(),
         };
 
-        await db
+        inAppLogger.log('📄 Final notification object:', notificationToStore);
+
+        const docRef = await db
           .collection('users')
           .doc(userId)
           .collection('notifications')
-          .add(notification);
+          .add(notificationToStore);
 
-        inAppLogger.info(`📱 In-app notification stored for user ${userId}.`);
+        inAppLogger.log(
+          `✅ In-app notification stored: docId=${docRef.id}, userId=${userId}, type=${notificationToStore.type}`,
+        );
       } catch (error) {
         inAppLogger.error(
-          `❌ Failed to store in-app notification for user ${userId}:`,
-          error,
+          `❌ Failed to store in-app notification for userId=${userId}: ${error.message}`,
+          { error },
         );
+        throw error;
       }
     },
   };

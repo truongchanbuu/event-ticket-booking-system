@@ -2,7 +2,7 @@ import "dotenv/config";
 export default {
     app: {
         port: process.env.PORT || 3000,
-        node_env: process.env.NODE_ENV || "development",
+        nodeEnv: process.env.NODE_ENV || "development",
     },
 
     redis: {
@@ -18,13 +18,22 @@ export default {
     localRedis: {
         host: process.env.LOCAL_REDIS_HOST || "127.0.0.1",
         port: process.env.LOCAL_REDIS_PORT || 6379,
+        keyPrefix: process.env.SERVICE_NAME,
     },
 
     kafka: {
         clientId: process.env.KAFKA_CLIENT_ID,
         brokers: process.env.KAFKA_BROKERS.split(","),
-        connectionTimeout: parseInt(process.env.KAFKA_CONNECTION_TIMEOUT, 10),
-        authenticationTimeout: parseInt(process.env.KAFKA_AUTH_TIMEOUT, 10),
+        connectionTimeout: Number.isNaN(
+            Number(process.env.KAFKA_CONNECTION_TIMEOUT),
+        )
+            ? 3000
+            : parseInt(process.env.KAFKA_CONNECTION_TIMEOUT, 10),
+        authenticationTimeout: Number.isNaN(
+            Number(process.env.KAFKA_AUTH_TIMEOUT),
+        )
+            ? 3000
+            : parseInt(process.env.KAFKA_AUTH_TIMEOUT, 10),
         retry: {
             initialRetryTime: 100,
             retries: 5,

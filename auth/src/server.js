@@ -19,7 +19,7 @@ async function bootstrap() {
 
         server = app.listen(PORT, () => {
             rootLogger.debug(`🚀 Auth service running on port ${PORT}`);
-            rootLogger.debug(`📊 Environment: ${config.node_env}`);
+            rootLogger.debug(`📊 Environment: ${config.app.nodeEnv}`);
         });
 
         // Graceful shutdown handling

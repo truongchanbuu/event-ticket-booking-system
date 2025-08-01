@@ -109,7 +109,7 @@ export class AuthController {
             name: "session",
             value: "",
             httpOnly: true,
-            secure: this.config.app.node_env === "production",
+            secure: this.config.app.nodeEnv === "production",
             path: "/",
             maxAge: 0,
         });
@@ -139,7 +139,7 @@ export class AuthController {
             res.cookie(COOKIE_NAME || "__session", sessionCookie, {
                 maxAge: SESSION_EXPIRE_MS,
                 httpOnly: true,
-                secure: this.config.app.node_env === "production",
+                secure: this.config.app.nodeEnv === "production",
                 path: "/",
                 sameSite: "lax",
             });

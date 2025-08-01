@@ -428,9 +428,11 @@ export class UserService {
             key,
             async () => {
                 const doc = await this.userCollection.doc(userID).get();
+
                 if (!doc.exists) {
                     return null;
                 }
+
                 return { id: doc.id, ...doc.data() };
             },
             ttl,

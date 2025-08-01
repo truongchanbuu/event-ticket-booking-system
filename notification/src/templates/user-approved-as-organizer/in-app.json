@@ -8,7 +8,7 @@
     {
       "label": "Create First Event",
       "action": "navigate",
-      "target": "/organizer/create-event",
+      "target": "/organizer/create",
       "style": "primary"
     },
     {

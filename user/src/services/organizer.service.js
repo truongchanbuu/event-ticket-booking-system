@@ -5,6 +5,7 @@ import {
     ORGANIZER_STATUS,
     db,
     REDIS_TTL,
+    FieldValue,
 } from "@event_ticket_booking_system/shared";
 import { USER_STATUS } from "../enums/user-status.enum.js";
 import {
@@ -32,7 +33,7 @@ export class OrganizerService {
 
     _getUserAppsCacheKey(userID, options) {
         const { orderBy = "desc", sortBy = "submittedAt" } = options;
-        return `user-apps:${userID}:${sortBy}:${orderBy}`;
+        return `${userID}:${sortBy}:${orderBy}`;
     }
 
     async getAllApplications(options = {}) {
@@ -146,7 +147,7 @@ export class OrganizerService {
         return this.redisService.getOrSet(
             cacheKey,
             async () => {
-                this.logger?.debug(
+                console.log(
                     `[DB Read] Fetching application ${appID} from Firestore.`,
                 );
                 const applicationSnap = await this.orgCollection
@@ -157,9 +158,6 @@ export class OrganizerService {
                     return null;
                 }
 
-                console.log(
-                    `[DB GET] - db got: ${JSON.stringify(applicationSnap)}`,
-                );
                 return applicationSnap.data();
             },
             REDIS_TTL.ORGANIZER_APP,
@@ -180,7 +178,7 @@ export class OrganizerService {
         return this.redisService.getOrSet(
             cacheKey,
             async () => {
-                this.logger?.debug(
+                console.log(
                     `[DB Read] Fetching applications for user ${userID} from Firestore.`,
                 );
                 const { orderBy = "desc", sortBy = "submittedAt" } = options;
@@ -203,13 +201,11 @@ export class OrganizerService {
 
     async canApplyOrganizer(userID) {
         try {
-            this.logger?.debug(`[canApplyOrganizer] Checking user ${userID}`);
+            console.log(`[canApplyOrganizer] Checking user ${userID}`);
 
             const userSnap = await this.userCollection.doc(userID).get();
             if (!userSnap.exists) {
-                this.logger?.debug(
-                    `[canApplyOrganizer] User not found: ${userID}`,
-                );
+                console.log(`[canApplyOrganizer] User not found: ${userID}`);
                 return {
                     canApply: false,
                     reason: "User not found.",
@@ -218,7 +214,7 @@ export class OrganizerService {
             }
 
             const user = userSnap.data();
-            this.logger?.debug(`[canApplyOrganizer] User data:`, user);
+            console.log(`[canApplyOrganizer] User data:`, user);
 
             // Check if account is deleted
             if (user?.isDeleted || user?.deletedAt) {
@@ -260,7 +256,7 @@ export class OrganizerService {
 
             // Check existing applications
             const applications = await this.getApplicationsByUserID(userID);
-            this.logger?.debug(
+            console.log(
                 `[canApplyOrganizer] Found ${applications.length} applications`,
             );
 
@@ -348,13 +344,10 @@ export class OrganizerService {
     async createApplication(applicationData) {
         const userID = applicationData.userID;
 
-        this.logger?.debug(`[createApplication] Start for user: ${userID}`);
+        console.log(`[createApplication] Start for user: ${userID}`);
 
         const canApplyResult = await this.canApplyOrganizer(userID);
-        this.logger?.debug(
-            `[createApplication] canApply result:`,
-            canApplyResult,
-        );
+        console.log(`[createApplication] canApply result:`, canApplyResult);
 
         if (!canApplyResult.canApply) {
             throw new AppError({
@@ -371,7 +364,7 @@ export class OrganizerService {
             user,
         );
 
-        this.logger?.debug(
+        console.log(
             `[createApplication] Admin approval check:`,
             adminApprovalCheck,
         );
@@ -396,10 +389,7 @@ export class OrganizerService {
             },
         };
 
-        this.logger?.debug(
-            `[createApplication] New application:`,
-            newApplication,
-        );
+        console.log(`[createApplication] New application:`, newApplication);
 
         const batch = db.batch();
 
@@ -411,11 +401,11 @@ export class OrganizerService {
 
         await batch.commit();
 
-        this.logger?.debug(
+        console.log(
             `[createApplication] Application committed: ${applicationID}`,
         );
 
-        this.logger?.debug(
+        console.log(
             `[Cache Invalidate] Deleting user apps list cache for user ${userID}`,
         );
         await this.redisService.del(this._getUserAppsCacheKey(userID, {}));
@@ -513,74 +503,110 @@ export class OrganizerService {
 
         batch.set(docRef, mergedData, { merge: true });
         await batch.commit();
-        this.logger?.debug(
+        console.log(
             `[Cache Invalidate] Deleting caches for app ${applicationID} and user ${existingApp.userID}`,
         );
-        await this.redisService.del([
-            this._getAppCacheKey(applicationID),
-            this._getUserAppsCacheKey(existingApp.userID, {}),
-        ]);
+        await this.redisService.del(
+            ...[
+                this._getAppCacheKey(applicationID),
+                this._getUserAppsCacheKey(existingApp.userID, {}),
+            ],
+        );
 
         return mergedData;
     }
 
     async updateApplicationStatus(
         applicationID,
-        status,
+        newStatus,
         userID,
         reviewedBy = null,
         rejectionReason = null,
     ) {
-        const batch = db.batch();
-        const updateData = {
-            status,
-            updatedAt: new Date().toISOString(),
-        };
-        if (reviewedBy) {
-            updateData.reviewedBy = reviewedBy;
-            updateData.reviewedAt = new Date().toISOString();
-        }
-        if (rejectionReason) {
-            updateData.rejectionReason = rejectionReason;
-        }
-
-        const application = await this.getApplicationByAppID(applicationID);
-        if (application.userID !== userID) {
-            throw new AppError({
-                message: "You are not allowed to update application",
-                errorCode: ERROR_CODE.UNAUTHORIZED,
-                statusCode: 401,
-            });
-        }
-
         const appRef = this.orgCollection.doc(applicationID);
         const userRef = this.userCollection.doc(userID);
 
-        batch.update(appRef, updateData);
-        console.log(`updated data: ${updateData}`);
+        const updatedApplicationData = await db.runTransaction(
+            async (transaction) => {
+                const appSnap = await transaction.get(appRef);
 
-        const userOrganizerStatus =
-            {
-                [APPLY_STATUS.APPROVED]: ORGANIZER_STATUS.APPROVED,
-                [APPLY_STATUS.REJECTED]: ORGANIZER_STATUS.NONE,
-                [APPLY_STATUS.PERMANENT_REJECTED]: ORGANIZER_STATUS.NONE,
-                [APPLY_STATUS.CANCELLED]: ORGANIZER_STATUS.NONE,
-            }[status] || ORGANIZER_STATUS.PENDING;
+                if (!appSnap.exists) {
+                    throw new AppError({
+                        message: "Application not found",
+                        errorCode: ERROR_CODE.NOT_FOUND,
+                        statusCode: 404,
+                    });
+                }
 
-        batch.update(userRef, {
-            organizerStatus: userOrganizerStatus,
-            updatedAt: new Date().toISOString(),
-        });
-        await batch.commit();
+                const currentAppData = appSnap.data();
 
-        await this.redisService.del([
-            this._getAppCacheKey(applicationID),
-            this._getUserAppsCacheKey(userID, {}),
-        ]);
+                if (currentAppData.userID !== userID) {
+                    throw new AppError({
+                        message:
+                            "You are not allowed to update this application",
+                        errorCode: ERROR_CODE.UNAUTHORIZED,
+                        statusCode: 403,
+                    });
+                }
 
-        this.logger?.debug(
-            `[Cache Invalidate] Deleting caches for app ${applicationID} and user ${userID}`,
+                // Chuẩn bị object update
+                const updateData = {
+                    status: newStatus,
+                    updatedAt: new Date().toISOString(),
+                    moderation: {
+                        ...(currentAppData.moderation || {}), // Clone moderation cũ nếu có
+                    },
+                };
+
+                if (reviewedBy) {
+                    updateData.moderation.reviewedBy = reviewedBy;
+                    updateData.moderation.reviewedAt = new Date().toISOString();
+                }
+
+                if (rejectionReason) {
+                    updateData.moderation.rejectionReason = rejectionReason;
+                }
+
+                if (newStatus === APPLY_STATUS.REJECTED) {
+                    updateData.moderation.rejectCount =
+                        (currentAppData.moderation?.rejectCount || 0) + 1;
+                }
+
+                transaction.update(appRef, updateData);
+
+                const userOrganizerStatus =
+                    {
+                        [APPLY_STATUS.APPROVED]: ORGANIZER_STATUS.APPROVED,
+                        [APPLY_STATUS.REJECTED]: ORGANIZER_STATUS.NONE,
+                        [APPLY_STATUS.PERMANENT_REJECTED]:
+                            ORGANIZER_STATUS.NONE,
+                        [APPLY_STATUS.CANCELLED]: ORGANIZER_STATUS.NONE,
+                    }[newStatus] || ORGANIZER_STATUS.PENDING;
+
+                transaction.update(userRef, {
+                    organizerStatus: userOrganizerStatus,
+                    updatedAt: new Date().toISOString(),
+                });
+
+                return {
+                    ...currentAppData,
+                    ...updateData,
+                };
+            },
         );
+
+        console.log(
+            `[Cache Write-Through] Updating/Deleting caches for app ${applicationID} and user ${userID}`,
+        );
+
+        await this.redisService.del(
+            ...[
+                this._getAppCacheKey(applicationID),
+                this._getUserAppsCacheKey(userID, {}),
+            ],
+        );
+
+        return updatedApplicationData;
     }
 
     async deleteApplication(applicationID) {
@@ -597,13 +623,15 @@ export class OrganizerService {
         await this.orgCollection.doc(applicationID).delete();
 
         // [CACHE] Xóa cache của đơn này VÀ danh sách đơn của người dùng
-        this.logger?.debug(
+        console.log(
             `[Cache Invalidate] Deleting caches for app ${applicationID} and user ${appToDelete.userID}`,
         );
-        await this.redisService.del([
-            this._getAppCacheKey(applicationID),
-            this._getUserAppsCacheKey(appToDelete.userID, {}),
-        ]);
+        await this.redisService.del(
+            ...[
+                this._getAppCacheKey(applicationID),
+                this._getUserAppsCacheKey(appToDelete.userID, {}),
+            ],
+        );
     }
 
     // Helper methods

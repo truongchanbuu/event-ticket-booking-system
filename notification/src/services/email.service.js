@@ -1,45 +1,87 @@
-import nodemailer from 'nodemailer';
+// file: src/services/email.service.js
+import { Resend } from 'resend';
 
-/**
- * Tạo email service có khả năng gửi mail qua SMTP
- * @param {object} emailConfig - { host, port, user, pass }
- * @returns {{ send: Function }}
- */
-export function createEmailService({ logger, config }) {
-  const emailLogger = logger.child({ service: 'EmailService' });
+export class EmailService {
+  #resend;
+  #logger;
+  #defaultFrom;
 
-  const transporter = nodemailer.createTransport({
-    host: config.host,
-    port: config.port,
-    secure: config.secure || false,
-    auth: config,
-  });
+  /**
+   * @param {object} dependencies - DI
+   * @param {object} dependencies.config - Config từ process.env
+   * @param {object} dependencies.logger
+   */
+  constructor({ config, templateConfig, logger }) {
+    this.#logger = console;
 
-  return {
-    /**
-     * Gửi email
-     * @param {{ to: string, subject: string, html: string }} param0
-     */
-    send: async ({ to, subject, html }) => {
-      if (!to) {
-        emailLogger.warn('⚠️ Email not sent: missing recipient.');
-        return;
-      }
+    const apiKey = config.email.resend?.apiKey;
+    if (!apiKey) {
+      this.#logger.error(
+        '[EmailService] Resend API key is missing. Email sending will be disabled.',
+      );
+      return;
+    }
 
-      try {
-        const info = await transporter.sendMail({
-          from: `"Event Ticket Booking System" <${config.user}>`,
-          to,
-          subject,
-          html,
-        });
+    this.#resend = new Resend(apiKey);
 
-        emailLogger.info(
-          `📧 Email sent to ${to}. Message ID: ${info.messageId}`,
+    // Lấy địa chỉ email gửi mặc định từ config
+    this.#defaultFrom =
+      templateConfig.global.sender.email || 'noreply@yourdomain.com';
+  }
+
+  /**
+   * Gửi email sử dụng Resend.
+   * @param {{ to: string, fromName?: string, fromAddress?: string, subject: string, html: string }} options
+   */
+  async send(options) {
+    if (!this.#resend) {
+      this.#logger.error(
+        '[EmailService] Cannot send email, service is not initialized (missing API key).',
+      );
+      throw new Error('EmailService is not configured.');
+    }
+
+    let { to, fromName, fromAddress, subject, html } = options;
+
+    const from = `"${fromName || 'EventHub'}" <${fromAddress || this.#defaultFrom}>`;
+
+    this.#logger.log(
+      `[EmailService] Attempting to send email via Resend to: ${to} from ${from}`,
+    );
+
+    // TODO: TEST ONLY
+    if (process.env.NODE_ENV === 'development') {
+      to = 'truongbuu1593@gmail.com';
+    }
+
+    try {
+      const { data, error } = await this.#resend.emails.send({
+        from: from,
+        to: [to],
+        subject: subject,
+        html: html,
+      });
+
+      if (error) {
+        this.#logger.error(
+          '[EmailService] FAILED to send email via Resend (API error).',
+          { error },
         );
-      } catch (error) {
-        emailLogger.error(`❌ Failed to send email to ${to}:`, error);
+        throw new Error(error.message);
       }
-    },
-  };
+
+      this.#logger.log('[EmailService] Email sent successfully via Resend!', {
+        messageId: data.id,
+      });
+      return data;
+    } catch (error) {
+      this.#logger.error(
+        '[EmailService] FAILED to send email via Resend (Transport error).',
+        {
+          errorMessage: error.message,
+        },
+      );
+      throw error; // Ném lại lỗi để hệ thống biết
+    }
+  }
 }

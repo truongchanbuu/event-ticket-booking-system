@@ -1,277 +1,66 @@
-# Global Configuration
+# ===================================================================
+# GLOBAL CONFIGURATION
+# Chỉ giữ lại những gì thực sự cần thiết.
+# ===================================================================
 global:
-  brand:
-    name: 'EventHub'
-    primary_color: '#667eea'
-    success_color: '#10b981'
-    warning_color: '#f59e0b'
-    error_color: '#ef4444'
-    critical_color: '#7c2d12'
-
-  urls:
-    base_url: 'https://eventhub.com'
-    support_url: 'https://eventhub.com/support'
-    guidelines_url: 'https://eventhub.com/guidelines'
-    legal_contact_url: 'https://eventhub.com/legal/contact'
-
   sender:
-    email: 'noreply@eventhub.com'
+    email: 'onboarding@resend.dev'
     name: 'EventHub Team'
-    sms_sender: 'EventHub'
 
-# Notification Types Configuration
+# ===================================================================
+# NOTIFICATION TYPES
+# Mỗi khối chỉ định nghĩa những gì cần thiết để gửi. Không có 'variables'.
+# ===================================================================
 notifications:
-  USER_REGISTERED:
-    name: 'User Registration Welcome'
-    priority: 'high'
-    variables:
-      - user_name
-      - explore_events_url
-      - become_organizer_url
-      - organizer_guide_url
-      - support_url
-
-    sms:
-      enabled: true
-      template: 'Thanks for joining EventHub! 🎉 Explore amazing events or become an organizer to create your own. Get started: {{explore_events_url}}'
-      max_length: 160
-
-    email:
-      enabled: true
-      subject: 'Welcome to EventHub! 🎉'
-      template_file: 'templates/email/user_registered.html'
-      from: '{{global.sender.email}}'
-      from_name: '{{global.sender.name}}'
-
-    in_app:
-      enabled: true
-      type: 'welcome'
-      title: 'Welcome to EventHub! 🎉'
-      message: 'Explore amazing events or become an organizer to create your own.'
-      icon: '🎉'
-      color: '{{global.brand.primary_color}}'
-      dismissible: true
-      auto_hide: false
-      actions:
-        - label: 'Explore Events'
-          action: 'navigate'
-          target: '/events'
-          style: 'primary'
-        - label: 'Become Organizer'
-          action: 'navigate'
-          target: '/organizer/apply'
-          style: 'secondary'
-
-  USER_APPROVED_AS_ORGANIZER:
-    name: 'Organizer Approval'
-    priority: 'high'
-    variables:
-      - user_name
-      - organizer_dashboard_url
-      - create_event_url
-      - organizer_help_url
-
-    sms:
-      enabled: true
-      template: "Congratulations! 🎉 You're now an approved EventHub organizer. Start creating your first event: {{create_event_url}}"
-
-    email:
-      enabled: true
-      subject: "You're now an approved organizer! ✅"
-      template_file: 'templates/email/organizer_approved.html'
-
-    in_app:
-      enabled: true
-      type: 'success'
-      title: 'Organizer Profile Approved! ✅'
-      message: 'Your organizer profile is now approved. Start creating events!'
-      icon: '✅'
-      color: '{{global.brand.success_color}}'
-      actions:
-        - label: 'Create First Event'
-          action: 'navigate'
-          target: '/organizer/create-event'
-          style: 'primary'
-        - label: 'View Dashboard'
-          action: 'navigate'
-          target: '/organizer/dashboard'
-          style: 'secondary'
-
   APPLICATION_APPROVED:
     name: 'Event Application Approved'
-    priority: 'high'
-    variables:
-      - organizer_name
-      - event_name
-      - event_date
-      - event_location
-      - expected_attendees
-      - event_id
-      - event_dashboard_url
-      - event_public_url
-      - organizer_support_url
-
-    sms:
-      enabled: true
-      template: 'Great news! 🥳 Your event application has been approved. View your event dashboard: {{event_dashboard_url}}'
-
     email:
-      enabled: true
-      subject: 'Your event permit has been approved 🥳'
-      template_file: 'templates/email/application_approved.html'
-
+      subject: 'Your event permit has been approved! 🥳'
+      template_file: 'application-approved/email.hbs'
     in_app:
-      enabled: true
-      type: 'success'
-      title: 'Event Application Approved! 🥳'
-      message: "Your application to host '{{event_name}}' has been approved!"
-      icon: '🥳'
-      color: '{{global.brand.warning_color}}'
-      metadata:
-        event_id: '{{event_id}}'
-        event_name: '{{event_name}}'
-      actions:
-        - label: 'View Dashboard'
-          action: 'navigate'
-          target: '/organizer/events/{{event_id}}/dashboard'
-          style: 'primary'
-        - label: 'View Event Page'
-          action: 'navigate'
-          target: '/events/{{event_id}}'
-          style: 'secondary'
+      template_file: 'application-approved/in-app.json.hbs'
+      # title: 'Event Application Approved! 🥳'
+      # message: 'Congratulations! Your application has been approved. Check your dashboard for details.'
+      # # Link được hardcode, không cần biến
+      # target: '/profile/dashboard'
+      # icon: '✅' # hoặc 'success-icon', 'check-circle'
+      # color: '#28a745' # Màu xanh lá
+      # dismissible: true
+      # autoHide: 5000 # Tự động ẩn sau 5 giây
 
   APPLICATION_REJECTED:
     name: 'Event Application Rejected'
-    priority: 'high'
-    variables:
-      - organizer_name
-      - event_name
-      - event_date
-      - event_location
-      - rejection_reason
-      - application_id
-      - event_guidelines_url
-      - resubmit_url
-      - support_url
-      - appeal_url
-
-    sms:
-      enabled: true
-      template: 'Your EventHub event application was not approved. Please check your email for details and resubmission guidelines.'
-
     email:
-      enabled: true
       subject: 'Your event application was rejected ❌'
-      template_file: 'templates/email/application_rejected.html'
-
+      template_file: 'application-rejected/email.hbs'
     in_app:
-      enabled: true
-      type: 'warning'
-      title: 'Application Rejected ❌'
-      message: 'Your application was rejected. Please review and try again.'
-      icon: '❌'
-      color: '{{global.brand.error_color}}'
-      metadata:
-        application_id: '{{application_id}}'
-        event_name: '{{event_name}}'
-        rejection_reason: '{{rejection_reason}}'
-      actions:
-        - label: 'View Details'
-          action: 'navigate'
-          target: '/organizer/applications/{{application_id}}'
-          style: 'primary'
-        - label: 'Submit New Application'
-          action: 'navigate'
-          target: '/organizer/apply'
-          style: 'secondary'
+      template_file: 'application-rejected/in-app.json.hbs'
+      # title: 'Application Rejected ❌'
+      # message: 'Unfortunately, your application was not approved. Please check your email for more details.'
+      # target: '/profile/applications'
+      # icon: '❌' # hoặc 'error-icon', 'x-circle'
+      # color: '#dc3545' # Màu đỏ
+      # dismissible: true
+      # autoHide: 10000
 
   APPLICATION_PERMANENTLY_REJECTED:
     name: 'Event Application Permanently Rejected'
-    priority: 'critical'
-    variables:
-      - organizer_name
-      - event_name
-      - rejection_reason
-      - application_id
-      - support_url
-      - guidelines_url
-      - legal_contact_url
-
-    sms:
-      enabled: true
-      template: 'Your EventHub application has been permanently rejected. Please check your email for details and contact support if needed.'
-
     email:
-      enabled: true
-      subject: 'Application permanently rejected'
-      template_file: 'templates/email/application_permanently_rejected.html'
-
+      subject: 'Important: Your event application was permanently rejected'
+      template_file: 'application-permantly-rejected/email.hbs'
     in_app:
-      enabled: true
-      type: 'error'
+      template_file: 'application-permantly-rejected/in-app.json.hbs'
       title: 'Application Permanently Rejected'
-      message: 'Your application has been permanently rejected and cannot be resubmitted.'
-      icon: '⚠️'
-      color: '{{global.brand.critical_color}}'
-      dismissible: false
-      auto_hide: false
-      metadata:
-        application_id: '{{application_id}}'
-        event_name: '{{event_name}}'
-        rejection_reason: '{{rejection_reason}}'
-        is_permanent: true
-      actions:
-        - label: 'View Details'
-          action: 'navigate'
-          target: '/organizer/applications/{{application_id}}'
-          style: 'primary'
-        - label: 'Contact Support'
-          action: 'external_link'
-          target: '{{support_url}}'
-          style: 'secondary'
+      message: 'Your application has been permanently rejected. This decision is final.'
+      target: '/profile/applications'
+      icon: '🚫'
+      color: '#6c757d'
+      dismissible: true
+      autoHide: 15000
+      type: 'warning'
 
-# URL Templates Configuration
-url_templates:
-  explore_events_url: '{{global.urls.base_url}}/events'
-  become_organizer_url: '{{global.urls.base_url}}/organizer/apply'
-  organizer_guide_url: '{{global.urls.base_url}}/organizer/guide'
-  organizer_dashboard_url: '{{global.urls.base_url}}/organizer/dashboard'
-  create_event_url: '{{global.urls.base_url}}/organizer/create-event'
-  organizer_help_url: '{{global.urls.base_url}}/organizer/help'
-  event_dashboard_url: '{{global.urls.base_url}}/organizer/events/{{event_id}}/dashboard'
-  event_public_url: '{{global.urls.base_url}}/events/{{event_id}}'
-  organizer_support_url: '{{global.urls.base_url}}/organizer/support'
-  event_guidelines_url: '{{global.urls.base_url}}/guidelines/events'
-  resubmit_url: '{{global.urls.base_url}}/organizer/apply?resubmit={{application_id}}'
-  appeal_url: '{{global.urls.base_url}}/appeals/{{application_id}}'
-
-# Email Template Settings
-email_settings:
-  template_directory: 'templates/email/'
-  default_layout: 'templates/email/layouts/base.html'
-  image_base_url: '{{global.urls.base_url}}/images/email/'
-  unsubscribe_url: '{{global.urls.base_url}}/unsubscribe/{{user_id}}'
-
-# SMS Settings
-sms_settings:
-  default_sender: '{{global.sender.sms_sender}}'
-  max_length: 160
-  unicode_support: true
-
-# In-App Notification Settings
-in_app_settings:
-  default_timeout: 0 # 0 = no auto-hide
-  max_actions: 2
-  supported_actions:
-    - navigate
-    - external_link
-    - dismiss
-    - modal
-
-# Localization Support
-localization:
-  default_locale: 'vi_VN'
-  supported_locales:
-    - 'vi_VN'
-    - 'en_US'
-  template_path_pattern: 'templates/{locale}/{channel}/{template_name}.{ext}'
+# ===================================================================
+# SERVICE SETTINGS
+# ===================================================================
+settings:
+  template_directory: 'src/templates'

@@ -1,9 +1,10 @@
+import twilio from 'twilio';
+
 export default function createSmsService({ config, logger }) {
-  const smsLogger = logger.child({ service: 'SMS Service' });
-  const client = require('twilio')(
-    config.twilio_account_sid,
-    config.twilio_auth_token,
-  );
+  // const smsLogger = logger?.child({ service: 'SMS Service' }) ?? console;
+  const smsLogger = console;
+
+  const client = twilio(config.twilio_account_sid, config.twilio_auth_token);
 
   return {
     send: async ({ to, message }) => {
