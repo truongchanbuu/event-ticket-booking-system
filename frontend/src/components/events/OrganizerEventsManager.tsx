@@ -70,7 +70,7 @@ import type { EventType } from "@/schema";
 import { formatDate } from "@/lib/utils";
 import { EVENT_STATUS } from "@/schema/enums/event-status";
 import EventFormModal from "./EventCreationModal";
-import TicketManagementModal from "./TicketManagementModal";
+import TicketManagementModal from "./CreateTicketTypeModal";
 import AttendeesModal from "./AttendeesList";
 import { useAuth } from "@/app/providers/AuthProvider";
 

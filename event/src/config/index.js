@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { TICKET_TYPES_EVENTS } from "../../../shared/kafka/topics.js";
 export default {
     app: {
         port: process.env.PORT || 3000,
@@ -37,6 +38,18 @@ export default {
         retry: {
             initialRetryTime: 100,
             retries: 5,
+        },
+
+        topics: {
+            ticket_type_events: TICKET_TYPES_EVENTS,
+        },
+        consumerGroups: {
+            main_events: "event-service-main-group",
+            ticket_type_group: "event-service-ticket-type-group",
+        },
+        dlqTopics: {
+            main_events_dlq: "event-service.main.dlq",
+            ticket_type_dlq: "event-service.ticket-type.dlq",
         },
     },
 };

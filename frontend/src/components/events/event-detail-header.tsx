@@ -8,32 +8,26 @@ import { Calendar, Loader2, MapPin, Plus, Star, Variable } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { Event } from "@/schema";
 import { toUpperCaseFirstLetter } from "@/lib/helpers/string.helper";
-import { UseMutateAsyncFunction } from "@tanstack/react-query";
-
-type EventUpdateInput = Partial<Event>;
-
-type UpdateEventFn = UseMutateAsyncFunction<
-  { data: Event },
-  Error,
-  EventUpdateInput,
-  unknown
->;
+import { UpdateEventFn } from "@/types/update-type";
+import CategoryDialog from "../ui/category-modal";
+import { toast } from "@/hooks/use-toast";
 
 interface EventDetailHeaderProps {
   eventId: string;
   eventDetail: Event;
   images: string[];
-  isUploading?: boolean;
   updateEvent: UpdateEventFn;
 }
 
 export default function EventDetailHeader({
   eventDetail,
   images: imgs,
-  isUploading = false,
   eventId,
   updateEvent,
 }: EventDetailHeaderProps) {
+  const [isUploading, setIsUploading] = useState(false);
+  const [isCategoriesModalOpen, setIsCategoriesModalOpen] = useState(false);
+
   const [originalImages, setOriginalImages] = useState<ImageItem[]>([]);
   const [images, setImages] = useState<ImageItem[]>([]);
 
@@ -43,41 +37,57 @@ export default function EventDetailHeader({
     setOriginalImages(transferredImages);
   }, [imgs]);
 
-  const handleAddCategory = () => {};
+  const handleAddCategory = async (selected: string[]) => {
+    try {
+      await updateEvent({ categories: selected });
+      toast({ variant: "success", title: "Update Successfully." });
+      setIsCategoriesModalOpen(false);
+    } catch (error) {
+      toast({ variant: "destructive", title: "Failed to update." });
+    }
+  };
 
   const handleSave = async (newImages: ImageItem[]) => {
-    const added = newImages.filter((img) => img.file);
-    const kept = newImages.filter((img) => !img.file);
-    const deleted = originalImages.filter(
-      (orig) => !newImages.some((img) => img.src === orig.src)
-    );
+    setIsUploading(true);
 
-    const uploaded = await Promise.all(
-      added.map(async (img) => {
-        const url = await uploadToCloudinary(
-          img.file!,
-          "thumbnails",
-          `events`,
-          eventId
-        );
-        return { ...img, src: url, file: undefined };
-      })
-    );
+    try {
+      const added = newImages.filter((img) => img.file);
+      const kept = newImages.filter((img) => !img.file);
+      const deleted = originalImages.filter(
+        (orig) => !newImages.some((img) => img.src === orig.src)
+      );
 
-    await Promise.all(
-      deleted.map(async (img) => {
-        await deleteImageFromCloudinary(img.src);
-      })
-    );
+      const uploaded = await Promise.all(
+        added.map(async (img) => {
+          const url = await uploadToCloudinary(
+            img.file!,
+            "thumbnails",
+            `events`,
+            eventId
+          );
+          return { ...img, src: url, file: undefined };
+        })
+      );
 
-    const final = [...kept, ...uploaded];
-    const finalUrls: string[] = final.map((img) => img.src);
+      await Promise.all(
+        deleted.map(async (img) => {
+          await deleteImageFromCloudinary(img.src);
+        })
+      );
 
-    console.log(`FINALS: ${finalUrls}`);
-    await updateEvent({ images: finalUrls });
+      const final = [...kept, ...uploaded];
+      const finalUrls: string[] = final.map((img) => img.src);
 
-    setImages(final);
-    setOriginalImages(final);
+      console.log(`FINALS: ${finalUrls}`);
+      await updateEvent({ images: finalUrls });
+
+      setOriginalImages(final);
+      setImages(final);
+    } catch (e) {
+      console.log(e);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return isUploading ? (
@@ -150,7 +160,7 @@ export default function EventDetailHeader({
           ))}
 
           <button
-            onClick={handleAddCategory}
+            onClick={() => setIsCategoriesModalOpen(true)}
             className="ml-1 text-xs text-blue-500 px-1 py-1 rounded-full border border-blue-300 opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-blue-100"
             title="Add category"
           >
@@ -158,6 +168,15 @@ export default function EventDetailHeader({
           </button>
         </div>
       </div>
+
+      {isCategoriesModalOpen && (
+        <CategoryDialog
+          onSave={handleAddCategory}
+          closeModal={() => setIsCategoriesModalOpen(false)}
+          initialCategories={eventDetail.categories}
+          isModalOpen={isCategoriesModalOpen}
+        />
+      )}
     </div>
   );
 }

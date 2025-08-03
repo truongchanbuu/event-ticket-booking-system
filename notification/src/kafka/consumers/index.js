@@ -1,5 +1,3 @@
-// src/consumers/index.js (Hoặc consumer_orchestrator.js)
-
 export class ConsumerOrchestrator {
   /**
    * @param {object} dependencies - DI

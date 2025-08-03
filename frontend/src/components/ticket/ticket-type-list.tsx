@@ -10,6 +10,7 @@ import {
   Users,
   AlertCircle,
   CheckCircle,
+  Plus,
 } from "lucide-react";
 
 interface TicketTypeListProps {
@@ -93,22 +94,29 @@ export default function TicketTypeList({
               <p className="text-gray-600 mb-4">
                 There are no ticket types configured for this event.
               </p>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={async () => await refetch()}
-                className="gap-2"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Try Again
-              </Button>
+
+              <div className="flex flex-col items-center gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={async () => await refetch()}
+                  className="gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Try Again
+                </Button>
+
+                <Button type="button">
+                  <Plus />
+                  Add Ticket Types
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="p-6">
               <div className="space-y-4">
                 {attendeesByTicketType.map((ticket) => {
-                  const soldCount =
-                    ticket.totalQuantity - ticket.remainingQuantity;
+                  const soldCount = ticket.soldQuantity;
                   const soldPercentage =
                     ticket.totalQuantity > 0
                       ? (soldCount / ticket.totalQuantity) * 100
@@ -177,7 +185,7 @@ export default function TicketTypeList({
                             Remaining
                           </p>
                           <p className="font-bold text-gray-900">
-                            {ticket.remainingQuantity}
+                            {ticket.totalQuantity - ticket.soldQuantity}
                           </p>
                         </div>
                       </div>

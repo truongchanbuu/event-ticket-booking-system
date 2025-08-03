@@ -77,8 +77,14 @@ export class KafkaService {
 
     const kafkaMessages = messages.map((msg) => ({
       key: msg.key,
-      value:
-        typeof msg.value === "string" ? msg.value : JSON.stringify(msg.value),
+      value: Buffer.isBuffer(msg.value)
+        ? msg.value
+        : Buffer.from(
+            typeof msg.value === "string"
+              ? msg.value
+              : JSON.stringify(msg.value),
+            "utf8"
+          ),
       headers: msg.headers,
     }));
 
@@ -107,7 +113,12 @@ export class KafkaService {
       throw new Error("Kafka not connected. Call initialize() first.");
     }
 
-    const consumer = this.kafka.consumer({ groupId, ...consumerConfig });
+    const consumer = this.kafka.consumer({
+      groupId,
+      sessionTimeout: 300000,
+      heartbeatInterval: 10000,
+      ...consumerConfig,
+    });
     await consumer.connect();
     await consumer.subscribe({ topic, fromBeginning: true });
 
@@ -179,10 +190,19 @@ export class KafkaService {
       attempt: attempt + 1,
     });
 
+    let safeValue = message.value;
+
+    if (Buffer.isBuffer(safeValue)) {
+    } else if (typeof safeValue === "object") {
+      safeValue = JSON.stringify(safeValue);
+    } else if (typeof safeValue !== "string") {
+      safeValue = String(safeValue);
+    }
+
     await this.send(nextTopic, [
       {
         key: message.key,
-        value: message.value,
+        value: safeValue,
         headers: {
           ...headers,
           "x-original-topic": originalTopic,

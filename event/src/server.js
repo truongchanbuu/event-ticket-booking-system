@@ -1,5 +1,6 @@
 import { createApp } from "./app.js";
 import { configureContainer } from "./container.js";
+import { ConsumerOrchestrator } from "./kafka/consumer/index.js";
 
 let server;
 
@@ -12,6 +13,14 @@ async function bootstrap() {
 
         // Initialize Kafka
         const kafkaService = container.resolve("kafkaService");
+        const consumerOrchestrator = new ConsumerOrchestrator({
+            container: container,
+            kafkaService: kafkaService,
+            messageDispatcher: container.resolve("messageDispatcher"),
+            config: config,
+            logger: rootLogger,
+        });
+        await consumerOrchestrator.startAll();
 
         // Create and start the app
         const app = createApp({ container, config, rootLogger });

@@ -3,11 +3,10 @@
 import { Button } from "@/components/ui/button";
 import { TICKET_STATUS, type Attendee, type Event } from "@/schema";
 import { formatDate } from "@/lib/utils";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Loader2 } from "lucide-react";
 import { ATTENDEE_STATUS } from "@/schema/enums/attendee-status";
 import { AttendeeResponse } from "@/lib/api/events/api";
 import { QueryObserverResult, RefetchOptions } from "@tanstack/react-query";
-import { TicketBookingLoader } from "../ticket-loader";
 
 interface AttendeeManagementProps {
   isLoading?: boolean;
@@ -115,11 +114,16 @@ export default function AttendeeManagement({
                 </th>
               </tr>
             </thead>
-            {isLoading ? (
-              <TicketBookingLoader />
-            ) : (
-              <tbody>
-                {filteredAttendees.map((attendee) => (
+
+            <tbody>
+              {isLoading ? (
+                <tr>
+                  <td colSpan={5} className="py-6 text-center">
+                    <Loader2 className="w-5 h-5 animate-spin text-gray-500 inline" />
+                  </td>
+                </tr>
+              ) : (
+                filteredAttendees.map((attendee) => (
                   <tr
                     key={attendee.userID}
                     className="border-b hover:bg-gray-50"
@@ -207,9 +211,9 @@ export default function AttendeeManagement({
                       </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            )}
+                ))
+              )}
+            </tbody>
           </table>
 
           {filteredAttendees.length === 0 && (

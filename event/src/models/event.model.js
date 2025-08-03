@@ -84,11 +84,7 @@
 
 //     "totalQuantity": "number",   // Tổng số lượng vé
 
-//     "remainingQuantity": "number",// Số lượng còn lại (cập nhật bằng transactions)
-
-//     "saleStartDate": "string",
-
-//     "saleEndDate": "string",
+//     "soldQuantity": "number",// Số lượng còn lại (cập nhật bằng transactions)
 
 //     "creationStatus": "string", // FAILED | SUCCESS
 

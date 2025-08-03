@@ -1,10 +1,9 @@
 import { z } from "zod";
 import { EventStatusEnum } from "../enums/event-status";
-import { TicketStatusEnum } from "../enums";
 import { ATTENDEE_STATUS, AttendeeStatusEnum } from "../enums/attendee-status";
 import { TicketPurchaseSchema } from "../booking";
 
-const OrganizerSchema = z.object({
+export const OrganizerSchema = z.object({
   organizerID: z.string().min(1, "Organizer ID cannot be empty."),
   name: z.string().min(1, "Organizer Name cannot be empty."),
   avatar: z.string().url("Invalid avatar url.").optional(),
@@ -20,7 +19,7 @@ export const LocationSchema = z.object({
   coordinates: GeoPointSchema.optional(),
 });
 
-const EventStatsSchema = z.object({
+export const EventStatsSchema = z.object({
   participantCount: z.number().int().min(0).default(0),
   checkInCount: z.number().int().min(0).default(0),
   ticketSoldCount: z.number().int().min(0).default(0),
@@ -87,3 +86,6 @@ export const EventSchema = z
 
 export type Event = z.infer<typeof EventSchema>;
 export type Attendee = z.infer<typeof AttendeeSchema>;
+export type Location = z.infer<typeof LocationSchema>;
+export type EventStats = z.infer<typeof EventStatsSchema>;
+export type EventOrganizer = z.infer<typeof OrganizerSchema>;

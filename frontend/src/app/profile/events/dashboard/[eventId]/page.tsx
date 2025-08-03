@@ -37,13 +37,13 @@ const EventManagementDashboard = () => {
 
   // Calculate statistics
   const totalRevenue = ticketTypes.reduce(
-    (sum, ticket: TicketType) =>
-      sum + ticket.price * (ticket.totalQuantity - ticket.remainingQuantity),
+    (sum, ticket: TicketType) => sum + ticket.price * ticket.soldQuantity,
     0
   );
 
   const totalTicketsRemaining = ticketTypes.reduce(
-    (sum, ticket: TicketType) => sum + ticket.remainingQuantity,
+    (sum, ticket: TicketType) =>
+      sum + (ticket.totalQuantity - ticket.soldQuantity),
     0
   );
 
@@ -133,7 +133,6 @@ const EventManagementDashboard = () => {
         {/* Header */}
         <header className="bg-white rounded-lg shadow-sm border mb-6 overflow-hidden">
           <EventDetailHeader
-            isUploading={isUpdating}
             eventId={eventId}
             eventDetail={eventDetail}
             images={eventDetail.images}
@@ -143,6 +142,8 @@ const EventManagementDashboard = () => {
 
         {/* Action Buttons */}
         <DetailActionButtons
+          updateEvent={updateEvent}
+          event={eventDetail}
           status={eventDetail.status}
           canPublished={canPublished}
         />

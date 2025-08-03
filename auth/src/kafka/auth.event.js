@@ -1,6 +1,6 @@
 // import {
 //     AUTH_EVENTS,
-//     USER_EVENT,
+//     USER_EVENTS,
 //     EVENT_TYPES,
 // } from "@event_ticket_booking_system/shared";
 // import { KafkaManager } from "@event_ticket_booking_system/shared";
@@ -21,8 +21,8 @@
 
 // // Create topic sender for user events
 // const sendUserEvent = KafkaManager.createTopicSender(
-//     USER_EVENT,
-//     "USER_EVENT",
+//     USER_EVENTS,
+//     "USER_EVENTS",
 //     "user-service",
 // );
 

@@ -1,0 +1,12 @@
+{
+    "type": "TICKET_TYPE_CREATED",
+    "payload": {
+        "ticketTypeId": "tt_test123",
+        "eventId": "5P3Jxa57W1XCfXCdmoT0",
+        "name": "Early Bird",
+        "description": "Giá vé ưu đãi",
+        "price": 500000,
+        "priceCurrency": "VND",
+        "totalQuantity": 150
+    }
+}

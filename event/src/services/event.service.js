@@ -183,6 +183,7 @@ export class EventService {
 
     async updateEvent(eventID, eventData) {
         const existingEvent = await this.getEventByID(eventID, false);
+        delete eventData.eventID;
 
         if (!existingEvent) {
             throw new AppError({ statusCode: 404, message: "Event not found" });
@@ -470,6 +471,7 @@ export class EventService {
 
             await attendeeRef.set({
                 ...attendeeData,
+                userID: userID,
                 joinedAt: new Date().toISOString(),
             });
 

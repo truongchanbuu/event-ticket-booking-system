@@ -257,21 +257,7 @@ export default class EventValidator extends BaseValidator {
         const chain = body("categories")
             .optional()
             .isArray({ min: 1, max: 5 })
-            .withMessage("categories must be an array with 1 to 5 items")
-            .custom((categories) => {
-                categories.forEach((cat) => {
-                    if (
-                        typeof cat !== "string" ||
-                        !CATEGORY_IDS.includes(cat)
-                    ) {
-                        throw new Error(
-                            `Invalid category: ${cat}. Must be one of: ${CATEGORY_IDS.join(", ")}`,
-                        );
-                    }
-                });
-
-                return true;
-            });
+            .withMessage("categories must be an array with 1 to 5 items");
 
         return required
             ? [

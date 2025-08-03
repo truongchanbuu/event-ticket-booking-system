@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { APPLICATION_EVENTS } from '../../../shared';
 
 export default {
   app: {
@@ -43,7 +44,7 @@ export default {
       retries: 5,
     },
     topics: {
-      application_events: 'application.events',
+      application_events: APPLICATION_EVENTS,
     },
     consumerGroups: {
       main_events: 'notification-service-main-group',

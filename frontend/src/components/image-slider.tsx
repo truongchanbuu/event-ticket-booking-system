@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { Button } from "./ui/button";
-import { ConfirmDeleteModal } from "./ui/confirm-dialog";
 import { UploadModal } from "./image-upload-modal";
 
 // TypeScript interfaces
@@ -68,15 +67,17 @@ export const OptimizedImage: React.FC<{
   src: string;
   alt: string;
   className?: string;
+  isLazy?: boolean;
   onClick?: () => void;
-}> = ({ src, alt, className, onClick }) => (
+}> = ({ src, alt, className, isLazy = true, onClick }) => (
   <Image
     fill
+    priority={!isLazy}
     src={src}
     alt={alt}
     className={className}
     onClick={onClick}
-    loading="lazy"
+    loading={isLazy ? "lazy" : undefined}
     style={{ width: "100%", height: "100%", objectFit: "cover" }}
   />
 );
@@ -356,6 +357,7 @@ export const ImageSlider: React.FC<ImageSliderProps> = ({
           style={{ maxHeight: "30vh" }}
         >
           <OptimizedImage
+            isLazy={currentIndex !== 0}
             src={currentImage.src}
             alt={currentImage.alt}
             className="w-full h-full object-cover cursor-pointer hover:opacity-95 transition-opacity"
