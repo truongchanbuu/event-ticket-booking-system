@@ -8,7 +8,7 @@ import {
 import { useWizardForm } from "./use-wizard-form";
 
 export function useApplyOrganizerWizard() {
-  const defaultValues: ApplyOrganizerFormData = {
+  const defaultValues: Partial<ApplyOrganizerFormData> = {
     // === Step 1 Defaults ===
     type: "personal",
     orgName: "",
@@ -64,7 +64,7 @@ export function useApplyOrganizerWizard() {
     purpose: "",
     signedBy: "",
     scannedImageUrl: "",
-  } as ApplyOrganizerFormData;
+  } as Partial<ApplyOrganizerFormData>;
 
   return useWizardForm<ApplyOrganizerFormData>({
     stepSchemas: [
@@ -81,9 +81,8 @@ export function useApplyOrganizerWizard() {
       (getValues) => {
         const values = getValues();
         const currentType = values.type;
-        const hasEventLicense = Boolean(values.eventLicense);
 
-        return createApplyOrganizerStep3Schema(currentType, hasEventLicense);
+        return createApplyOrganizerStep3Schema(currentType);
       },
     ],
     fullSchema: ApplyOrganizerFormSchema,

@@ -16,7 +16,7 @@ export function useApplicationEditForm(userID: string) {
   const [canEdit, setCanEdit] = useState(false);
   const {
     applicationQuery: { data, isLoading, isFetched, refetch, isFetching },
-    setEditting,
+
     updateData,
     updateDocumentUrl,
     updateDocumentUrlInCache,
@@ -126,7 +126,6 @@ export function useApplicationEditForm(userID: string) {
     currentApplication: data?.data,
     applicationID: application?.applicationID,
     moderation: application?.moderation,
-    setEditting,
 
     updateData,
     updateDocumentUrl,

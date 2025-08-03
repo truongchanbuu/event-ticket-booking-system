@@ -103,16 +103,6 @@ export default function AppHeader({
         userRole={effectiveRole}
       />
 
-      {effectiveRole === ROLE.EVENT_ORGANIZER && (
-        <AppHeaderNav
-          pathname={pathname}
-          href="/profile/my-events"
-          variant={variant}
-        >
-          Event Management
-        </AppHeaderNav>
-      )}
-
       {/* Notifications */}
       {notifications > 0 && (
         <div className="relative">
@@ -170,7 +160,7 @@ export default function AppHeader({
       {effectiveRole === ROLE.EVENT_ORGANIZER && (
         <AppHeaderNav
           pathname={pathname}
-          href="/profile/my-events"
+          href="/profile/events/dashboard"
           variant={variant}
           onClick={closeMenus}
         >
@@ -209,7 +199,7 @@ export default function AppHeader({
 
           {effectiveRole === ROLE.EVENT_ORGANIZER && (
             <Link
-              href="/profile/my-events"
+              href="/profile/events/dashboard"
               className={`${dropdownItemCls(variant)} rounded-md`}
               onClick={closeMenus}
             >

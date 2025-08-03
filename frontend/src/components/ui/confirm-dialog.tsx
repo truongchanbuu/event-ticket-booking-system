@@ -1,52 +1,47 @@
-// components/ConfirmModal.tsx
-"use client";
-
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 
-interface ConfirmModalProps {
+interface ConfirmDeleteModalProps {
   open: boolean;
-  title?: string;
-  message: string;
-  actionText?: string;
-  onConfirm: () => void;
   onCancel: () => void;
+  onConfirm: () => void;
+  title?: string;
+  description?: string;
 }
 
-export function ConfirmModal({
+export const ConfirmDeleteModal: React.FC<ConfirmDeleteModalProps> = ({
   open,
-  title = "Action Confirm",
-  message,
-  actionText = "Confirm",
-  onConfirm,
   onCancel,
-}: ConfirmModalProps) {
+  onConfirm,
+  title = "Delete Image?",
+  description = "This action cannot be undone. Are you sure you want to delete this image?",
+}) => {
   return (
-    <Dialog open={open} onOpenChange={onCancel}>
-      <DialogContent className="z-[9999]">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        <div className="text-sm text-gray-600">{message}</div>
-        <DialogFooter className="mt-4">
-          <Button
-            variant="outline"
-            className="hover:bg-primary hover:text-white"
-            onClick={onCancel}
+    <AlertDialog open={open} onOpenChange={(v) => !v && onCancel()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onCancel}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            role="alert"
+            className="bg-red-600 hover:bg-red-700 text-white"
+            onClick={onConfirm}
           >
-            Cancel
-          </Button>
-          <Button className="text-white" onClick={onConfirm}>
-            {actionText}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
-}
+};

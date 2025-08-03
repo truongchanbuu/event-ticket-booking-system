@@ -1,53 +1,53 @@
-"use client";
+// "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { useParams } from "next/navigation";
-import type { EventType } from "@/schema";
-import OrganizerEventsManager from "@/components/events/OrganizerEventsManager";
-import LoadingPage from "@/components/app-loading";
-import { mockEvents } from "@/schema/events/events.mock";
-import { useRouter } from "next/navigation";
-import ROLE from "@/schema/enums/role";
-import { useProfileManagement } from "@/hooks/user-store-hooks";
+// import { useQuery } from "@tanstack/react-query";
+// import { useParams } from "next/navigation";
+// import type { EventType } from "@/schema";
+// import OrganizerEventsManager from "@/components/events/OrganizerEventsManager";
+// import LoadingPage from "@/components/app-loading";
+// import { mockEvents } from "@/schema/events/events.mock";
+// import { useRouter } from "next/navigation";
+// import ROLE from "@/schema/enums/role";
+// import { useProfileManagement } from "@/hooks/user-store-hooks";
 
-export default function OrganizerEventsPage() {
-  const router = useRouter();
-  const { organizerId } = useParams<{ organizerId: string }>();
-  const { userProfile, isProfileLoading } = useProfileManagement();
+// export default function OrganizerEventsPage() {
+//   const router = useRouter();
+//   const { organizerId } = useParams<{ organizerId: string }>();
+//   const { userProfile, isProfileLoading } = useProfileManagement();
 
-  // Fetch organizer data
-  const { data: organizer, isLoading: organizerLoading } = useQuery<Organizer>({
-    queryKey: [`/api/profile/organizers`],
-    enabled: Boolean(organizerId),
-    placeholderData: mockOrganizer,
-  });
+//   // Fetch organizer data
+//   const { data: organizer, isLoading: organizerLoading } = useQuery<Organizer>({
+//     queryKey: [`/api/profile/organizers`],
+//     enabled: Boolean(organizerId),
+//     placeholderData: mockOrganizer,
+//   });
 
-  // Fetch events data
-  const { data: events = [], isLoading: eventsLoading } = useQuery<EventType[]>(
-    {
-      queryKey: [`/api/organizers/${organizerId}/events`],
-      enabled: Boolean(organizerId),
-      placeholderData: mockEvents,
-    }
-  );
+//   // Fetch events data
+//   const { data: events = [], isLoading: eventsLoading } = useQuery<EventType[]>(
+//     {
+//       queryKey: [`/api/organizers/${organizerId}/events`],
+//       enabled: Boolean(organizerId),
+//       placeholderData: mockEvents,
+//     }
+//   );
 
-  if (isProfileLoading || organizerLoading) {
-    return <LoadingPage />;
-  }
+//   if (isProfileLoading || organizerLoading) {
+//     return <LoadingPage />;
+//   }
 
-  // Check if user is organizer (from custom claims)
-  const isOrganizer = userProfile.role === ROLE.EVENT_ORGANIZER;
+//   // Check if user is organizer (from custom claims)
+//   const isOrganizer = userProfile.role === ROLE.EVENT_ORGANIZER;
 
-  // If user is organizer and this is their own organizer page, show management interface
-  if (!isOrganizer) {
-    router.replace("/profile/events");
-    return;
-  }
+//   // If user is organizer and this is their own organizer page, show management interface
+//   if (!isOrganizer) {
+//     router.replace("/profile/events");
+//     return;
+//   }
 
-  return (
-    <OrganizerEventsManager
-      organizerId={organizerId as string}
-      user={userProfile}
-    />
-  );
-}
+//   return (
+//     <OrganizerEventsManager
+//       organizerId={organizerId as string}
+//       user={userProfile}
+//     />
+//   );
+// }

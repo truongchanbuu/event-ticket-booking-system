@@ -70,7 +70,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
 
   useEffect(() => {
     if (previewUrl) {
-      const url = URL.createObjectURL(value.file);
+      const url = URL.createObjectURL(value!.file);
       return () => {
         URL.revokeObjectURL(url);
       };

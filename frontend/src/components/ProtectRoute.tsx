@@ -10,12 +10,12 @@ import ROLE from "@/schema/enums/role";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  allowedRoles?: string[];
+  allowedRoles?: Role[];
 }
 
 export default function ProtectedRoute({
   children,
-  allowedRoles = ["customer"],
+  allowedRoles = [ROLE.CUSTOMER],
 }: ProtectedRouteProps) {
   const { user, isAuthLoading, role } = useAuth();
   const router = useRouter();

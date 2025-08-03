@@ -8,39 +8,38 @@ export function sanitizePublicEvent(event) {
 
     const {
         eventID,
-        organizerID,
-        organizerName,
-        eventTitle,
-        eventDesc,
-        coverImages = [],
-        category = [],
+        organizer,
+        title,
+        description,
+        images = [],
+        categories = [],
         location,
         startTime,
         endTime,
         ticketTypes = [],
         status,
+        stats,
     } = event;
 
     const publicTicketTypes = ticketTypes.map((t) => ({
-        typeID: t.typeID,
         name: t.name,
         price: t.price,
-        remaining: t.remaining,
-        maxPerUser: t.maxPerUser ?? undefined, // optional
+        totalQuantity: t.totalQuantity,
+        remaining: t.remaining ?? 0,
     }));
 
     return {
         eventID,
-        organizerID,
-        organizerName,
-        eventTitle,
-        eventDesc,
-        coverImages,
-        category,
+        organizer,
+        title,
+        description,
+        images,
+        categories,
         location,
         startTime,
         endTime,
         ticketTypes: publicTicketTypes,
         status,
+        stats,
     };
 }

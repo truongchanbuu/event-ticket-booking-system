@@ -1,4 +1,5 @@
 import { Kafka } from "kafkajs";
+import ms from "ms";
 
 export class KafkaService {
   /** @private */
@@ -94,71 +95,218 @@ export class KafkaService {
     }
   }
 
-  async createConsumer(
+  async createConsumer({
     groupId,
     topic,
     handler,
-    dlqTopic = undefined,
-    consumerConfig = {}
-  ) {
+    retryDelays,
+    dlqTopic,
+    consumerConfig = {},
+  }) {
     if (this.connectionState !== "CONNECTED") {
       throw new Error("Kafka not connected. Call initialize() first.");
     }
 
-    const consumer = this.kafka.consumer({
-      groupId,
-      sessionTimeout: 30000,
-      rebalanceTimeout: 60000,
-      heartbeatInterval: 3000,
-      ...consumerConfig,
-    });
-
+    const consumer = this.kafka.consumer({ groupId, ...consumerConfig });
     await consumer.connect();
-
-    const fromBeginning = process.env.NODE_ENV === "development";
-    await consumer.subscribe({ topic, fromBeginning });
+    await consumer.subscribe({ topic, fromBeginning: true });
 
     await consumer.run({
       eachMessage: async (payload) => {
         try {
           await handler(payload);
         } catch (error) {
-          const { topic, partition, message } = payload;
           this.logger?.error(
-            "❌ Unhandled error from message handler. Moving to DLQ.",
+            `Handler failed for message. Initiating retry/DLQ process.`,
             {
-              topic,
-              offset: message.offset,
+              topic: payload.topic,
+              offset: payload.message.offset,
               error: error.message,
-              stack: error.stack,
             }
           );
-
-          if (dlqTopic) {
-            this.logger?.info(
-              `Moving failed message to DLQ topic: ${dlqTopic}`
-            );
-            await this.send(dlqTopic, [
-              {
-                key: message.key,
-                value: message.value,
-                headers: {
-                  ...message.headers,
-                  "x-original-topic": topic,
-                  "x-error-message": error.message,
-                  "x-error-stack": error.stack,
-                },
-              },
-            ]);
-          }
+          await this.publishToNextTopic(
+            payload,
+            error,
+            topic,
+            retryDelays,
+            dlqTopic
+          );
         }
       },
     });
 
     this.consumers.set(groupId, consumer);
     this.logger?.info(
-      `✅ Consumer created for topic '${topic}' with group '${groupId}'`
+      `✅ Retrying consumer created for topic '${topic}' with group '${groupId}'`
     );
+  }
+
+  /**
+   * @private
+   * Logic để đẩy tin nhắn đến topic retry hoặc DLQ tiếp theo.
+   */
+  async publishToNextTopic(
+    payload,
+    error,
+    originalTopic,
+    retryDelays,
+    dlqTopic
+  ) {
+    const { message } = payload;
+    const headers = message.headers || {};
+    const attempt = headers["x-retry-attempt"]
+      ? parseInt(headers["x-retry-attempt"].toString(), 10)
+      : 0;
+
+    let nextTopic;
+    if (attempt < retryDelays.length) {
+      nextTopic = `${originalTopic}.retry.${retryDelays[attempt]}`;
+    } else {
+      nextTopic = dlqTopic;
+    }
+
+    if (!nextTopic) {
+      this.logger?.error(
+        "No more retry topics and no DLQ configured. Message will be dropped.",
+        {
+          offset: message.offset,
+        }
+      );
+      return;
+    }
+
+    this.logger?.log(`Moving message to topic: ${nextTopic}`, {
+      attempt: attempt + 1,
+    });
+
+    await this.send(nextTopic, [
+      {
+        key: message.key,
+        value: message.value,
+        headers: {
+          ...headers,
+          "x-original-topic": originalTopic,
+          "x-retry-attempt": (attempt + 1).toString(),
+          "x-failure-reason": error.message,
+        },
+      },
+    ]);
+  }
+
+  /**
+   * Tạo một consumer duy nhất để xử lý tất cả các topic retry.
+   * @param {object} config
+   * @param {string} config.groupId - Group ID cho consumer retry.
+   * @param {string} config.originalTopic - Topic gốc để suy ra các topic retry.
+   * @param {string[]} config.retryDelays - Mảng thời gian chờ, phải khớp với consumer chính.
+   */
+  async createGlobalRetryHandlerConsumer({ groupId, retryConfigs }) {
+    if (this.connectionState !== "CONNECTED") {
+      throw new Error("Kafka not connected");
+    }
+
+    // Từ mảng cấu hình, tạo ra một danh sách phẳng tất cả các topic retry cần lắng nghe
+    const allRetryTopics = retryConfigs.flatMap((rc) =>
+      rc.retryDelays.map((delay) => `${rc.originalTopic}.retry.${delay}`)
+    );
+
+    if (allRetryTopics.length === 0) {
+      this.logger?.warn(
+        "No retry topics configured for the global retry handler."
+      );
+      return;
+    }
+
+    const sleep = (duration) =>
+      new Promise((resolve) => setTimeout(resolve, duration));
+    const consumer = this.kafka.consumer({ groupId });
+
+    await consumer.connect();
+    await consumer.subscribe({ topics: allRetryTopics, fromBeginning: true });
+
+    this.logger?.info(
+      `✅ Global Retry Handler consumer listening to ${
+        allRetryTopics.length
+      } topics: [${allRetryTopics.join(", ")}]`
+    );
+
+    await consumer.run({
+      eachMessage: async ({ topic, message }) => {
+        const delayString = topic.split(".").pop();
+        const delayMs = ms(delayString);
+
+        this.logger?.info(
+          `Received message from retry topic '${topic}'. Waiting for ${delayString}...`
+        );
+        await sleep(delayMs);
+
+        const originalTargetTopic =
+          message.headers["x-original-topic"]?.toString();
+        if (!originalTargetTopic) {
+          this.logger?.error(
+            "Cannot re-drive message, 'x-original-topic' header is missing."
+          );
+          return;
+        }
+
+        this.logger?.info(
+          `Re-driving message back to original topic: ${originalTargetTopic}`
+        );
+        await this.send(originalTargetTopic, [
+          {
+            key: message.key,
+            value: message.value,
+            headers: message.headers,
+          },
+        ]);
+      },
+    });
+
+    this.consumers.set(groupId, consumer);
+  }
+
+  /**
+   * Đảm bảo rằng các topic cần thiết đã tồn tại. Nếu chưa, sẽ tự động tạo chúng.
+   * @param {Array<{topic: string, numPartitions?: number, replicationFactor?: number}>} topicsToEnsure - Mảng các đối tượng cấu hình topic.
+   * @returns {Promise<void>}
+   */
+  async ensureTopicsExist(topicsToEnsure) {
+    if (this.connectionState !== "CONNECTED") {
+      throw new Error(
+        "Kafka not connected. Call initialize() or ensureTopicsExist() must be called after initialize()."
+      );
+    }
+
+    if (!topicsToEnsure || topicsToEnsure.length === 0) {
+      return;
+    }
+
+    this.logger?.info("Ensuring required topics exist...", {
+      topics: topicsToEnsure.map((t) => t.topic),
+    });
+
+    try {
+      await this.admin.createTopics({
+        validateOnly: false,
+        waitForLeaders: true,
+        topics: topicsToEnsure.map((t) => ({
+          topic: t.topic,
+          numPartitions: t.numPartitions || 1,
+          replicationFactor: t.replicationFactor || 1,
+        })),
+      });
+      this.logger?.info("✅ All topics are ready.");
+    } catch (error) {
+      if (error.name === "TopicAlreadyExistsError") {
+        this.logger?.warn("Topics already exist, which is fine.");
+        return;
+      }
+
+      this.logger?.error("❌ Failed to create topics.", {
+        error: error.message,
+      });
+      throw error;
+    }
   }
 
   /**

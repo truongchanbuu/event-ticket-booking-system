@@ -15,12 +15,12 @@ import {
   Download,
   Printer,
 } from "lucide-react";
-import { mockEvents } from "@/schema/events/events.mock";
 import { EventType } from "@/schema";
 import { formatDate } from "@/lib/utils";
 import ProtectedRoute from "@/components/ProtectRoute";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import ROLE from "@/schema/enums/role";
 
 // Mock tickets data for each event
 const mockTickets = [
@@ -190,7 +190,7 @@ const MyEventsPage = () => {
   const filteredEvents = filterEvents(mockedEvents, activeTab);
 
   return (
-    <ProtectedRoute allowedRoles={["organizer"]}>
+    <ProtectedRoute allowedRoles={[ROLE.EVENT_ORGANIZER]}>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
         {/* Header */}
         <div className="bg-white/80 backdrop-blur-sm border-b border-slate-200/50 sticky top-0 z-10">

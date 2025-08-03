@@ -1,31 +1,38 @@
-import express from 'express';
-import cors from 'cors';
-import { scopePerRequest } from 'awilix-express';
+import express from "express";
+import cors from "cors";
+import { scopePerRequest } from "awilix-express";
 
-import healthRouter from './routes/health.js';
-import { checkJson, errorHandler } from '@event_ticket_booking_system/shared';
-import container from './container.js';
-import { ENV } from '../src/config/env.js';
-import { ERROR_CODE } from '@event_ticket_booking_system/shared';
-import { AppError } from '@event_ticket_booking_system/shared';
+import healthRouter from "./routes/health.js";
+import { checkJson, errorHandler } from "@event_ticket_booking_system/shared";
+import { ERROR_CODE } from "@event_ticket_booking_system/shared";
+import { AppError } from "@event_ticket_booking_system/shared";
 
-export default async function createApp() {
-  const app = express();
+export function createApp({ container, config, logger }) {
+    const app = express();
 
-  // Test Config: Custom when production
-  if (ENV.NODE_ENV == 'development') app.use(cors());
+    if (config.app.nodeEnv == "development") app.use(cors());
 
-  app.use(express.json());
-  app.use(checkJson);
-  app.use(scopePerRequest(container));
+    app.use(express.json());
+    app.use(checkJson);
 
-  const eventRoutes = container.resolve('eventRoutes');
-  app.use('/', eventRoutes.authRouter);
-  app.use('/health', healthRouter);
-  app.use((req, res, next) => {
-    next(new AppError('Not Found', 404, ERROR_CODE.NOT_FOUND));
-  });
-  app.use(errorHandler);
+    app.use((req, res, next) => {
+        console.log(
+            `📨 ${req.method} ${req.url} - ${new Date().toISOString()}`,
+        );
+        next();
+    });
 
-  return app;
+    app.use("/api/health", healthRouter);
+
+    app.use(scopePerRequest(container));
+
+    const apiRoutes = container.resolve("apiRoutes");
+    app.use("/api", apiRoutes.router);
+
+    app.use((req, res, next) => {
+        next(new AppError("Not Found", 404, ERROR_CODE.NOT_FOUND));
+    });
+    app.use(errorHandler);
+
+    return app;
 }

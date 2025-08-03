@@ -1,12 +1,25 @@
 import diff from "microdiff";
-import { AppError, db, FieldValue } from "@event_ticket_booking_system/shared";
-import { sanitizePublicEvent } from "../utils/sanitize";
+import { AppError, db, REDIS_TTL } from "@event_ticket_booking_system/shared";
+import { sanitizePublicEvent } from "../utils/sanitize.js";
+import { EVENT_STATUS } from "../enums/event-status.js";
 
-export default class EventService {
-    constructor({ logger, ticketServiceClient }) {
-        this.logger = logger;
-        this.ticketServiceClient = ticketServiceClient;
+const EVENT_COLLECTION = "events";
+const ATTENDEES_SUBCOLLECTION = "attendees";
+const TICKET_TYPES_SUBCOLLECTION = "ticketTypes";
+
+export class EventService {
+    constructor({ logger, redisService }) {
+        console = logger;
         this.eventCollection = db.collection("events");
+        this.redisService = redisService;
+
+        this.CACHE_KEYS = {
+            EVENT_BY_ID: (eventID) => `event:${eventID}`,
+            EVENTS_BY_ORG_ID: (orgID) => `events:org:${orgID}`,
+            EVENT_ATTENDEES_BY_ID: (eventID) => `event:${eventID}:attendees`,
+            EVENT_TICKET_TYPES_BY_ID: (eventID) =>
+                `event:${eventID}:ticketTypes`,
+        };
     }
 
     async getAllEvents(options = {}) {
@@ -65,75 +78,116 @@ export default class EventService {
         };
     }
 
-    async getEventsByOrgID(orgID, isPublic = true) {
-        const query = this.eventCollection.where("organizerID", "==", orgID);
-        const snap = await query.get();
+    async getEventsByOrgID(orgID) {
+        const cacheKey = this.CACHE_KEYS.EVENTS_BY_ORG_ID(orgID);
 
-        if (snap.empty) {
+        const eventsFromCacheOrDB = await this.redisService.getOrSet(
+            cacheKey,
+            async () => {
+                console.log(
+                    `[Cache Miss] Fetching events for orgID ${orgID} from Firestore.`,
+                );
+
+                const query = this.eventCollection.where(
+                    "organizerID",
+                    "==",
+                    orgID,
+                );
+                const snap = await query.get();
+
+                if (snap.empty) {
+                    return [];
+                }
+
+                return snap.docs.map((doc) => doc.data());
+            },
+            REDIS_TTL.EVENT_DEFAULT,
+        );
+
+        if (!eventsFromCacheOrDB || eventsFromCacheOrDB.length === 0) {
             return [];
         }
 
-        const events = snap.docs;
-        return isPublic ? events.map((e) => sanitizePublicEvent(e)) : events;
+        return eventsFromCacheOrDB;
     }
 
     async getEventByID(eventID, isPublic = true) {
-        const docRef = this.eventCollection.doc(eventID);
-        const doc = await docRef.get();
+        const cacheKey = this.CACHE_KEYS.EVENT_BY_ID(eventID);
 
-        if (!doc.exists) {
+        const eventFromCacheOrDB = await this.redisService.getOrSet(
+            cacheKey,
+            async () => {
+                console.log(
+                    `[Cache Miss] Fetching eventID ${eventID} from Firestore.`,
+                );
+                const docRef = this.eventCollection.doc(eventID);
+                const doc = await docRef.get();
+
+                if (!doc.exists) {
+                    return null;
+                }
+
+                return doc.data();
+            },
+            REDIS_TTL.EVENT_DEFAULT,
+        );
+
+        if (!eventFromCacheOrDB) {
             return null;
         }
 
-        return isPublic ? sanitizePublicEvent(doc) : doc;
+        return isPublic
+            ? sanitizePublicEvent(eventFromCacheOrDB)
+            : eventFromCacheOrDB;
     }
 
-    async createEvent(eventData) {
-        const {
-            organizerID,
-            organizerName,
-            eventTitle,
-            eventDesc,
-            thumbnails,
-            category,
-            participantCount,
-            location,
-            startTime,
-            endTime,
-            status = EVENT_STATUS.DRAFT,
-        } = eventData;
-
+    async createEvent(user, eventData) {
+        console.log(
+            `EVENT DATA: ${JSON.stringify(eventData)} - user: ${JSON.stringify(user)}`,
+        );
         const eventDocRef = this.eventCollection.doc();
-
-        // TODO: Đổi sang ISO string
         const eventID = eventDocRef.id;
-        const eventTitleLowerCase = eventTitle.toLowerCase();
-        const timestampNow = FieldValue.serverTimestamp();
+
+        eventData.status = EVENT_STATUS.DRAFT;
+
         const newEvent = {
+            ...eventData,
+            organizer: {
+                organizerID: user.uid,
+                name: user.name,
+                phototUrl: user.picture,
+            },
+            stats: {
+                participantCount: 0,
+                checkInCount: 0,
+                ticketSoldCount: 0,
+            },
             eventID,
-            organizerID,
-            organizerName,
-            eventTitle,
-            eventTitleLowerCase,
-            eventDesc,
-            thumbnails,
-            category,
-            participantCount,
-            location,
-            startTime: new Date(startTime),
-            endTime: new Date(endTime),
-            status,
-            createdAt: timestampNow,
-            updatedAt: timestampNow,
+            startTime: new Date(eventData.startTime).toISOString(),
+            endTime: new Date(eventData.endTime).toISOString(),
+            createdAt: new Date().toISOString(),
         };
 
         await eventDocRef.set(newEvent);
+
+        const orgCacheKey = this.CACHE_KEYS.EVENTS_BY_ORG_ID(
+            eventData.organizer.organizerID,
+        );
+        console.log(
+            `[Cache Invalidate] Deleting key ${orgCacheKey} due to new event creation.`,
+        );
+        await this.redisService.del(orgCacheKey);
 
         return eventID;
     }
 
     async updateEvent(eventID, eventData) {
-        const existingEvent = await this.getEventByID(eventID);
+        const existingEvent = await this.getEventByID(eventID, false);
+
+        if (!existingEvent) {
+            throw new AppError({ statusCode: 404, message: "Event not found" });
+        }
+
         this._validateEventUpdateRules(existingEvent, eventData);
         if (eventData.ticketTypes && eventData.ticketTypes.length > 0) {
             eventData.ticketTypes = await this._validateTicketTypes(
@@ -144,17 +198,23 @@ export default class EventService {
 
         const updateData = this._prepareUpdateData(eventData);
 
-        // 6. Update the event
-        await this.eventCollection
-            .doc(existingEvent.eventID)
-            .update(updateData);
+        await this.eventCollection.doc(eventID).update(updateData);
+        const eventCacheKey = this.CACHE_KEYS.EVENT_BY_ID(eventID);
+        const orgCacheKey = this.CACHE_KEYS.EVENTS_BY_ORG_ID(
+            existingEvent.organizerID,
+        );
 
-        return updateData;
+        console.info(
+            `[Cache Invalidate] Deleting keys ${eventCacheKey} and ${orgCacheKey} due to update.`,
+        );
+        await this.redisService.del(...[eventCacheKey, orgCacheKey]);
+
+        return { ...existingEvent, ...updateData };
     }
 
     _validateEventUpdateRules(existingEvent, eventData) {
         // Cannot update cancelled events
-        if (existingEvent.status === "cancelled") {
+        if (existingEvent.status === EVENT_STATUS.CANCELLED) {
             throw new AppError({
                 statusCode: 400,
                 errorCode: ERROR_CODE.INVALID_OPERATION,
@@ -164,8 +224,8 @@ export default class EventService {
 
         // Cannot change status from published to draft if there are participants
         if (
-            existingEvent.status === "published" &&
-            eventData.status === "draft" &&
+            existingEvent.status === EVENT_STATUS.PUBLISHED &&
+            eventData.status === EVENT_STATUS.DRAFT &&
             existingEvent.participantCount > 0
         ) {
             throw new AppError({
@@ -294,7 +354,7 @@ export default class EventService {
         }
 
         // Add updated timestamp
-        updateData.updatedAt = FieldValue.serverTimestamp();
+        updateData.updatedAt = new Date().toISOString();
 
         // Remove undefined/null values
         Object.keys(updateData).forEach((key) => {
@@ -304,5 +364,219 @@ export default class EventService {
         });
 
         return updateData;
+    }
+
+    /**
+     * Lấy danh sách người tham dự của một sự kiện, có sử dụng Redis cache.
+     * @param {string} eventID - ID của sự kiện.
+     * @returns {Promise<Array<Object>|null>} Danh sách người tham dự.
+     */
+    async getEventAttendees(eventID) {
+        if (!eventID) {
+            console.warn("[getEventAttendees] eventID is required.");
+            return null;
+        }
+
+        const cacheKey = this.CACHE_KEYS.EVENT_ATTENDEES_BY_ID(eventID);
+
+        const fetchFromDatabase = async () => {
+            console.info(
+                `[CACHE MISS] Fetching attendees for event ${eventID} from database.`,
+            );
+
+            try {
+                const attendeesCollectionRef = this.eventCollection
+                    .doc(eventID)
+                    .collection(ATTENDEES_SUBCOLLECTION);
+
+                const snapshot = await attendeesCollectionRef.get();
+
+                if (snapshot.empty) {
+                    console.info(
+                        `No attendees found for event ${eventID} in Firestore.`,
+                    );
+                    return [];
+                }
+
+                const attendees = snapshot.docs.map((doc) => {
+                    const data = doc.data();
+                    const joinedAtTimestamp = data.joinedAt;
+
+                    return {
+                        userID: doc.id,
+                        displayName: data.displayName,
+                        avatarUrl: data.avatarUrl,
+                        status: data.status, // Giả sử có trường status
+                        // Chuyển đổi Timestamp của Firestore sang một định dạng có thể serialize được (ví dụ: ISO string)
+                        joinedAt: joinedAtTimestamp?.toDate
+                            ? joinedAtTimestamp.toDate().toISOString()
+                            : null,
+                    };
+                });
+
+                return attendees;
+            } catch (error) {
+                console.error(
+                    `Failed to fetch attendees from DB for event ${eventID}`,
+                    { error: error.message },
+                );
+                return null;
+            }
+        };
+
+        return this.redisService.getOrSet(
+            cacheKey,
+            fetchFromDatabase,
+            REDIS_TTL.EVENT_DEFAULT,
+        );
+    }
+
+    /**
+     * Khi có một hành động làm thay đổi danh sách người tham dự (ví dụ: có người mới tham gia),
+     * chúng ta cần xóa cache cũ đi để lần gọi tiếp theo sẽ lấy dữ liệu mới nhất từ DB.
+     * @param {string} eventID - ID của sự kiện.
+     * @param {string} userID - ID của người dùng tham gia.
+     */
+    /**
+     * Thêm một người dùng vào danh sách người tham dự của một sự kiện
+     * trong Firestore và làm mới cache trong Redis.
+     *
+     * @param {string} eventID - ID của sự kiện (document trong collection 'events').
+     * @param {string} userID - ID của người dùng để làm ID cho document trong subcollection.
+     * @param {object} attendeeData - Dữ liệu của người dùng cần lưu trữ.
+     * @param {string} attendeeData.fullName - Tên đầy đủ của người dùng.
+     * @param {string} attendeeData.avatarUrl - URL ảnh đại diện của người dùng.
+     * @returns {Promise<{success: boolean, error?: string}>} - Trả về trạng thái thành công hoặc thất bại.
+     */
+    async addUserToEvent(eventID, userID, attendeeData) {
+        if (!eventID || !userID || !attendeeData) {
+            const errorMsg =
+                "addUserToEvent: eventID, userID, and attendeeData are required.";
+            console.warn(errorMsg);
+            return { success: false, error: errorMsg };
+        }
+
+        const cacheKey = this.CACHE_KEYS.EVENT_ATTENDEES_BY_ID(eventID);
+        const attendeeRef = this.firestore
+            .collection(EVENT_COLLECTION)
+            .doc(eventID)
+            .collection(ATTENDEES_SUBCOLLECTION)
+            .doc(userID);
+
+        try {
+            console.info(
+                `Adding user ${userID} to event ${eventID} in Firestore.`,
+            );
+
+            await attendeeRef.set({
+                ...attendeeData,
+                joinedAt: new Date().toISOString(),
+            });
+
+            console.info(
+                `Successfully added user ${userID} to event ${eventID}.`,
+            );
+
+            console.info(
+                `[CACHE INVALIDATION] Deleting cache for key: ${cacheKey}`,
+            );
+
+            await this.redisService.del(cacheKey);
+
+            return { success: true };
+        } catch (error) {
+            console.error(`Failed to add user ${userID} to event ${eventID}.`, {
+                error: error.message,
+                eventID,
+                userID,
+            });
+
+            return {
+                success: false,
+                error: "Failed to update event attendees.",
+            };
+        }
+    }
+
+    /**
+     * Lấy danh sách các loại vé (ticket types) của một sự kiện
+     * @param {string} eventID - ID của sự kiện.
+     * @returns {Promise<Array<Object>|null>} Danh sách các loại vé hoặc null nếu có lỗi.
+     */
+    async getEventTicketTypes(eventID) {
+        if (!eventID) {
+            console.warn("[getEventTicketTypes] eventID is required.");
+            return null;
+        }
+
+        const cacheKey = this.CACHE_KEYS.EVENT_TICKET_TYPES_BY_ID(eventID);
+
+        const fetchFromDatabase = async () => {
+            console.info(
+                `[CACHE MISS] Fetching ticket types for event ${eventID} from Firestore.`,
+            );
+            try {
+                const ticketTypesCollectionRef = this.eventCollection
+                    .doc(eventID)
+                    .collection(TICKET_TYPES_SUBCOLLECTION);
+
+                const snapshot = await ticketTypesCollectionRef.get();
+
+                if (snapshot.empty) {
+                    console.info(`No ticket types found for event ${eventID}.`);
+                    return [];
+                }
+
+                const ticketTypes = snapshot.docs.map((doc) => ({
+                    id: doc.id,
+                    ...doc.data(),
+                }));
+
+                return ticketTypes;
+            } catch (error) {
+                console.error(
+                    `Failed to fetch ticket types from Firestore for event ${eventID}`,
+                    { error: error.message },
+                );
+                return null;
+            }
+        };
+
+        return this.redisService.getOrSet(
+            cacheKey,
+            fetchFromDatabase,
+            REDIS_TTL.TICKET_TYPES_DEFAULT,
+        );
+    }
+
+    /**
+     * Tạo một loại vé mới cho sự kiện.
+     * @param {string} eventID - ID của sự kiện.
+     * @param {object} ticketTypeData - Dữ liệu của loại vé mới.
+     */
+    async createTicketType(eventID, ticketTypeData) {
+        try {
+            const ticketTypesCollectionRef = this.eventCollection
+                .doc(eventID)
+                .collection(TICKET_TYPES_SUBCOLLECTION);
+
+            const docRef = await ticketTypesCollectionRef.add(ticketTypeData);
+            console.info(
+                `Successfully created new ticket type with ID: ${docRef.id}`,
+            );
+
+            const cacheKey = this.CACHE_KEYS.EVENT_TICKET_TYPES_BY_ID(eventID);
+            console.info(
+                `[CACHE INVALIDATION] Deleting cache for key: ${cacheKey}`,
+            );
+            await this.redisService.del(cacheKey);
+
+            return { success: true, id: docRef.id };
+        } catch (error) {
+            console.error(`Failed to create ticket type for event ${eventID}`, {
+                error: error.message,
+            });
+            return { success: false, error: "Failed to create ticket type." };
+        }
     }
 }

@@ -2,8 +2,7 @@ import { linkCls } from "@/styles/app-header/style";
 import { HeaderVariant } from "@/types/app-header/type";
 import Link from "next/link";
 
-const isActivePath = (pathname: string, target: string) =>
-  pathname === target || pathname.startsWith(target + "/");
+const isActivePath = (pathname: string, target: string) => pathname === target;
 
 interface NavLinkProps {
   pathname: string;

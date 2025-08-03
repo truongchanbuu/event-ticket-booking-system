@@ -1,31 +1,89 @@
 import { z } from "zod";
-import { TicketTypeSchema } from "../tickets";
-import { CategorySchema } from "./category.schema";
 import { EventStatusEnum } from "../enums/event-status";
+import { TicketStatusEnum } from "../enums";
+import { ATTENDEE_STATUS, AttendeeStatusEnum } from "../enums/attendee-status";
+import { TicketPurchaseSchema } from "../booking";
 
-// Event schema
-export const EventSchema = z.object({
-  eventID: z.string(),
-  organizerID: z.string(),
-  organizerName: z.string(),
-  organizerPhotoUrl: z.string().optional(),
-
-  eventTitle: z.string(),
-  eventDesc: z.string(),
-  thumbnails: z.array(z.string().url()),
-
-  categories: z.array(CategorySchema),
-  participantCount: z.number().int().nonnegative(),
-  location: z.string(),
-
-  startTime: z.string(),
-  endTime: z.string(),
-
-  ticketTypes: z.array(TicketTypeSchema),
-
-  status: EventStatusEnum,
-  createdAt: z.string().optional(),
-  updatedAt: z.string().optional(),
+const OrganizerSchema = z.object({
+  organizerID: z.string().min(1, "Organizer ID cannot be empty."),
+  name: z.string().min(1, "Organizer Name cannot be empty."),
+  avatar: z.string().url("Invalid avatar url.").optional(),
 });
 
-export type EventType = z.infer<typeof EventSchema>;
+export const GeoPointSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+});
+
+export const LocationSchema = z.object({
+  address: z.string().min(1, "Location cannot be empty."),
+  coordinates: GeoPointSchema.optional(),
+});
+
+const EventStatsSchema = z.object({
+  participantCount: z.number().int().min(0).default(0),
+  checkInCount: z.number().int().min(0).default(0),
+  ticketSoldCount: z.number().int().min(0).default(0),
+});
+
+export const AttendeeSchema = z
+  .object({
+    userID: z.string().min(1),
+    displayName: z.string().min(1),
+    email: z.string().email("Invalid Email"),
+    ticketID: z.string().min(1, "Ticket ID is required"),
+    tickets: z.array(TicketPurchaseSchema),
+    attendeeStatus: AttendeeStatusEnum,
+    checkInTime: z.string().datetime().optional().nullable(),
+  })
+  .refine(
+    (data) =>
+      data.attendeeStatus === ATTENDEE_STATUS.CHECKED_IN
+        ? data.checkInTime != null
+        : true,
+    {
+      message: "Check-in date time must be have if attendees checked in.",
+      path: ["checkInTime"],
+    }
+  );
+
+export const EventSchema = z
+  .object({
+    eventID: z.string().optional(),
+    organizer: OrganizerSchema,
+    title: z
+      .string()
+      .min(3, "Title must be at least 3 charaters")
+      .max(100, "Title cannot more than 100 charaters"),
+    description: z.string().min(1, "Description cannot be empty."),
+    images: z
+      .array(z.string().url("Image must be a valid url."))
+      .min(1, "at least một ảnh"),
+    categories: z
+      .array(z.string().min(1))
+      .min(1, "There should be at least 1 category."),
+
+    startTime: z.string().datetime({ message: "Invalid Date." }),
+    endTime: z.string().datetime({ message: "Invalid Date." }),
+
+    location: LocationSchema,
+
+    status: EventStatusEnum,
+    isFeatured: z.boolean().default(false),
+
+    stats: EventStatsSchema.default({
+      checkInCount: 0,
+      participantCount: 0,
+      ticketSoldCount: 0,
+    }),
+
+    createdAt: z.string().datetime().optional(),
+    updatedAt: z.string().datetime().optional(),
+  })
+  .refine((data) => new Date(data.endTime) > new Date(data.startTime), {
+    message: "Thời gian kết thúc phải sau thời gian bắt đầu",
+    path: ["endTime"],
+  });
+
+export type Event = z.infer<typeof EventSchema>;
+export type Attendee = z.infer<typeof AttendeeSchema>;

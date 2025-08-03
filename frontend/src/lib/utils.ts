@@ -15,7 +15,7 @@ export function formatCurrency(amount: number): string {
 }
 
 export function formatDate(
-  date?: Date | string | Timestamp
+  date: Date | string | Timestamp | undefined
 ): string | undefined {
   if (date === undefined) return undefined;
 
@@ -142,7 +142,8 @@ export function getCategoryColor(categoryId: string) {
 
 export function getStatusColor(status: string) {
   const colors = {
-    available: "text-green-600",
+    draft: "text-gray-200",
+    published: "text-green-600",
     selling_fast: "text-orange-600",
     sold_out: "text-red-600",
     confirmed: "text-green-600",

@@ -53,25 +53,25 @@ import {
   BarChart3,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import {
-  getOrganizerEventsByIDAPI,
-  getOrganizerStatsByIDAPI,
-  createEventAPI,
-  updateEventAPI,
-  deleteEventAPI,
-  publishEventAPI,
-  unpublishEventAPI,
-  cancelEventAPI,
-  duplicateEventAPI,
-  exportEventAttendeesAPI,
-  getEventStatsByIDAPI,
-} from "@/lib/api/base";
+// import {
+//   getOrganizerEventsByIDAPI,
+//   getOrganizerStatsByIDAPI,
+//   createEventAPI,
+//   updateEventAPI,
+//   deleteEventAPI,
+//   publishEventAPI,
+//   unpublishEventAPI,
+//   cancelEventAPI,
+//   duplicateEventAPI,
+//   exportEventAttendeesAPI,
+//   getEventStatsByIDAPI,
+// } from "@/lib/api/base";
 import type { EventType } from "@/schema";
 import { formatDate } from "@/lib/utils";
 import { EVENT_STATUS } from "@/schema/enums/event-status";
-import EventFormModal from "./EventFormModal";
+import EventFormModal from "./EventCreationModal";
 import TicketManagementModal from "./TicketManagementModal";
-import AttendeesModal from "./AttendeesModal";
+import AttendeesModal from "./AttendeesList";
 import { useAuth } from "@/app/providers/AuthProvider";
 
 interface OrganizerEventsManagerProps {
@@ -92,16 +92,16 @@ function EventStatsModal({
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (open && eventId) {
-      setLoading(true);
-      getEventStatsByIDAPI(eventId)
-        .then((res) => setStats(res.data))
-        .finally(() => setLoading(false));
-    } else {
-      setStats(null);
-    }
-  }, [open, eventId]);
+  // useEffect(() => {
+  //   if (open && eventId) {
+  //     setLoading(true);
+  //     getEventStatsByIDAPI(eventId)
+  //       .then((res) => setStats(res.data))
+  //       .finally(() => setLoading(false));
+  //   } else {
+  //     setStats(null);
+  //   }
+  // }, [open, eventId]);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -160,206 +160,189 @@ export default function OrganizerEventsManager({
   const ITEMS_PER_PAGE = 10;
 
   // Fetch events with filters
-  const { data: events = [], isLoading: eventsLoading } = useQuery<EventType[]>(
-    {
-      queryKey: [
-        `/api/organizers/${organizerId}/events`,
-        search,
-        statusFilter,
-        sortBy,
-        currentPage,
-      ],
-      queryFn: async () => {
-        try {
-          const response = await getOrganizerEventsByIDAPI(organizerId, {
-            search,
-            status: statusFilter !== "all" ? statusFilter : undefined,
-            sort: sortBy,
-            page: currentPage,
-            limit: ITEMS_PER_PAGE,
-          });
+  // const { data: events = [], isLoading: eventsLoading } = useQuery<EventType[]>(
+  //   {
+  //     queryKey: [
+  //       `/api/organizers/${organizerId}/events`,
+  //       search,
+  //       statusFilter,
+  //       sortBy,
+  //       currentPage,
+  //     ],
+  //     queryFn: async () => {
+  //       try {
+  //         const response = await getOrganizerEventsByIDAPI(organizerId, {
+  //           search,
+  //           status: statusFilter !== "all" ? statusFilter : undefined,
+  //           sort: sortBy,
+  //           page: currentPage,
+  //           limit: ITEMS_PER_PAGE,
+  //         });
 
-          return response.data || response || [];
-        } catch (error) {
-          console.error("Failed to fetch events:", error);
-          return [];
-        }
-      },
-      enabled: !!organizerId,
-    }
-  );
+  //         return response.data || response || [];
+  //       } catch (error) {
+  //         console.error("Failed to fetch events:", error);
+  //         return [];
+  //       }
+  //     },
+  //     enabled: !!organizerId,
+  //   }
+  // );
 
   // Fetch statistics
-  const { data: stats } = useQuery({
-    queryKey: [`/api/organizers/${organizerId}/stats`],
-    queryFn: async () => {
-      try {
-        const response = await getOrganizerStatsByIDAPI(organizerId);
-        return (
-          response.data ||
-          response || {
-            totalEvents: 0,
-            publishedEvents: 0,
-            totalTicketsSold: 0,
-            totalRevenue: 0,
-          }
-        );
-      } catch (error) {
-        console.error("Failed to fetch stats:", error);
-        return {
-          totalEvents: 0,
-          publishedEvents: 0,
-          totalTicketsSold: 0,
-          totalRevenue: 0,
-        };
-      }
-    },
-    enabled: !!organizerId,
-  });
+  // const { data: stats } = useQuery({
+  //   queryKey: [`/api/organizers/${organizerId}/stats`],
+  //   queryFn: async () => {
+  //     try {
+  //       const response = await getOrganizerStatsByIDAPI(organizerId);
+  //       return (
+  //         response.data ||
+  //         response || {
+  //           totalEvents: 0,
+  //           publishedEvents: 0,
+  //           totalTicketsSold: 0,
+  //           totalRevenue: 0,
+  //         }
+  //       );
+  //     } catch (error) {
+  //       console.error("Failed to fetch stats:", error);
+  //       return {
+  //         totalEvents: 0,
+  //         publishedEvents: 0,
+  //         totalTicketsSold: 0,
+  //         totalRevenue: 0,
+  //       };
+  //     }
+  //   },
+  //   enabled: !!organizerId,
+  // });
 
   // Mutations
-  const publishMutation = useMutation({
-    mutationFn: async (eventId: string) => {
-      if (!firebaseUser) throw new Error("User not authenticated");
-      const token = await firebaseUser.getIdToken();
-      return publishEventAPI(eventId, token);
-    },
-    onSuccess: () => {
-      toast({ title: "Event published successfully!", variant: "success" });
-      queryClient.invalidateQueries({
-        queryKey: [`/api/organizers/${organizerId}/events`],
-      });
-      queryClient.invalidateQueries({
-        queryKey: [`/api/organizers/${organizerId}/stats`],
-      });
-    },
-    onError: () => {
-      toast({ title: "Failed to publish event", variant: "destructive" });
-    },
-  });
+  // const publishMutation = useMutation({
+  //   mutationFn: async (eventId: string) => {
+  //     if (!firebaseUser) throw new Error("User not authenticated");
+  //     const token = await firebaseUser.getIdToken();
+  //     return publishEventAPI(eventId, token);
+  //   },
+  //   onSuccess: () => {
+  //     toast({ title: "Event published successfully!", variant: "success" });
+  //     queryClient.invalidateQueries({
+  //       queryKey: [`/api/organizers/${organizerId}/events`],
+  //     });
+  //     queryClient.invalidateQueries({
+  //       queryKey: [`/api/organizers/${organizerId}/stats`],
+  //     });
+  //   },
+  //   onError: () => {
+  //     toast({ title: "Failed to publish event", variant: "destructive" });
+  //   },
+  // });
 
-  const unpublishMutation = useMutation({
-    mutationFn: async (eventId: string) => {
-      if (!firebaseUser) throw new Error("User not authenticated");
-      const token = await firebaseUser.getIdToken();
-      return unpublishEventAPI(eventId, token);
-    },
-    onSuccess: () => {
-      toast({ title: "Event unpublished successfully!", variant: "success" });
-      queryClient.invalidateQueries({
-        queryKey: [`/api/organizers/${organizerId}/events`],
-      });
-      queryClient.invalidateQueries({
-        queryKey: [`/api/organizers/${organizerId}/stats`],
-      });
-    },
-    onError: () => {
-      toast({ title: "Failed to unpublish event", variant: "destructive" });
-    },
-  });
+  // const unpublishMutation = useMutation({
+  //   mutationFn: async (eventId: string) => {
+  //     if (!firebaseUser) throw new Error("User not authenticated");
+  //     const token = await firebaseUser.getIdToken();
+  //     return unpublishEventAPI(eventId, token);
+  //   },
+  //   onSuccess: () => {
+  //     toast({ title: "Event unpublished successfully!", variant: "success" });
+  //     queryClient.invalidateQueries({
+  //       queryKey: [`/api/organizers/${organizerId}/events`],
+  //     });
+  //     queryClient.invalidateQueries({
+  //       queryKey: [`/api/organizers/${organizerId}/stats`],
+  //     });
+  //   },
+  //   onError: () => {
+  //     toast({ title: "Failed to unpublish event", variant: "destructive" });
+  //   },
+  // });
 
-  const cancelMutation = useMutation({
-    mutationFn: async (eventId: string) => {
-      if (!firebaseUser) throw new Error("User not authenticated");
-      const token = await firebaseUser.getIdToken();
-      return cancelEventAPI(eventId, token);
-    },
-    onSuccess: () => {
-      toast({ title: "Event cancelled successfully!", variant: "success" });
-      queryClient.invalidateQueries({
-        queryKey: [`/api/organizers/${organizerId}/events`],
-      });
-      queryClient.invalidateQueries({
-        queryKey: [`/api/organizers/${organizerId}/stats`],
-      });
-    },
-    onError: () => {
-      toast({ title: "Failed to cancel event", variant: "destructive" });
-    },
-  });
+  // const cancelMutation = useMutation({
+  //   mutationFn: async (eventId: string) => {
+  //     if (!firebaseUser) throw new Error("User not authenticated");
+  //     const token = await firebaseUser.getIdToken();
+  //     return cancelEventAPI(eventId, token);
+  //   },
+  //   onSuccess: () => {
+  //     toast({ title: "Event cancelled successfully!", variant: "success" });
+  //     queryClient.invalidateQueries({
+  //       queryKey: [`/api/organizers/${organizerId}/events`],
+  //     });
+  //     queryClient.invalidateQueries({
+  //       queryKey: [`/api/organizers/${organizerId}/stats`],
+  //     });
+  //   },
+  //   onError: () => {
+  //     toast({ title: "Failed to cancel event", variant: "destructive" });
+  //   },
+  // });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (eventId: string) => {
-      if (!firebaseUser) throw new Error("User not authenticated");
-      const token = await firebaseUser.getIdToken();
-      return deleteEventAPI(eventId, token);
-    },
-    onSuccess: () => {
-      toast({ title: "Event deleted successfully!", variant: "success" });
-      queryClient.invalidateQueries({
-        queryKey: [`/api/organizers/${organizerId}/events`],
-      });
-      queryClient.invalidateQueries({
-        queryKey: [`/api/organizers/${organizerId}/stats`],
-      });
-    },
-    onError: () => {
-      toast({ title: "Failed to delete event", variant: "destructive" });
-    },
-  });
+  // const deleteMutation = useMutation({
+  //   mutationFn: async (eventId: string) => {
+  //     if (!firebaseUser) throw new Error("User not authenticated");
+  //     const token = await firebaseUser.getIdToken();
+  //     return deleteEventAPI(eventId, token);
+  //   },
+  //   onSuccess: () => {
+  //     toast({ title: "Event deleted successfully!", variant: "success" });
+  //     queryClient.invalidateQueries({
+  //       queryKey: [`/api/organizers/${organizerId}/events`],
+  //     });
+  //     queryClient.invalidateQueries({
+  //       queryKey: [`/api/organizers/${organizerId}/stats`],
+  //     });
+  //   },
+  //   onError: () => {
+  //     toast({ title: "Failed to delete event", variant: "destructive" });
+  //   },
+  // });
 
-  const cloneMutation = useMutation({
-    mutationFn: async (eventId: string) => {
-      if (!firebaseUser) throw new Error("User not authenticated");
-      const token = await firebaseUser.getIdToken();
-      return duplicateEventAPI(eventId, token);
-    },
-    onSuccess: () => {
-      toast({ title: "Event cloned successfully!", variant: "success" });
-      queryClient.invalidateQueries({
-        queryKey: [`/api/organizers/${organizerId}/events`],
-      });
-      queryClient.invalidateQueries({
-        queryKey: [`/api/organizers/${organizerId}/stats`],
-      });
-    },
-    onError: () => {
-      toast({ title: "Failed to clone event", variant: "destructive" });
-    },
-  });
+  // const cloneMutation = useMutation({
+  //   mutationFn: async (eventId: string) => {
+  //     if (!firebaseUser) throw new Error("User not authenticated");
+  //     const token = await firebaseUser.getIdToken();
+  //     return duplicateEventAPI(eventId, token);
+  //   },
+  //   onSuccess: () => {
+  //     toast({ title: "Event cloned successfully!", variant: "success" });
+  //     queryClient.invalidateQueries({
+  //       queryKey: [`/api/organizers/${organizerId}/events`],
+  //     });
+  //     queryClient.invalidateQueries({
+  //       queryKey: [`/api/organizers/${organizerId}/stats`],
+  //     });
+  //   },
+  //   onError: () => {
+  //     toast({ title: "Failed to clone event", variant: "destructive" });
+  //   },
+  // });
 
-  const exportMutation = useMutation({
-    mutationFn: async (eventId: string) => {
-      if (!firebaseUser) throw new Error("User not authenticated");
-      const token = await firebaseUser.getIdToken();
-      const blob = await exportEventAttendeesAPI(eventId, token, "csv");
+  // const exportMutation = useMutation({
+  //   mutationFn: async (eventId: string) => {
+  //     if (!firebaseUser) throw new Error("User not authenticated");
+  //     const token = await firebaseUser.getIdToken();
+  //     const blob = await exportEventAttendeesAPI(eventId, token, "csv");
 
-      // Create and download CSV file
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `event-${eventId}-attendees.csv`;
-      a.click();
-      window.URL.revokeObjectURL(url);
+  //     // Create and download CSV file
+  //     const url = window.URL.createObjectURL(blob);
+  //     const a = document.createElement("a");
+  //     a.href = url;
+  //     a.download = `event-${eventId}-attendees.csv`;
+  //     a.click();
+  //     window.URL.revokeObjectURL(url);
 
-      return blob;
-    },
-    onSuccess: () => {
-      toast({ title: "Data exported successfully!", variant: "success" });
-    },
-    onError: () => {
-      toast({ title: "Failed to export data", variant: "destructive" });
-    },
-  });
+  //     return blob;
+  //   },
+  //   onSuccess: () => {
+  //     toast({ title: "Data exported successfully!", variant: "success" });
+  //   },
+  //   onError: () => {
+  //     toast({ title: "Failed to export data", variant: "destructive" });
+  //   },
+  // });
 
-  const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      [EVENT_STATUS.DRAFT]: { variant: "secondary", label: "Draft" },
-      [EVENT_STATUS.PUBLISHED]: { variant: "default", label: "Published" },
-      [EVENT_STATUS.CANCELLED]: { variant: "destructive", label: "Cancelled" },
-      [EVENT_STATUS.POSTPONED]: { variant: "outline", label: "Postponed" },
-      [EVENT_STATUS.SOLD_OUT]: { variant: "default", label: "Sold Out" },
-      [EVENT_STATUS.ONGOING]: { variant: "default", label: "Ongoing" },
-      [EVENT_STATUS.ENDED]: { variant: "secondary", label: "Ended" },
-      [EVENT_STATUS.ARCHIVED]: { variant: "secondary", label: "Archived" },
-    };
-
-    const config = statusConfig[status as keyof typeof statusConfig] || {
-      variant: "outline",
-      label: status,
-    };
-    return <Badge variant={config.variant as any}>{config.label}</Badge>;
-  };
+  const stats = {};
 
   const getTotalTicketsSold = (event: EventType) => {
     return event.ticketTypes.reduce((total, ticket) => {
@@ -866,3 +849,22 @@ export default function OrganizerEventsManager({
     </div>
   );
 }
+
+const getStatusBadge = (status: string) => {
+  const statusConfig = {
+    [EVENT_STATUS.DRAFT]: { variant: "secondary", label: "Draft" },
+    [EVENT_STATUS.PUBLISHED]: { variant: "default", label: "Published" },
+    [EVENT_STATUS.CANCELLED]: { variant: "destructive", label: "Cancelled" },
+    [EVENT_STATUS.POSTPONED]: { variant: "outline", label: "Postponed" },
+    [EVENT_STATUS.SOLD_OUT]: { variant: "default", label: "Sold Out" },
+    [EVENT_STATUS.ONGOING]: { variant: "default", label: "Ongoing" },
+    [EVENT_STATUS.ENDED]: { variant: "secondary", label: "Ended" },
+    [EVENT_STATUS.ARCHIVED]: { variant: "secondary", label: "Archived" },
+  };
+
+  const config = statusConfig[status as keyof typeof statusConfig] || {
+    variant: "outline",
+    label: status,
+  };
+  return <Badge variant={config.variant as any}>{config.label}</Badge>;
+};

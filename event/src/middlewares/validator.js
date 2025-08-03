@@ -1,8 +1,9 @@
-import { body, param } from "express-validator";
+import { body } from "express-validator";
 import {
     BaseValidator,
     CATEGORY_IDS,
 } from "@event_ticket_booking_system/shared";
+import { EVENT_STATUS } from "../enums/event-status.js";
 
 const LIMIT_IMAGE_COUNT = 10;
 const LIMIT_TICKET_COUNT = 20;
@@ -15,22 +16,87 @@ export default class EventValidator extends BaseValidator {
 
     static createEventValidation() {
         return [
-            // Organizer validation
-            ...this.validateName({ fieldName: "organizerName" }),
+            body("title")
+                .isString()
+                .isLength({ min: 3, max: 100 })
+                .withMessage(
+                    "Title must be at least 3 and cannot more than 100 charaters",
+                ),
 
-            // Event details validation
-            ...this.validateEventTitle({ required: true }),
-            ...this.validateEventDesc({ required: true }),
-            ...this.validateLocation({ required: true }),
+            body("description")
+                .isString()
+                .notEmpty()
+                .withMessage("Description cannot be empty."),
 
-            // Time validation
-            ...this.validateStartTime({ required: true }),
-            ...this.validateEndTime({ required: true }),
+            body("images")
+                .isArray({ min: 1 })
+                .withMessage("At least one image is required.")
+                .bail() // Dừng lại nếu không phải là array
+                .custom((images) => {
+                    for (const image of images) {
+                        if (typeof image !== "string" || !image.trim()) {
+                            throw new Error("Image URL cannot be empty.");
+                        }
+                    }
+                    return true;
+                }),
+            body("images.*") // Validate từng phần tử trong array
+                .isURL()
+                .withMessage("Image must be a valid url."),
 
-            // Optional arrays validation
-            ...this.validateThumbnails(),
+            body("categories")
+                .isArray({ min: 1 })
+                .withMessage("There should be at least 1 category."),
+            body("categories.*")
+                .isString()
+                .notEmpty()
+                .withMessage("Category name cannot be empty."),
 
-            ...this.validateCategory(),
+            // --- Time ---
+            body("startTime")
+                .isISO8601()
+                .withMessage("Invalid Date for startTime.")
+                .toDate(),
+
+            body("endTime")
+                .isISO8601()
+                .withMessage("Invalid Date for endTime.")
+                .toDate() // Chuyển đổi thành đối tượng Date
+                // refine: endTime > startTime
+                .custom((endTime, { req }) => {
+                    if (endTime <= req.body.startTime) {
+                        throw new Error("End time must be after start time");
+                    }
+                    return true;
+                }),
+
+            // --- Location ---
+            body("location.address")
+                .isString()
+                .notEmpty()
+                .withMessage("Location address cannot be empty."),
+
+            body("location.coordinates.latitude")
+                .optional()
+                .isFloat({ min: -90, max: 90 })
+                .withMessage("Latitude must be between -90 and 90."),
+            body("location.coordinates.longitude")
+                .optional()
+                .isFloat({ min: -180, max: 180 })
+                .withMessage("Longitude must be between -180 and 180."),
+
+            // --- Other Fields ---
+            body("status")
+                .optional()
+                .isIn(Object.values(EVENT_STATUS))
+                .withMessage(
+                    `Invalid status. Must be one of: ${Object.values(EVENT_STATUS).join(", ")}`,
+                ),
+
+            body("isFeatured")
+                .optional()
+                .isBoolean()
+                .withMessage("isFeatured must be a boolean."),
         ];
     }
 

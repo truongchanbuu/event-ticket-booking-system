@@ -1,15 +1,20 @@
 import { CloudinaryUploadResponse, SignUploadResponse } from "@/schema";
 import { fetchAPI } from "../base";
 import { RequestInit } from "next/dist/server/web/spec-extension/request";
+import { string } from "zod";
 
 async function fetchMedia<T>(path: string, options: RequestInit): Promise<T> {
-  return fetchAPI<T>(`${path}`, options);
+  return fetchAPI<T>(`/public/media/${path}`, options);
 }
 
-export async function signUpload(docType: string): Promise<SignUploadResponse> {
-  return fetchMedia("/media/sign-upload", {
+export async function signUpload(
+  docType?: string,
+  folder?: string,
+  id?: string
+): Promise<SignUploadResponse> {
+  return fetchMedia("/sign-upload", {
     method: "POST",
-    body: JSON.stringify({ docType }),
+    body: JSON.stringify({ docType, folder, id }),
   });
 }
 
@@ -31,4 +36,11 @@ export async function uploadCloudinary(
   }
 
   return res.json();
+}
+
+export function deleteFromCloudinary(publicId: string) {
+  return fetchMedia("/delete-cloudinary-image", {
+    method: "PUT",
+    body: JSON.stringify({ publicId }),
+  });
 }

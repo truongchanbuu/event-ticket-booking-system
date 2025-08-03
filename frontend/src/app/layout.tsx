@@ -14,7 +14,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" data-gramm="false" data-gramm_editor="false">
+    <html lang="en">
       <body>
         <RouteProgressBar height={8} />
         <NavigationEvents />

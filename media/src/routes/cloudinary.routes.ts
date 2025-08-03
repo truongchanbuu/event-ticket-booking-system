@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { verifyFirebaseToken } from "../middlewares/auth.middleware";
-import { signUpload } from "../controllers/cloudinary.controller";
+import { deleteImage, signUpload } from "../controllers/cloudinary.controller";
 import { validateBody } from "../middlewares/validator";
 import { signUploadSchema } from "../schema/document.schema";
+import { deleteImageSchema } from "../schema/delete-image,schema";
 
 const mediaRouter = Router();
 
@@ -11,6 +12,13 @@ mediaRouter.post(
     verifyFirebaseToken,
     validateBody(signUploadSchema),
     signUpload,
+);
+
+mediaRouter.put(
+    "/delete-cloudinary-image",
+    verifyFirebaseToken,
+    validateBody(deleteImageSchema),
+    deleteImage,
 );
 
 export default mediaRouter;

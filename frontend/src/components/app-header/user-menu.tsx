@@ -71,7 +71,7 @@ export default function UserMenu({
 
           {effectiveRole === ROLE.EVENT_ORGANIZER && (
             <Link
-              href="/profile/my-events"
+              href="/profile/events/dashboard"
               className={dropdownItemCls(variant)}
               onClick={closeMenu}
             >

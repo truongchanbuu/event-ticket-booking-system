@@ -25,24 +25,64 @@ export class ConsumerOrchestrator {
 
     const { topics, dlqTopics, consumerGroups } = this.config.kafka;
 
-    await this.kafkaService.createConsumer(
-      consumerGroups.main_events,
-      topics.application_events,
-      async (rawMessage) => {
-        console.log(`data out: ${JSON.stringify(rawMessage)}`);
-        const scope = this.container.createScope();
-        await this.messageDispatcher.dispatch(rawMessage, scope);
+    const consumerDefinitions = [
+      {
+        topic: topics.application_events,
+        groupId: consumerGroups.main_events,
+        dlqTopic: dlqTopics.main_events_dlq,
+        retryDelays: ['1m', '5m', '10m'],
+        handler: async (payload) => {
+          const { message } = payload;
+          this.logger.info(
+            `Processing message: ${message.offset} from topic ${payload.topic}`,
+          );
+          const scope = this.container.createScope();
+          await this.messageDispatcher.dispatch(payload, scope);
+        },
       },
-      dlqTopics.main_events_dlq,
+      // Ví dụ: Nếu bạn có một consumer khác, chỉ cần thêm nó vào đây
+      // {
+      //     topic: topics.another_event,
+      //     groupId: consumerGroups.another_group,
+      //     dlqTopic: dlqTopics.another_dlq,
+      //     retryDelays: ['30s', '2m'],
+      //     handler: this.anotherHandler.handle.bind(this.anotherHandler)
+      // }
+    ];
+
+    const allTopicsToEnsure = consumerDefinitions.flatMap((def) => [
+      { topic: def.topic, numPartitions: 3 }, // Topic chính
+      ...def.retryDelays.map((delay) => ({
+        topic: `${def.topic}.retry.${delay}`,
+      })),
+      { topic: def.dlqTopic },
+    ]);
+
+    await this.kafkaService.ensureTopicsExist(allTopicsToEnsure);
+
+    // --- BƯỚC 3: TẠO CÁC CONSUMER NGHIỆP VỤ ---
+    for (const def of consumerDefinitions) {
+      await this.kafkaService.createConsumer({
+        groupId: def.groupId,
+        topic: def.topic,
+        retryDelays: def.retryDelays,
+        dlqTopic: def.dlqTopic,
+        handler: def.handler,
+      });
+    }
+
+    const allRetryConfigs = consumerDefinitions.map((def) => ({
+      originalTopic: def.topic,
+      retryDelays: def.retryDelays,
+    }));
+
+    await this.kafkaService.createGlobalRetryHandlerConsumer({
+      groupId: 'global-retry-handler-group',
+      retryConfigs: allRetryConfigs,
+    });
+
+    this.logger.info(
+      '✅ All Kafka consumers and handlers have been started successfully.',
     );
-
-    // Ví dụ: Tạo một consumer khác cho một mục đích khác, có thể với một handler khác
-    // await this.kafkaService.createConsumer(
-    //   consumerGroups.another_group,
-    //   topics.another_topic,
-    //   this.anotherHandler.handle.bind(this.anotherHandler)
-    // );
-
-    this.logger.info('✅ All Kafka consumers have been started.');
   }
 }

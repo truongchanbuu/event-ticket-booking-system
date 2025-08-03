@@ -729,32 +729,32 @@ const MyApplicationUI = () => {
               Contact Us
             </a>
           </div>
-
-          {canEdit && isEditing ? (
-            <div className="flex gap-2">
-              <Button variant="ghost" type="button" onClick={handleCancel}>
-                <X className="w-4 h-4" />
-                Cancel
-              </Button>
+          {canEdit &&
+            (isEditing ? (
+              <div className="flex gap-2">
+                <Button variant="ghost" type="button" onClick={handleCancel}>
+                  <X className="w-4 h-4" />
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  loading={isSubmitting}
+                  disabled={!isDirty || !isEmptyObject(errors) || isSubmitting}
+                  className="bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  <Save className="w-4 h-4" />
+                  Save
+                </Button>
+              </div>
+            ) : (
               <Button
-                type="submit"
-                loading={isSubmitting}
-                disabled={!isDirty || !isEmptyObject(errors) || isSubmitting}
-                className="bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                onClick={handleEditToggle}
+                className="bg-secondary font-bold text-sm"
               >
-                <Save className="w-4 h-4" />
-                Save
+                <Edit3 className="w-4 h-4" />
+                Edit
               </Button>
-            </div>
-          ) : (
-            <Button
-              onClick={handleEditToggle}
-              className="bg-secondary font-bold text-sm"
-            >
-              <Edit3 className="w-4 h-4" />
-              Edit
-            </Button>
-          )}
+            ))}
         </footer>
       </form>
     </div>

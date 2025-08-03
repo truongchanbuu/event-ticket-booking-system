@@ -12,15 +12,14 @@ async function fetchApplications<T>(
   path: string,
   options?: RequestInit
 ): Promise<T> {
-  const formattedPath = path.startsWith("/") ? path : `/${path}`;
-  return fetchAPI<T>(formattedPath, options);
+  return fetchAPI<T>(`${path}`, options);
 }
 
 export async function fetchAllApplications(
   context: QueryFunctionContext<ApplicationQueryKey, string | null>
 ): Promise<ApplicationListReponse> {
   const { queryKey, pageParam } = context;
-  const [_key, options = {}] = queryKey; // ✨ Thêm giá trị mặc định cho options
+  const [_key, options = {}] = queryKey;
 
   const params = new URLSearchParams();
 

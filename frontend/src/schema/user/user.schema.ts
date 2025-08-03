@@ -3,7 +3,6 @@ import {
   RoleEnum,
   USER_STATUS,
   UserStatusEnum,
-  ORGANIZER_STATUS,
   OrganizerStatusEnum,
 } from "../enums";
 import ROLE from "../enums/role";

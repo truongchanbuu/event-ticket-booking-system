@@ -1,4 +1,4 @@
-import { signUpload, uploadCloudinary } from "@/lib/api";
+import { deleteFromCloudinary, signUpload, uploadCloudinary } from "@/lib/api";
 
 /**
  * Hàm upload file lên Cloudinary một cách an toàn bằng phương pháp Signed Upload.
@@ -8,9 +8,11 @@ import { signUpload, uploadCloudinary } from "@/lib/api";
  */
 export async function uploadToCloudinary(
   file: File,
-  docType: string
+  docType?: string,
+  prefix?: string,
+  id?: string
 ): Promise<string> {
-  const signData = await signUpload(docType);
+  const signData = await signUpload(docType, prefix, id);
   const { timestamp, signature, api_key, folder, cloud_name } = signData;
 
   const formData = new FormData();
@@ -22,4 +24,19 @@ export async function uploadToCloudinary(
 
   const uploadedData = await uploadCloudinary(cloud_name, formData);
   return uploadedData.secure_url;
+}
+
+export async function deleteImageFromCloudinary(url: string): Promise<boolean> {
+  try {
+    const result: any = await deleteFromCloudinary(url);
+    console.log(JSON.stringify(result));
+    if (!result || !result?.success) {
+      return false;
+    }
+
+    return true;
+  } catch (e) {
+    console.error(`FAILED: ${e} `);
+    return false;
+  }
 }

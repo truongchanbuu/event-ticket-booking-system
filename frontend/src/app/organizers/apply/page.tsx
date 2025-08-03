@@ -18,6 +18,7 @@ import {
 import { OrganizerStatus } from "@/components/organizer/OrganizerStatus";
 import LoadingPage from "@/components/app-loading";
 import { useRouter } from "next/navigation";
+import ROLE from "@/schema/enums/role";
 
 function _ApplyOrganizerPage() {
   const { userProfile } = useProfileManagement();
@@ -88,13 +89,14 @@ function _ApplyOrganizerPage() {
 
 export default function ApplyOrganizerPage() {
   return (
-    <ProtectedRoute allowedRoles={["customer", "admin", "organizer"]}>
+    <ProtectedRoute
+      allowedRoles={[ROLE.CUSTOMER, ROLE.ADMIN, ROLE.EVENT_ORGANIZER]}
+    >
       <_ApplyOrganizerPage />
     </ProtectedRoute>
   );
 }
 
-// --- Helpers (Có thể đặt bên ngoài component function) ---
 /**
  * Tải tất cả các file cần thiết lên Cloudinary.
  * @param data Dữ liệu từ form ApplyOrganizerFormData

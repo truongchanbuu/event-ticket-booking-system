@@ -14,8 +14,8 @@
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
         "format": "prettier --write .",
-        "docker:build": "docker build -t user-service .",
-        "docker:run": "docker run -p 3000:3000 user-service"
+        "docker:build": "docker build -t auth-service .",
+        "docker:run": "docker run -p 3000:3000 auth-service"
     },
     "keywords": [],
     "author": "",

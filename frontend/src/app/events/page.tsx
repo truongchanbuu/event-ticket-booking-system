@@ -8,8 +8,7 @@ import EventCard from "@/components/events/event-card";
 import EventFilterBar from "@/components/events/event-filter-bar";
 import EventLoadingSkeleton from "@/components/events/event-loading-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { EventType, EventFilters } from "@/schema";
-import { mockEvents } from "@/schema/events/events.mock";
+import type { Event, EventFilters } from "@/schema";
 import { useDebounce } from "@/hooks/use-debounce";
 import { AppUser } from "@/schema/user";
 
@@ -22,7 +21,7 @@ export default function EventsPage() {
 
   // Pagination states
   const [page, setPage] = useState(1);
-  const [events, setEvents] = useState<EventType[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
