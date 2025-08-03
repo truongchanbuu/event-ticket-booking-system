@@ -8,6 +8,7 @@ import {
   createLoggerFactory,
   createRedisClient,
   db,
+  MessageDispatcher,
   RedisService,
 } from '@event_ticket_booking_system/shared';
 import { createKafkaService } from './services/kafka.service.js';
@@ -16,7 +17,6 @@ import { EmailService } from './services/email.service.js';
 import createSmsService from './services/sms.service.js';
 import { createInAppService } from './services/in-app.service.js';
 import { NotificationService } from './services/notification.service.js';
-import { MessageDispatcher } from './kafka/consumers/message-dispatcher.js';
 import { ApplicationNotificationHandler } from './kafka/consumers/application-status-change.handler.js';
 
 /**

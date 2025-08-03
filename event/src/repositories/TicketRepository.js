@@ -1,3 +1,10 @@
+// TODO: Refactor this Repo to the SERVICE
+
+import {
+    EVENTS_COLLECTION,
+    TICKET_TYPES_SUB_COLLECTION,
+} from "../config/constants/collection.js";
+
 export class TicketTypeSnapshotRepo {
     /**
      * @param {object} deps
@@ -18,10 +25,26 @@ export class TicketTypeSnapshotRepo {
      */
     _getDocRef(eventId, ticketTypeId) {
         return this.db
-            .collection("events")
+            .collection(EVENTS_COLLECTION)
             .doc(eventId)
-            .collection("ticketTypes")
+            .collection(TICKET_TYPES_SUB_COLLECTION)
             .doc(ticketTypeId);
+    }
+
+    async getById(eventId, ticketTypeId) {
+        const docRef = this._getDocRef(eventId, ticketTypeId);
+        const snapshot = await docRef.get();
+        const data = snapshot.data();
+
+        if (!snapshot.exists) {
+            this.logger.warn(`No ticket found.`, {
+                eventId,
+                ticketTypeId,
+            });
+            throw new TicketNotFoundError("Ticket Not Found");
+        }
+
+        return data;
     }
 
     /**
@@ -32,9 +55,9 @@ export class TicketTypeSnapshotRepo {
      * @returns {Promise<void>}
      */
     async createOrUpdate(eventId, ticketTypeId, data) {
-        const eventRef = this.db.collection("events").doc(eventId);
+        const eventRef = this.db.collection(EVENTS_COLLECTION).doc(eventId);
         const ticketTypeRef = eventRef
-            .collection("ticketTypes")
+            .collection(TICKET_TYPES_SUB_COLLECTION)
             .doc(ticketTypeId);
 
         await this.db.runTransaction(async (transaction) => {
@@ -45,7 +68,7 @@ export class TicketTypeSnapshotRepo {
                     `Attempted to create ticket type for a non-existent event.`,
                     { eventId, ticketTypeId },
                 );
-                throw new Error("Event Not Found");
+                throw new EventNotFoundError("Event Not Found");
             }
 
             this.logger.info(

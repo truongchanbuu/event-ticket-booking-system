@@ -1,5 +1,3 @@
-import fs from "fs";
-
 export class CreateTicketTypeSnapshotUseCase {
     /**
      * @param {object} deps
@@ -23,19 +21,6 @@ export class CreateTicketTypeSnapshotUseCase {
     async handle(payload) {
         const { ticketTypeId, eventId } = payload;
 
-        const controlFilePath = "/tmp/failure_control.txt";
-        if (fs.existsSync(controlFilePath)) {
-            const failingIds = fs.readFileSync(controlFilePath, "utf-8");
-            if (failingIds.includes(ticketTypeId)) {
-                this.logger.error(
-                    `[TEST] Intentionally failing for ticket type ID: ${ticketTypeId}`,
-                );
-                throw new IntentionalTestError(
-                    `Forced failure for testing purposes.`,
-                );
-            }
-        }
-
         this.logger.info(
             "Handling TICKET_TYPE_CREATED event for Firestore...",
             {
@@ -54,6 +39,7 @@ export class CreateTicketTypeSnapshotUseCase {
                 soldQuantity: 0,
                 checkedInQuantity: 0,
                 createdAt: new Date().toISOString(),
+                ticketTypeID: ticketTypeId,
             };
 
             await this.ticketTypeSnapshotRepo.createOrUpdate(

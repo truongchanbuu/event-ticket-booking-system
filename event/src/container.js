@@ -23,8 +23,10 @@ import { EventService } from "./services/event.service.js";
 import { EventRoutes } from "./routes/event.routes.js";
 import { EventController } from "./controllers/event.controller.js";
 import { ProfileRoutes } from "./routes/profile.routes.js";
-import { TicketTypeSnapshotRepo } from "./repositories/TicketRepository.repo.js";
+import { TicketTypeSnapshotRepo } from "./repositories/TicketRepository.js";
 import { CreateTicketTypeSnapshotUseCase } from "./kafka/consumer/CreateTicketTypeSnapshot.js";
+import { UpdateTicketTypeSnapshotUseCase } from "./kafka/consumer/UpdateTicketTypeSnapshot.js";
+import { DeleteTicketTypeSnapshotUseCase } from "./kafka/consumer/DeleteTicketTypeSnapshot.js";
 
 /**
  * Hàm factory để tạo, đăng ký, và khởi động DI container.
@@ -75,6 +77,12 @@ export async function configureContainer() {
 
         createTicketTypeSnapshotUseCase: asClass(
             CreateTicketTypeSnapshotUseCase,
+        ).scoped(),
+        updateTicketTypeSnapshotUseCase: asClass(
+            UpdateTicketTypeSnapshotUseCase,
+        ).scoped(),
+        deleteTicketTypeSnapshotUseCase: asClass(
+            DeleteTicketTypeSnapshotUseCase,
         ).scoped(),
 
         messageDispatcher: asClass(MessageDispatcher).singleton(),

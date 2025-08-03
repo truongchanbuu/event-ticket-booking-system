@@ -12,15 +12,15 @@ async function sendMessage(ticketId, eventId) {
     await producer.connect();
 
     const message = {
-        type: "TICKET_TYPE_CREATED",
+        type: "TICKET_TYPE_DELETED",
         payload: {
-            ticketTypeId: ticketId,
+            ticketTypeId: ticketId || "ticket-001",
             eventId: eventId || "evt_default_test",
             name: `Test Ticket ${ticketId}`,
             description: "This is a test ticket.",
             price: 100000,
-            priceCurrency: "VND",
-            totalQuantity: 100,
+            priceCurrency: "USD",
+            totalQuantity: 500,
         },
     };
 
