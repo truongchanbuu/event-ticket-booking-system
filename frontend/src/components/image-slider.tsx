@@ -6,10 +6,14 @@ import {
   Upload,
   Trash2,
   Plus,
+  ZoomOut,
+  ZoomIn,
+  Download,
 } from "lucide-react";
 import Image from "next/image";
 import { Button } from "./ui/button";
 import { ConfirmDeleteModal } from "./ui/confirm-dialog";
+import { UploadModal } from "./image-upload-modal";
 
 // TypeScript interfaces
 export interface ImageItem {
@@ -59,22 +63,8 @@ interface ImageSliderProps {
   onSave: (images: ImageItem[]) => Promise<void>;
 }
 
-interface ImageModalProps {
-  image: ImageItem | null;
-  isOpen: boolean;
-  onClose: () => void;
-}
-
-interface UploadModalProps {
-  images: ImageItem[];
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (images: ImageItem[]) => Promise<void>;
-  onImagesChange: (images: ImageItem[]) => void;
-}
-
 // Next.js Image Component simulation (since we can't import actual Next.js Image)
-const OptimizedImage: React.FC<{
+export const OptimizedImage: React.FC<{
   src: string;
   alt: string;
   className?: string;
@@ -92,11 +82,46 @@ const OptimizedImage: React.FC<{
 );
 
 // Image Modal Component for fullscreen view
-const ImageModal: React.FC<ImageModalProps> = ({ image, isOpen, onClose }) => {
-  // Close modal with ESC key
+const ImageModal: React.FC<{
+  image: ImageItem;
+  isOpen: boolean;
+  onClose: () => void;
+  canNavigate?: boolean;
+  onPrevious?: () => void;
+  onNext?: () => void;
+  currentIndex?: number;
+  totalCount?: number;
+}> = ({
+  image,
+  isOpen,
+  onClose,
+  canNavigate = false,
+  onPrevious,
+  onNext,
+  currentIndex,
+  totalCount,
+}) => {
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [zoom, setZoom] = useState(1);
+
+  const handleZoomIn = () => {
+    setZoom((prev) => Math.min(prev + 0.25, 3));
+  };
+
+  const handleZoomOut = () => {
+    setZoom((prev) => Math.max(prev - 0.25, 0.5));
+  };
+
+  const resetZoom = () => {
+    setZoom(1);
+  };
+
+  // Close modal with ESC key and manage body overflow
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
+      if (canNavigate && onPrevious && e.key === "ArrowLeft") onPrevious();
+      if (canNavigate && onNext && e.key === "ArrowRight") onNext();
     };
 
     if (isOpen) {
@@ -108,223 +133,145 @@ const ImageModal: React.FC<ImageModalProps> = ({ image, isOpen, onClose }) => {
       document.removeEventListener("keydown", handleEscape);
       document.body.style.overflow = "unset";
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, canNavigate, onPrevious, onNext]);
+
+  // Reset state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setImageLoaded(false);
+      setZoom(1);
+    }
+  }, [isOpen]);
 
   if (!isOpen || !image) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center">
-      <button
-        onClick={onClose}
-        className="absolute top-4 right-4 z-10 p-2 bg-black bg-opacity-50 rounded-full text-white hover:bg-opacity-70 transition-all"
-      >
-        <X size={24} />
-      </button>
-      <div className="max-w-screen-lg max-h-screen-lg p-4">
-        <OptimizedImage
-          src={image.src}
-          alt={image.alt}
-          className="max-w-full max-h-full object-contain"
-        />
-      </div>
-    </div>
-  );
-};
-
-// Upload Modal Component
-const UploadModal: React.FC<UploadModalProps> = ({
-  images,
-  isOpen,
-  onSave,
-  onClose,
-  onImagesChange,
-}) => {
-  const [confirmDelete, setConfrimDelete] = useState<{
-    confirm: boolean;
-    id?: string;
-  }>({
-    confirm: false,
-  });
-  const [isSaving, setIsSaving] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
-
-  // Handle file upload
-  const handleFileUpload = useCallback(
-    (files: FileList) => {
-      const fileArray = Array.from(files);
-      const promises = fileArray.map((file) => {
-        return new Promise<ImageItem>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            resolve({
-              id: Date.now() + Math.random().toString(36).substr(2, 9),
-              src: e.target?.result as string,
-              alt: file.name,
-              name: file.name,
-              file: file,
-            });
-          };
-          reader.readAsDataURL(file);
-        });
-      });
-
-      Promise.all(promises).then((newImages) => {
-        onImagesChange([...images, ...newImages]);
-      });
-    },
-    [images, onImagesChange]
-  );
-
-  // Handle drag and drop
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setDragOver(false);
-      handleFileUpload(e.dataTransfer.files);
-    },
-    [handleFileUpload]
-  );
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(true);
-  }, []);
-
-  const handleDragLeave = useCallback(() => {
-    setDragOver(false);
-  }, []);
-
-  // Handle file input
-  const handleFileInput = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files) {
-        handleFileUpload(e.target.files);
-      }
-    },
-    [handleFileUpload]
-  );
-
-  // Delete image
-  const deleteImage = useCallback(
-    (imageId?: string) => {
-      if (imageId) {
-        onImagesChange(images.filter((img) => img.id !== imageId));
-      }
-    },
-    [images, onImagesChange]
-  );
-
-  const handleSave = async () => {
-    try {
-      setIsSaving(true);
-      await onSave(images);
-      onClose();
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-40 bg-black bg-opacity-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden">
-        <div className="p-6 border-b flex justify-between items-center">
-          <h2 className="text-xl font-semibold">Manage Images</h2>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
-            <X size={20} />
-          </button>
+    <div className="fixed inset-0 z-50 bg-black bg-opacity-95 flex flex-col">
+      {/* Header */}
+      <div className="bg-black bg-opacity-80 backdrop-blur-sm p-4 flex items-center justify-between">
+        <div className="flex flex-col">
+          <h2 className="text-white text-lg font-semibold">
+            {image.name || image.alt || "Image"}
+          </h2>
+          <p className="text-gray-300 text-sm">
+            {canNavigate && currentIndex !== undefined && totalCount
+              ? `IMAGE ${currentIndex + 1} of ${totalCount}`
+              : "IMAGE"}
+          </p>
         </div>
-
-        <div className="p-6 max-h-[80vh] overflow-y-auto">
-          {/* Upload Area */}
-          <div
-            className={`border-2 border-dashed rounded-lg p-8 text-center mb-6 transition-colors ${
-              dragOver
-                ? "border-blue-500 bg-blue-50"
-                : "border-gray-300 hover:border-gray-400"
-            }`}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
+        <div className="flex items-center space-x-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handleZoomOut}
+            className="text-white hover:bg-white hover:bg-opacity-20 p-2"
+            disabled={zoom <= 0.5}
+            title="Zoom Out"
           >
-            <Upload className="mx-auto mb-4 text-gray-400" size={48} />
-            <p className="text-gray-600 mb-4">
-              Drag and drop images here, or click to select files
-            </p>
-            <input
-              type="file"
-              multiple
-              accept="image/*"
-              onChange={handleFileInput}
-              className="hidden"
-              id="file-upload"
-            />
-            <label
-              htmlFor="file-upload"
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer transition-colors"
-            >
-              <Plus size={20} className="mr-2" />
-              Add Images
-            </label>
-          </div>
+            <ZoomOut className="w-4 h-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={resetZoom}
+            className="text-white hover:bg-white hover:bg-opacity-20 px-3 py-2 text-sm min-w-[60px]"
+            title="Reset Zoom"
+          >
+            {Math.round(zoom * 100)}%
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handleZoomIn}
+            className="text-white hover:bg-white hover:bg-opacity-20 p-2"
+            disabled={zoom >= 3}
+            title="Zoom In"
+          >
+            <ZoomIn className="w-4 h-4" />
+          </Button>
+          <div className="w-px h-6 bg-gray-600 mx-2" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-white hover:bg-white hover:bg-opacity-20 p-2"
+            title="Download"
+          >
+            <a href={image.src} download>
+              <Download className="w-4 h-4" />
+            </a>
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            className="text-white hover:bg-white hover:bg-opacity-20 p-2"
+            title="Close"
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
 
-          {/* Optimized Image Grid */}
-          {images.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4">
-              {images.map((image) => (
-                <div
-                  key={image.id}
-                  className="relative group aspect-square bg-gray-100 rounded-lg overflow-hidden hover:shadow-lg transition-all duration-200"
-                >
-                  <OptimizedImage
-                    src={image.src}
-                    alt={image.alt}
-                    className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-                  />
+      {/* Navigation Buttons */}
+      {canNavigate && onPrevious && (
+        <button
+          onClick={onPrevious}
+          className="absolute left-4 top-1/2 transform -translate-y-1/2 z-10 p-3 bg-black bg-opacity-50 rounded-full text-white hover:bg-opacity-70 transition-all"
+          title="Previous Image (←)"
+        >
+          <ChevronLeft size={24} />
+        </button>
+      )}
 
-                  {/* Overlay for better button visibility */}
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-200" />
+      {canNavigate && onNext && (
+        <button
+          onClick={onNext}
+          className="absolute right-4 top-1/2 transform -translate-y-1/2 z-10 p-3 bg-black bg-opacity-50 rounded-full text-white hover:bg-opacity-70 transition-all"
+          title="Next Image (→)"
+        >
+          <ChevronRight size={24} />
+        </button>
+      )}
 
-                  {/* Delete button */}
-                  <button
-                    onClick={() =>
-                      setConfrimDelete({ confirm: true, id: image.id })
-                    }
-                    className="absolute top-2 right-2 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full 
-                     opacity-0 group-hover:opacity-100 transition-all duration-200 
-                     shadow-lg hover:shadow-xl transform hover:scale-110
-                     focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-red-300"
-                    aria-label={`Delete image ${image.alt || "image"}`}
-                    type="button"
-                  >
-                    <Trash2 size={16} className="drop-shadow-sm" />
-                  </button>
-                </div>
-              ))}
+      {/* Image Container */}
+      <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
+        <div
+          className="relative transition-transform duration-200 ease-out"
+          style={{ transform: `scale(${zoom})` }}
+        >
+          {!imageLoaded && (
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-900 rounded">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
             </div>
           )}
-
-          <div className="my-2 flex justify-end">
-            <Button loading={isSaving} variant="secondary" onClick={handleSave}>
-              Save
-            </Button>
-          </div>
+          <img
+            src={image.src}
+            alt={image.alt}
+            className={`max-w-none object-contain rounded-lg shadow-2xl transition-opacity duration-300 ${
+              imageLoaded ? "opacity-100" : "opacity-0"
+            }`}
+            style={{
+              maxHeight: "calc(95vh - 120px)",
+              width: "auto",
+              height: "auto",
+            }}
+            onLoad={() => setImageLoaded(true)}
+          />
         </div>
       </div>
 
-      <ConfirmDeleteModal
-        title="Delete Image"
-        description="Do you really want to delete this image?"
-        onCancel={() => setConfrimDelete({ confirm: false, id: undefined })}
-        onConfirm={() => {
-          deleteImage(confirmDelete.id);
-          setConfrimDelete({ confirm: false, id: undefined });
-        }}
-        open={confirmDelete.confirm}
-      />
+      {/* Hint */}
+      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-gray-400 text-sm text-center">
+        <p>
+          Use zoom controls or scroll to navigate •{" "}
+          {canNavigate ? "← → to change images • " : ""}Press ESC to close
+        </p>
+      </div>
     </div>
   );
 };
@@ -403,8 +350,11 @@ export const ImageSlider: React.FC<ImageSliderProps> = ({
   return (
     <div className="w-full mx-auto h-full">
       {/* Main Slider */}
-      <div className="relative group bg-gray-100 rounded-lg overflow-hidden h-[30vh]">
-        <div className="relative aspect-video">
+      <div className="relative bg-gray-100 rounded-lg overflow-hidden">
+        <div
+          className="relative aspect-video group mx-auto"
+          style={{ maxHeight: "30vh" }}
+        >
           <OptimizedImage
             src={currentImage.src}
             alt={currentImage.alt}
@@ -481,6 +431,11 @@ export const ImageSlider: React.FC<ImageSliderProps> = ({
       {/* Modals */}
       <ImageModal
         image={currentImage}
+        canNavigate={true}
+        currentIndex={currentIndex}
+        onNext={goToNext}
+        onPrevious={goToPrevious}
+        totalCount={images.length}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
       />

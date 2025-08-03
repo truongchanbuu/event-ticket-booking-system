@@ -225,6 +225,7 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
 
               <label htmlFor={`replace-${doc.documentType}`}>
                 <Button
+                  loading={isUploading}
                   type="button"
                   variant="ghost"
                   size="icon"
