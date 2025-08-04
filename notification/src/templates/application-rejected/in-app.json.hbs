@@ -1,0 +1,24 @@
+{
+  "userId": "{{userId}}",
+  "type": "error",
+  "priority": "high",
+  "title": "Your Application Was Rejected",
+  "message": "Unfortunately, your application {{applicationId}} was rejected. Reason: {{reason}}. You may update and resubmit.",
+  "icon": "❌",
+  "color": "#dc2626",
+  "dismissible": true,
+  "autoHide": null,
+  "actions": [
+    {
+      "label": "Edit & Resubmit",
+      "action": "navigate",
+      "target": "/profile/me",
+      "style": "primary"
+    }
+  ],
+  "metadata": {
+    "applicationId": "{{applicationId}}",
+    "rejectionReason": "{{reason}}",
+    "isPermanent": false
+  }
+}

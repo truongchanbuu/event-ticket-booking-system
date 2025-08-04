@@ -1,0 +1,145 @@
+<html>
+  <head>
+    <meta charset='UTF-8' />
+    <meta name='viewport' content='width=device-width, initial-scale=1.0' />
+    <title>Application permanently rejected</title>
+    <style>
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        margin: 0;
+        padding: 0;
+        background: #f8fafc;
+      }
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: white;
+      }
+      .header {
+        background: linear-gradient(135deg, #7c2d12 0%, #991b1b 100%);
+        padding: 40px 30px;
+        text-align: center;
+      }
+      .header h1 {
+        color: white;
+        margin: 0;
+        font-size: 28px;
+        font-weight: 600;
+      }
+      .content {
+        padding: 40px 30px;
+      }
+      .permanent-notice {
+        background: #fef2f2;
+        border: 2px solid #ef4444;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 20px 0;
+      }
+      .reason-box {
+        background: #f1f5f9;
+        border-left: 4px solid #7c2d12;
+        padding: 15px;
+        margin: 20px 0;
+      }
+      .cta-button {
+        display: inline-block;
+        background: #6b7280;
+        color: white;
+        padding: 14px 28px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        margin: 10px 5px;
+      }
+      .footer {
+        background: #f8fafc;
+        padding: 20px 30px;
+        text-align: center;
+        color: #6b7280;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class='container'>
+      <div class='header'>
+        <h1>Application Permanently Rejected</h1>
+      </div>
+
+      <div class='content'>
+        <div class='permanent-notice'>
+          <div style='display: flex; align-items: center; margin-bottom: 15px'>
+            <span style='font-size: 24px; margin-right: 10px'>⚠️</span>
+            <strong style='color: #374151; font-size: 18px'>Permanent Rejection
+              Notice</strong>
+          </div>
+          <p style='color: #6b7280; margin: 0; line-height: 1.6'>
+            Your application for "{{event_name}}" has been permanently rejected
+            and cannot be resubmitted.
+          </p>
+        </div>
+
+        <p style='color: #374151; line-height: 1.6'>
+          Hi there,<br /><br />
+          After careful review, we have made the decision to permanently reject
+          your event application. This decision is final and the application
+          cannot be resubmitted.
+        </p>
+
+        {{#if payload.reason}}
+          <div class='reason-box'>
+            <strong style='color: #374151'>Reason for permanent rejection:</strong><br
+            />
+            <span style='color: #6b7280'>{{payload.reason}}</span>
+          </div>
+        {{/if}}
+
+        <h3 style='color: #374151'>What this means:</h3>
+        <ul style='color: #6b7280; line-height: 1.6'>
+          <li>This specific event application cannot be resubmitted</li>
+          <li>
+            You may still apply for other events that comply with our guidelines
+          </li>
+          <li>Your organizer account remains active for future applications</li>
+          <li>You can still attend events as a regular user</li>
+        </ul>
+
+        <div style='text-align: center; margin: 30px 0'>
+          <a href='#!' class='cta-button'>Contact Support</a>
+          {{!-- <a href='{{guidelines_url}}' class='cta-button'>Review Guidelines</a> --}}
+        </div>
+
+        <div
+          style='
+            background: #f8fafc;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+          '
+        >
+          <p style='margin: 0; color: #374151'>
+            <strong>Still want to organize events?</strong>
+            Review our community guidelines and consider submitting applications
+            for different events that align with our policies.
+          </p>
+        </div>
+      </div>
+
+      <div class='footer'>
+        <p>
+          EventHub Team<br />
+          For questions about this decision:
+          <a
+            href='mailto:truongchanbuu0512@gmail.com?subject=Appeal%20for%20Application%20{{payload.applicationId}}&body=Hello%20{{payload.username}},%0D%0A%0D%0AI%20would%20like%20to%20appeal%20the%20rejection%20of%20my%20event%20application.%0D%0AApplication%20ID:%20{{payload.applicationId}}%0D%0AReason%20Given:%20{{rejection_reason}}%0D%0A%0D%0AThank%20you.'
+            style='color: #ef4444'
+          >
+            Submit an Appeal
+          </a>.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+[33m712c7a1[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfrontend[m[33m)[m feat(frontend): added eslint rule + tailwindcss eslint plugin + added prettier setup + tailwindcss plugin + sort imports plugin
+[33m7fd9126[m feat(frontend): add engine locking
+[33maaeebcb[m[33m ([m[1;31morigin/feature/auth[m[33m, [m[1;31morigin/develop[m[33m, [m[1;32mfeature/auth[m[33m, [m[1;32mdevelop[m[33m)[m feat(auth): implemented auth service (untested)
+[33mf22907d[m[33m ([m[1;31morigin/staging[m[33m, [m[1;31morigin/main[m[33m, [m[1;32mstaging[m[33m, [m[1;32mmain[m[33m)[m chore: setup templates for other services
+[33md9f6457[m chore: setup logger & error handler
+[33m3885e8c[m ci: update ci.yml for checking code
+[33m8d428d2[m ci: change workflow dir => workflows dir
+[33mdc61df7[m ci: change workflow ci.yml
+[33mf93ea54[m chore: setup docker-compose and some template files - app.js, server.js, .env.example with README.md files
+[33mf5525cb[m ci: apply ci.yml for main CI
+[33med8845b[m chore: setup project structure

@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "es2016",
+    "module": "commonjs",
+
+    /* Đường dẫn và thư mục */
+    "outDir": "./dist", // <-- SỬA LỖI 1: Chỉ định thư mục output
+    "rootDir": "./src", // <-- SỬA LỖI 1: Chỉ định thư mục source
+
+    /* Interop Constraints */
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* Type Checking */
+    "strict": true
+
+    /* Completeness */
+    // Tạm thời tắt để gỡ lỗi
+    // "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts", "src/**/*.d.ts"],
+  "exclude": ["node_modules", "dist"] // Thêm "dist" vào exclude để tránh vòng lặp biên dịch
+}

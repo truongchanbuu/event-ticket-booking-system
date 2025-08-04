@@ -1,9 +1,7 @@
 import admin from "firebase-admin";
 import REVOKE_REASON from "../enums/revoke_reason.enum.js";
-import { REVOKE_TOPIC } from "../kafka/topics.js";
-import { sendKafkaMessage } from "../kafka/procuder.js";
 
-export default class AuthService {
+export class AuthService {
     constructor({ logger }) {
         this.logger = logger;
     }
@@ -11,17 +9,12 @@ export default class AuthService {
     async revokeToken(uid, reason = REVOKE_REASON.SYSTEM, actor = {}) {
         try {
             await admin.auth().revokeRefreshTokens(uid);
-
-            await sendKafkaMessage({
-                topic: REVOKE_TOPIC,
-                key: uid,
-                value: {
-                    uid,
-                    actor,
-                    reason,
-                    timestamp: new Date().toISOString(),
-                },
-            });
+            // await sendTokenRevoked({
+            //     uid,
+            //     actor,
+            //     reason,
+            //     timestamp: new Date().toISOString(),
+            // });
         } catch (e) {
             this.logger.error("Failed to revoke token:", e);
             throw e;
@@ -55,6 +48,16 @@ export default class AuthService {
         } catch (e) {
             this.logger.error("Failed to set claims:", e);
             throw e;
+        }
+    }
+
+    async deleteUser(uid) {
+        try {
+            await admin.auth().deleteUser(uid);
+            return uid;
+        } catch (e) {
+            console.error("failed to delete: ", e);
+            return null;
         }
     }
 

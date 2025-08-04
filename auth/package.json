@@ -23,22 +23,24 @@
     "description": "",
     "dependencies": {
         "@event_ticket_booking_system/shared": "file:../shared",
+        "awilix": "^12.0.5",
+        "awilix-express": "^9.0.2",
         "cors": "^2.8.5",
         "dotenv": "^16.5.0",
         "express": "^5.1.0",
         "express-validator": "^7.2.1",
+        "firebase": "^11.9.0",
         "firebase-admin": "^13.4.0",
-        "kafkajs": "^2.2.4"
+        "kafka": "^0.2.3",
+        "kafkajs": "^2.2.4",
+        "pino": "^9.7.0"
     },
     "devDependencies": {
         "@babel/preset-env": "^7.27.2",
-        "awilix": "^12.0.5",
-        "awilix-express": "^9.0.2",
         "eslint": "^9.28.0",
         "eslint-config-prettier": "^10.1.5",
         "eslint-plugin-prettier": "^5.4.1",
-        "jest": "^29.7.0",
         "prettier": "^3.5.3",
-        "pino-pretty": "^13.0.0"
+        "supertest": "^7.1.1"
     }
 }

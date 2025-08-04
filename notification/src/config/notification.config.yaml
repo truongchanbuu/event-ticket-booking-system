@@ -1,0 +1,66 @@
+# ===================================================================
+# GLOBAL CONFIGURATION
+# Chỉ giữ lại những gì thực sự cần thiết.
+# ===================================================================
+global:
+  sender:
+    email: 'onboarding@resend.dev'
+    name: 'EventHub Team'
+
+# ===================================================================
+# NOTIFICATION TYPES
+# Mỗi khối chỉ định nghĩa những gì cần thiết để gửi. Không có 'variables'.
+# ===================================================================
+notifications:
+  APPLICATION_APPROVED:
+    name: 'Event Application Approved'
+    email:
+      subject: 'Your event permit has been approved! 🥳'
+      template_file: 'application-approved/email.hbs'
+    in_app:
+      template_file: 'application-approved/in-app.json.hbs'
+      # title: 'Event Application Approved! 🥳'
+      # message: 'Congratulations! Your application has been approved. Check your dashboard for details.'
+      # # Link được hardcode, không cần biến
+      # target: '/profile/dashboard'
+      # icon: '✅' # hoặc 'success-icon', 'check-circle'
+      # color: '#28a745' # Màu xanh lá
+      # dismissible: true
+      # autoHide: 5000 # Tự động ẩn sau 5 giây
+
+  APPLICATION_REJECTED:
+    name: 'Event Application Rejected'
+    email:
+      subject: 'Your event application was rejected ❌'
+      template_file: 'application-rejected/email.hbs'
+    in_app:
+      template_file: 'application-rejected/in-app.json.hbs'
+      # title: 'Application Rejected ❌'
+      # message: 'Unfortunately, your application was not approved. Please check your email for more details.'
+      # target: '/profile/applications'
+      # icon: '❌' # hoặc 'error-icon', 'x-circle'
+      # color: '#dc3545' # Màu đỏ
+      # dismissible: true
+      # autoHide: 10000
+
+  APPLICATION_PERMANENTLY_REJECTED:
+    name: 'Event Application Permanently Rejected'
+    email:
+      subject: 'Important: Your event application was permanently rejected'
+      template_file: 'application-permantly-rejected/email.hbs'
+    in_app:
+      template_file: 'application-permantly-rejected/in-app.json.hbs'
+      title: 'Application Permanently Rejected'
+      message: 'Your application has been permanently rejected. This decision is final.'
+      target: '/profile/applications'
+      icon: '🚫'
+      color: '#6c757d'
+      dismissible: true
+      autoHide: 15000
+      type: 'warning'
+
+# ===================================================================
+# SERVICE SETTINGS
+# ===================================================================
+settings:
+  template_directory: 'src/templates'

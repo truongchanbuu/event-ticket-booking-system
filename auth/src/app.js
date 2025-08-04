@@ -3,24 +3,34 @@ import cors from "cors";
 import { scopePerRequest } from "awilix-express";
 
 import healthRouter from "./routes/health.js";
-import { errorHandler } from "@event_ticket_booking_system/shared";
-import container from "./container.js";
-import { ENV } from "../src/config/env.js";
+import { checkJson, errorHandler } from "@event_ticket_booking_system/shared";
 import { ERROR_CODE } from "@event_ticket_booking_system/shared";
 import { AppError } from "@event_ticket_booking_system/shared";
 
-export default async function createApp() {
+export function createApp({ container, config, logger }) {
     const app = express();
 
     // Test Config: Custom when production
-    if (ENV.NODE_ENV == "development") app.use(cors());
+    if (config.app.nodeEnv == "development") app.use(cors());
+
+    // Add logging middleware
+    app.use((req, res, next) => {
+        logger?.debug(
+            `📨 ${req.method} ${req.url} - ${new Date().toISOString()}`,
+        );
+        next();
+    });
+
+    app.use("/api/health", healthRouter);
 
     app.use(express.json());
+    app.use(checkJson);
+
     app.use(scopePerRequest(container));
 
-    const authRoutes = container.resolve("authRoutes");
-    app.use("/", authRoutes.authRouter);
-    app.use("/health", healthRouter);
+    const apiRoutes = container.resolve("apiRoutes");
+    app.use("/api", apiRoutes.router);
+
     app.use((req, res, next) => {
         next(new AppError("Not Found", 404, ERROR_CODE.NOT_FOUND));
     });

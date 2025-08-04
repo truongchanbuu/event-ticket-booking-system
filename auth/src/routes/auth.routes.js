@@ -1,12 +1,12 @@
 import express from "express";
-import AuthValidator from "../utils/validator.js";
+import AuthValidator from "../middlewares/validator.js";
 import {
+    verifyToken,
     checkAdmin,
     checkOwnerOrAdmin,
-    verifyToken,
-} from "../middlewares/firebase_auth.middleware.js";
+} from "@event_ticket_booking_system/shared";
 
-export default class AuthRoutes {
+export class AuthRoutes {
     constructor({ authController }) {
         this.router = express.Router();
         this.authController = authController;
@@ -15,9 +15,13 @@ export default class AuthRoutes {
 
     initRoutes() {
         this.router.post(
-            "/validate-token",
+            "/verify-token",
             verifyToken,
-            this.authController.validateToken,
+            this.authController.verifyToken,
+        );
+        this.router.post(
+            "/verify-session",
+            this.authController.verifySessionCookies,
         );
         this.router.post(
             "/revoke-token",
@@ -28,7 +32,18 @@ export default class AuthRoutes {
             this.authController.revokeToken,
         );
         this.router.post("/logout", verifyToken, this.authController.logout);
-
+        this.router.post(
+            "/session",
+            verifyToken,
+            this.authController.createSession,
+        );
+        this.router.delete(
+            "/:uid",
+            verifyToken,
+            checkOwnerOrAdmin,
+            AuthValidator.validateDeleteUser(),
+            AuthValidator.handleValidationErrors,
+        );
         this.router.get(
             "/claims/:uid",
             verifyToken,
@@ -45,9 +60,5 @@ export default class AuthRoutes {
             AuthValidator.handleValidationErrors,
             this.authController.setClaims,
         );
-    }
-
-    get authRouter() {
-        return this.router;
     }
 }

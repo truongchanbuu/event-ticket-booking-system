@@ -1,0 +1,25 @@
+{
+  "id": "organizer_approved",
+  "type": "success",
+  "priority": "high",
+  "title": "Organizer Profile Approved! ✅",
+  "message": "Your organizer profile is now approved. Start creating events!",
+  "actions": [
+    {
+      "label": "Create First Event",
+      "action": "navigate",
+      "target": "/organizer/create",
+      "style": "primary"
+    },
+    {
+      "label": "View Dashboard",
+      "action": "navigate",
+      "target": "/organizer/dashboard",
+      "style": "secondary"
+    }
+  ],
+  "icon": "✅",
+  "color": "#10b981",
+  "dismissible": true,
+  "autoHide": false
+}

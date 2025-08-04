@@ -1,0 +1,71 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-background: hsl(0, 0%, 100%);
+  --color-foreground: hsl(20, 14.3%, 4.1%);
+  --color-muted: hsl(60, 4.8%, 95.9%);
+  --color-border: hsl(20, 5.9%, 90%);
+  --color-input: hsl(20, 5.9%, 90%);
+  --color-primary: hsl(262, 83%, 58%);
+  --color-secondary: hsl(217, 91%, 60%);
+  --color-accent: hsl(166, 76%, 37%);
+  --color-destructive: hsl(0, 84.2%, 60.2%);
+  --color-ring: hsl(20, 14.3%, 4.1%);
+  --radius-base: 0.75rem;
+}
+
+@layer base {
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+  .dark {
+    --color-background: hsl(240, 10%, 3.9%);
+    --color-foreground: hsl(0, 0%, 98%);
+    --color-muted: hsl(240, 3.7%, 15.9%);
+    --color-border: hsl(240, 3.7%, 15.9%);
+    --color-input: hsl(240, 3.7%, 15.9%);
+    --color-destructive: hsl(0, 62.8%, 30.6%);
+    --color-ring: hsl(240, 4.9%, 83.9%);
+  }
+  button {
+    @apply cursor-pointer;
+  }
+}
+
+@layer components {
+  .payment-option {
+    @apply flex items-center p-3 border border-gray-200 rounded-lg 
+           cursor-pointer transition-colors;
+  }
+  .payment-option:hover {
+    @apply bg-gray-50;
+  }
+  .quantity-button {
+    @apply w-8 h-8 rounded-full flex items-center justify-center transition-colors text-xs;
+  }
+  .quantity-button-add {
+    @apply bg-primary hover:bg-primary text-white;
+  }
+  .quantity-button-remove {
+    @apply bg-gray-100 hover:bg-gray-200 text-gray-600;
+  }
+  .ticket-card {
+    @apply border border-gray-200 rounded-lg p-4 transition-colors hover:border-primary;
+  }
+  .countdown-text {
+    @apply text-lg font-bold text-destructive;
+  }
+  .progress-step-active {
+    @apply bg-primary text-white;
+  }
+  .progress-step-inactive {
+    @apply bg-gray-300 text-gray-600;
+  }
+  .progress-line-active {
+    @apply bg-primary;
+  }
+  .progress-line-inactive {
+    @apply bg-gray-300;
+  }
+}

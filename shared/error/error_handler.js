@@ -2,21 +2,24 @@ import AppError from "./app_error.js";
 import error_code from "./error_code.js";
 
 export const errorHandler = (err, req, res, next) => {
+  if (process.env.NODE_ENV !== "development") {
+    console.error(err);
+  }
+
   if (err instanceof AppError) {
     return res.status(err.statusCode).json({
       success: false,
       message: err.message,
       errorCode: err.errorCode,
+      statusCode: err.statusCode,
+      errors: err.errors,
     });
-  }
-
-  if (process.env.NODE_ENV !== "test") {
-    console.error(err);
   }
 
   res.status(500).json({
     success: false,
     message: err.message || "Internal Server Error",
+    statusCode: err.statusCode,
     errorCode: error_code.INTERNAL_ERROR,
   });
 };

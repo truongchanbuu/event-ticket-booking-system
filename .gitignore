@@ -71,3 +71,15 @@ junit.xml
 # Ensure all sensitive config files are ignored
 ticket/config/
 payment/config/ 
+.husky
+
+/frontend/node_modules
+/frontend/dist
+/frontend/build
+/frontend/tmp
+/frontend/temp
+/frontend/logs
+/frontend/coverage
+/frontend/test-output
+/frontend/junit.xml
+/frontend/.next

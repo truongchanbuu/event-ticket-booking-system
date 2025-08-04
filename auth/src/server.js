@@ -1,27 +1,56 @@
-import createApp from "./app.js";
-import { ENV } from "./config/env.js";
-import { initProducer } from "./kafka/procuder.js";
-import { shutdownKafka } from "./kafka/shutdown.js";
+import { createApp } from "./app.js";
+import { configureContainer } from "./container.js";
+
+let server;
 
 async function bootstrap() {
-    await initProducer();
-    const app = await createApp();
-    const PORT = ENV.PORT || 3000;
-    app.listen(PORT, () => {
-        console.log(`🚀 Auth service running on port ${PORT}`);
-    });
+    try {
+        const container = await configureContainer();
 
-    process.on("SIGINT", async () => {
-        await shutdownKafka();
-        process.exit(0);
-    });
-    process.on("SIGTERM", async () => {
-        await shutdownKafka();
-        process.exit(0);
-    });
+        const config = container.resolve("config");
+        const rootLogger = container.resolve("logger");
+
+        // Initialize Kafka
+        const kafkaService = container.resolve("kafkaService");
+
+        // Create and start the app
+        const app = createApp({ container, config, rootLogger });
+        const PORT = config.app.port;
+
+        server = app.listen(PORT, () => {
+            rootLogger.debug(`🚀 Auth service running on port ${PORT}`);
+            rootLogger.debug(`📊 Environment: ${config.app.nodeEnv}`);
+        });
+
+        // Graceful shutdown handling
+        const gracefulShutdown = async (signal) => {
+            rootLogger.debug(
+                `\n🛑 Received ${signal}. Starting graceful shutdown...`,
+            );
+
+            if (server) {
+                server.close(() => {
+                    rootLogger.debug("✅ HTTP server closed");
+                });
+            }
+
+            try {
+                await kafkaService.disconnect();
+                rootLogger.debug("✅ Kafka connections closed");
+            } catch (error) {
+                rootLogger.error("❌ Error closing Kafka connections:", error);
+            }
+
+            process.exit(0);
+        };
+
+        // Handle shutdown signals
+        process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+        process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+    } catch (error) {
+        console.error("❌ Failed to start the Auth service:", error);
+        process.exit(1);
+    }
 }
 
-bootstrap().catch((e) => {
-    console.error("❌ Failed to start the auth service", e);
-    process.exit(1);
-});
+bootstrap();

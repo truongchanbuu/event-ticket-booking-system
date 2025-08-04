@@ -1,10 +1,23 @@
 FROM node:22-alpine
 
+# 1️⃣ Tạo thư mục làm việc gốc
 WORKDIR /app
+
+# 2️⃣ Copy package.json chính & shared & service
 COPY package*.json ./
-RUN npm install
-COPY . .
+COPY shared/package*.json ./shared/
+COPY ticket/package*.json ./ticket/
 
+# 5️⃣ Tắt husky, cài dependencies của service
+ENV HUSKY=0
+RUN npm install --omit=dev
+
+# 4️⃣ Làm việc trong thư mục ticket
+WORKDIR /app/ticket
+# 3️⃣ Copy source code shared và service vào đúng vị trí
+COPY shared/ ./shared/
+COPY ticket/ ./ticket/
+
+# 6️⃣ Expose port & Run app
 EXPOSE 3000
-
-CMD ["npm", "run", "dev"]
+CMD ["npm", "run", "start"]
