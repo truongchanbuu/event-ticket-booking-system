@@ -28,13 +28,19 @@ export class ConsumerOrchestrator {
     async startAll() {
         this.logger.info("Starting all Kafka consumers for this service...");
 
-        const { topics, dlqTopics, consumerGroups } = this.config.kafka;
+        const {
+            topics,
+            dlqTopics,
+            consumerGroups,
+            sessionTimeout,
+            heartbeatInterval,
+        } = this.config.kafka;
 
         const consumerDefinitions = [
             {
                 topic: topics.ticket_type_events,
                 groupId: consumerGroups.ticket_type_group,
-                dlqTopic: dlqTopics.ticket_type_dlq,
+                dlqTopic: dlqTopics.main_events_dlq,
                 retryDelays: ["1m", "5m", "15m", "30m"],
                 handler: async (payload) => {
                     this.logger.info(
@@ -47,7 +53,7 @@ export class ConsumerOrchestrator {
         ];
 
         const allTopicsToEnsure = consumerDefinitions.flatMap((def) => [
-            { topic: def.topic, numPartitions: 3 }, // Topic chính
+            { topic: def.topic, numPartitions: 3 },
             ...def.retryDelays.map((delay) => ({
                 topic: `${def.topic}.retry.${delay}`,
             })),
@@ -63,6 +69,10 @@ export class ConsumerOrchestrator {
                 retryDelays: def.retryDelays,
                 dlqTopic: def.dlqTopic,
                 handler: def.handler,
+                consumerConfig: {
+                    sessionTimeout,
+                    heartbeatInterval,
+                },
             });
         }
 
@@ -72,8 +82,17 @@ export class ConsumerOrchestrator {
         }));
 
         await this.kafkaService.createGlobalRetryHandlerConsumer({
-            groupId: "event-service-global-retry-handler",
+            groupId: consumerGroups.global_retry_group,
             retryConfigs: allRetryConfigs,
+        });
+
+        await this.kafkaService.createDlqConsumer({
+            groupId: consumerGroups.dlq_group,
+            dlqTopic: dlqTopics.main_events_dlq,
+            consumerConfig: {
+                sessionTimeout,
+                heartbeatInterval,
+            },
         });
 
         this.logger.info(

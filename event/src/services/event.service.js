@@ -142,75 +142,102 @@ export class EventService {
     }
 
     async createEvent(user, eventData) {
-        console.log(
-            `EVENT DATA: ${JSON.stringify(eventData)} - user: ${JSON.stringify(user)}`,
-        );
         const eventDocRef = this.eventCollection.doc();
         const eventID = eventDocRef.id;
 
-        eventData.status = EVENT_STATUS.DRAFT;
-
+        const now = new Date().toISOString();
         const newEvent = {
             ...eventData,
+            status: EVENT_STATUS.DRAFT,
             organizer: {
                 organizerID: user.uid,
                 name: user.name,
-                phototUrl: user.picture,
+                photoUrl: user.picture,
             },
             stats: {
                 participantCount: 0,
                 checkInCount: 0,
                 ticketSoldCount: 0,
             },
-            eventID,
             startTime: new Date(eventData.startTime).toISOString(),
             endTime: new Date(eventData.endTime).toISOString(),
-            createdAt: new Date().toISOString(),
+            createdAt: now,
+            eventID,
         };
 
-        await eventDocRef.set(newEvent);
+        try {
+            await db.runTransaction(async (tx) => {
+                tx.set(eventDocRef, newEvent);
 
-        const orgCacheKey = this.CACHE_KEYS.EVENTS_BY_ORG_ID(
-            eventData.organizer.organizerID,
-        );
-        console.log(
-            `[Cache Invalidate] Deleting key ${orgCacheKey} due to new event creation.`,
-        );
-        await this.redisService.del(orgCacheKey);
+                if (eventData.ticketTypes?.length > 0) {
+                    const ticketTypesCollectionRef = eventDocRef.collection(
+                        TICKET_TYPES_SUBCOLLECTION,
+                    );
+                    for (const ticketType of eventData.ticketTypes) {
+                        const ticketTypeDocRef = ticketTypesCollectionRef.doc(); // dùng doc().set để có thể kiểm soát ID
+                        tx.set(ticketTypeDocRef, ticketType);
+                    }
+                }
+            });
 
-        return eventID;
+            // Invalidate cache sau khi transaction thành công
+            const orgCacheKey = this.CACHE_KEYS.EVENTS_BY_ORG_ID(user.uid);
+            console.log(
+                `[Cache Invalidate] Deleting key ${orgCacheKey} due to new event creation.`,
+            );
+            await this.redisService.del(orgCacheKey);
+
+            return eventID;
+        } catch (error) {
+            console.error("Transaction failed:", error.message);
+            throw new Error("Failed to create event and ticket types.");
+        }
     }
 
     async updateEvent(eventID, eventData) {
-        const existingEvent = await this.getEventByID(eventID, false);
         delete eventData.eventID;
 
-        if (!existingEvent) {
-            throw new AppError({ statusCode: 404, message: "Event not found" });
-        }
+        const eventRef = this.eventCollection.doc(eventID);
+        let updatedEvent = null;
 
-        this._validateEventUpdateRules(existingEvent, eventData);
-        if (eventData.ticketTypes && eventData.ticketTypes.length > 0) {
-            eventData.ticketTypes = await this._validateTicketTypes(
-                existingEvent.ticketTypes,
-                eventData.ticketTypes,
-            );
-        }
+        await db.runTransaction(async (tx) => {
+            const snap = await tx.get(eventRef);
+            if (!snap.exists) {
+                throw new AppError({
+                    statusCode: 404,
+                    message: "Event not found",
+                });
+            }
 
-        const updateData = this._prepareUpdateData(eventData);
+            const existingEvent = snap.data();
 
-        await this.eventCollection.doc(eventID).update(updateData);
+            this._validateEventUpdateRules(existingEvent, eventData);
+
+            if (eventData.ticketTypes && eventData.ticketTypes.length > 0) {
+                eventData.ticketTypes = await this._validateTicketTypes(
+                    existingEvent.ticketTypes,
+                    eventData.ticketTypes,
+                );
+            }
+
+            const updateData = this._prepareUpdateData(eventData);
+
+            tx.update(eventRef, updateData);
+
+            updatedEvent = { ...existingEvent, ...updateData };
+        });
+
+        // Invalidate cache sau khi commit thành công
         const eventCacheKey = this.CACHE_KEYS.EVENT_BY_ID(eventID);
         const orgCacheKey = this.CACHE_KEYS.EVENTS_BY_ORG_ID(
-            existingEvent.organizerID,
+            updatedEvent.organizerID,
         );
-
         console.info(
             `[Cache Invalidate] Deleting keys ${eventCacheKey} and ${orgCacheKey} due to update.`,
         );
-        await this.redisService.del(...[eventCacheKey, orgCacheKey]);
+        await this.redisService.del(eventCacheKey, orgCacheKey);
 
-        return { ...existingEvent, ...updateData };
+        return updatedEvent;
     }
 
     _validateEventUpdateRules(existingEvent, eventData) {
@@ -433,12 +460,6 @@ export class EventService {
     }
 
     /**
-     * Khi có một hành động làm thay đổi danh sách người tham dự (ví dụ: có người mới tham gia),
-     * chúng ta cần xóa cache cũ đi để lần gọi tiếp theo sẽ lấy dữ liệu mới nhất từ DB.
-     * @param {string} eventID - ID của sự kiện.
-     * @param {string} userID - ID của người dùng tham gia.
-     */
-    /**
      * Thêm một người dùng vào danh sách người tham dự của một sự kiện
      * trong Firestore và làm mới cache trong Redis.
      *
@@ -458,7 +479,7 @@ export class EventService {
         }
 
         const cacheKey = this.CACHE_KEYS.EVENT_ATTENDEES_BY_ID(eventID);
-        const attendeeRef = this.firestore
+        const attendeeRef = db
             .collection(EVENT_COLLECTION)
             .doc(eventID)
             .collection(ATTENDEES_SUBCOLLECTION)

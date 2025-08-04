@@ -3,6 +3,7 @@ import {
     catchAsync,
     ERROR_CODE,
 } from "@event_ticket_booking_system/shared";
+import { EVENT_STATUS } from "../enums/event-status.js";
 
 export class EventController {
     constructor({ logger, eventService }) {
@@ -17,6 +18,7 @@ export class EventController {
         this.getEventTicketTypes = catchAsync(
             this.getEventTicketTypes.bind(this),
         );
+        this.cancelMyEvent = catchAsync(this.cancelMyEvent.bind(this));
     }
 
     async getMyEvents(req, res) {
@@ -104,6 +106,53 @@ export class EventController {
         );
 
         return res.status(200).json({ success: true, data: updatedEvent });
+    }
+
+    async cancelMyEvent(req, res) {
+        const { eventID } = req.params;
+        const userID = req.user.uid;
+
+        const event = await this.eventService.getEventByID(eventID);
+        if (!event) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Failed to cancel." });
+        }
+
+        if (event.organizer.organizerID !== userID) {
+            return res.status(403).json({
+                success: false,
+                message: "You are not allowed to cancel this event.",
+            });
+        }
+
+        // if ((event?.stats?.participantCount || 0) > 0) {
+        // }
+
+        if (event.status === EVENT_STATUS.CANCELLED) {
+            return res.status(200).json({
+                success: true,
+                message: "Event has been cancelled.",
+                data: event,
+            });
+        }
+
+        const updatedData = {
+            cancelledReason: "No reason provided.",
+            ...req.body,
+            status: EVENT_STATUS.CANCELLED,
+            cancelledAt: new Date().toISOString(),
+            cancelledBy: "self",
+        };
+
+        const result = await this.eventService.updateEvent(
+            eventID,
+            updatedData,
+        );
+
+        console.log(`res: ${JSON.stringify(result)}`);
+
+        return res.status(200).json({ success: true, data: result });
     }
 
     async getEventAttendees(req, res) {

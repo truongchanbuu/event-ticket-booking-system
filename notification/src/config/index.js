@@ -46,8 +46,12 @@ export default {
     topics: {
       application_events: APPLICATION_EVENTS,
     },
+    sessionTimeout: 300000,
+    heartbeatInterval: 10000,
     consumerGroups: {
       main_events: 'notification-service-main-group',
+      global_retry_group: 'global-retry-handler-group',
+      dlq_group: 'notification-service-dlq',
     },
     dlqTopics: {
       main_events_dlq: 'notification-service.main.dlq',

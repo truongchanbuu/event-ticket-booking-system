@@ -1,4 +1,4 @@
-import { body } from "express-validator";
+import { body, param } from "express-validator";
 import {
     BaseValidator,
     CATEGORY_IDS,
@@ -110,6 +110,23 @@ export default class EventValidator extends BaseValidator {
             ...this.validateStartTime(),
             ...this.validateEndTime(),
             ...this.validateThumbnails(),
+        ];
+    }
+
+    static validateCancelEvent() {
+        return [
+            param("eventID")
+                .notEmpty()
+                .withMessage("eventId is required")
+                .isString()
+                .withMessage("eventId must be a string"),
+
+            body("cancelledReason")
+                .optional()
+                .isString()
+                .withMessage("cancelledReason must be a string")
+                .isLength({ max: 300 })
+                .withMessage("cancelledReason is too long"),
         ];
     }
 

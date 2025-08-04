@@ -76,6 +76,10 @@ export const EventSchema = z
       ticketSoldCount: 0,
     }),
 
+    cancelledReason: z.string().optional(),
+    cancelledBy: z.string().optional(),
+    cancelledAt: z.string().datetime().optional(),
+
     createdAt: z.string().datetime().optional(),
     updatedAt: z.string().datetime().optional(),
   })

@@ -32,28 +32,42 @@ async function bootstrap() {
         });
 
         // Graceful shutdown handling
+        // Trong file bootstrap.js của bạn
+
         const gracefulShutdown = async (signal) => {
             rootLogger.debug(
-                `\n🛑 Received ${signal}. Starting graceful shutdown...`,
+                `\n🛑 Received ${signal}. Starting graceful shutdown. Draining connections...`,
             );
 
             if (server) {
-                server.close(() => {
-                    rootLogger.debug("✅ HTTP server closed");
+                await new Promise((resolve, reject) => {
+                    server.close((err) => {
+                        if (err) {
+                            rootLogger.error(
+                                "❌ Error closing HTTP server:",
+                                err,
+                            );
+                            return reject(err);
+                        }
+                        rootLogger.debug(
+                            "✅ HTTP server closed. No new requests will be accepted.",
+                        );
+                        resolve();
+                    });
                 });
             }
 
             try {
                 await kafkaService.disconnect();
-                rootLogger.debug("✅ Kafka connections closed");
+                rootLogger.debug("✅ Kafka connections closed gracefully.");
             } catch (error) {
                 rootLogger.error("❌ Error closing Kafka connections:", error);
             }
 
+            rootLogger.debug("👋 Shutdown complete. Exiting now.");
             process.exit(0);
         };
 
-        // Handle shutdown signals
         process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
         process.on("SIGINT", () => gracefulShutdown("SIGINT"));
     } catch (error) {

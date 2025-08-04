@@ -124,4 +124,9 @@
 
 //     "checkInTime": "string"
 
+//  "cancelledAt": "2025-08-03T13:00:00Z",
+//   "cancelledBy": "user_456",
+//   "cancelledReason": "Sự kiện không đủ người đăng ký",
+//   "isRefundable": true,
+//   "cancelNotificationSent": false,
 // }

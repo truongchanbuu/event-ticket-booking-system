@@ -4,11 +4,22 @@ import {
   deleteImageFromCloudinary,
   uploadToCloudinary,
 } from "@/services/cloudinary.service";
-import { Calendar, Loader2, MapPin, Plus, Star, Variable } from "lucide-react";
-import { formatDate } from "@/lib/utils";
+import {
+  Calendar,
+  Clock,
+  Loader2,
+  MapPin,
+  MessageSquare,
+  Plus,
+  Star,
+  User,
+  Variable,
+  XCircle,
+} from "lucide-react";
+import { formatDate, formatTime } from "@/lib/utils";
 import { Event } from "@/schema";
 import { toUpperCaseFirstLetter } from "@/lib/helpers/string.helper";
-import { UpdateEventFn } from "@/types/update-type";
+import { UpdateEventFn } from "@/types/event.api";
 import CategoryDialog from "../ui/category-modal";
 import { toast } from "@/hooks/use-toast";
 
@@ -40,10 +51,9 @@ export default function EventDetailHeader({
   const handleAddCategory = async (selected: string[]) => {
     try {
       await updateEvent({ categories: selected });
-      toast({ variant: "success", title: "Update Successfully." });
       setIsCategoriesModalOpen(false);
     } catch (error) {
-      toast({ variant: "destructive", title: "Failed to update." });
+      console.error(error);
     }
   };
 
@@ -167,6 +177,57 @@ export default function EventDetailHeader({
             <Plus className="w-4 h-4" />
           </button>
         </div>
+
+        {/* Cancellation Information */}
+        {eventDetail.status?.toLowerCase() === "cancelled" && (
+          <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-start space-x-3">
+              <div className="flex-shrink-0">
+                <XCircle className="h-5 w-5 text-red-500 mt-0.5" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-red-800 mb-3">
+                  Event Cancelled
+                </h3>
+
+                <div className="space-y-2 text-sm text-red-700">
+                  {eventDetail.cancelledAt && (
+                    <div className="flex items-center space-x-2">
+                      <Clock className="h-4 w-4 text-red-500" />
+                      <span>
+                        <span className="font-medium">Cancelled on:</span>{" "}
+                        {formatDate(eventDetail.cancelledAt)} at{" "}
+                        {formatTime(eventDetail.cancelledAt)}
+                      </span>
+                    </div>
+                  )}
+
+                  {eventDetail.cancelledBy && (
+                    <div className="flex items-center space-x-2">
+                      <User className="h-4 w-4 text-red-500" />
+                      <span>
+                        <span className="font-medium">Cancelled by:</span>{" "}
+                        {toUpperCaseFirstLetter(eventDetail.cancelledBy)}
+                      </span>
+                    </div>
+                  )}
+
+                  {eventDetail.cancelledReason && (
+                    <div className="flex items-start space-x-2">
+                      <MessageSquare className="h-4 w-4 text-red-500 mt-0.5" />
+                      <div>
+                        <span className="font-medium">Reason:</span>
+                        <p className="mt-1 text-red-600 leading-relaxed">
+                          {eventDetail.cancelledReason}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {isCategoriesModalOpen && (

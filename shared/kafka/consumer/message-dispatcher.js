@@ -9,8 +9,6 @@ export class MessageDispatcher {
    * @param {object} rawMessage - Message thô từ `eachMessage` của kafkajs
    */
   async dispatch(data, scope) {
-    console.log("--- RUNNING NEWEST VERSION OF DISPATCHER ---");
-
     const { topic, partition, message } = data;
 
     let messageValue;

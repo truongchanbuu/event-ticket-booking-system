@@ -23,7 +23,6 @@ export class ProfileRoutes {
             this.eventController.getMyEventByID,
         );
 
-        // TODO: SETUP KAFKA CONSUMER FOR TICKET UPDATED/CREATED + CONTINUE UPDATING EVENT
         this.router.put(
             "/events/:eventID",
             verifyToken,
@@ -31,6 +30,15 @@ export class ProfileRoutes {
             EventValidator.handleValidationErrors,
             this.eventController.updateMyEvent,
         );
+
+        this.router.post(
+            "/events/:eventID/cancel",
+            verifyToken,
+            EventValidator.validateCancelEvent(),
+            EventValidator.handleValidationErrors,
+            this.eventController.cancelMyEvent,
+        );
+
         this.router.delete("/events/:eventID", verifyToken);
 
         this.router.post(

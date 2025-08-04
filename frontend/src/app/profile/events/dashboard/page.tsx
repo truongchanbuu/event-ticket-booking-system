@@ -11,6 +11,8 @@ import EventCreationModal from "@/components/events/EventCreationModal";
 import { CreateEventFormValues } from "@/schema/events/event-creation.schema";
 import { Event } from "@/schema";
 import EventCard from "@/components/events/event-card";
+import { EVENT_STATUS } from "@/schema/enums/event-status";
+import { toUpperCaseFirstLetter } from "@/lib/helpers/string.helper";
 
 const MAX_PER_PAGE = 10;
 
@@ -208,11 +210,11 @@ const EventManagementDashboard = () => {
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
-                <option value="all">All Status</option>
-                <option value="draft">Draft</option>
-                <option value="published">Published</option>
-                <option value="cancelled">Cancelled</option>
-                <option value="completed">Completed</option>
+                {Object.values(EVENT_STATUS).map((status) => (
+                  <option key={status} value={status}>
+                    {toUpperCaseFirstLetter(status)}
+                  </option>
+                ))}
               </select>
               <select
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"

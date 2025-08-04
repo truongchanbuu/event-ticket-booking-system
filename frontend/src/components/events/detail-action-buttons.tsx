@@ -11,30 +11,45 @@ import { EVENT_STATUS } from "@/schema/enums/event-status";
 import { useState } from "react";
 import UpdateEventModal from "./UpdateEventModal";
 import { Event } from "@/schema";
-import { UpdateEventFn } from "@/types/update-type";
+import { CancelFunction, UpdateEventFn } from "@/types/event.api";
+import { Textarea } from "../ui/textarea";
 
 interface DetailActionButtonsProps {
   event: Event;
-  status: EVENT_STATUS;
   canPublished?: boolean;
+  isCancelling: boolean;
   updateEvent: UpdateEventFn;
+  cancelEvent: CancelFunction;
 }
 
 export default function DetailActionButtons({
   event,
-  status,
   canPublished = true,
+  isCancelling,
   updateEvent,
+  cancelEvent,
 }: DetailActionButtonsProps) {
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [isUpdateModalOpen, setIsUploadModalOpen] = useState(false);
 
-  const handleCancelEvent = () => {
-    // TODO: Gọi API cancel event tại đây
-    setIsCancelModalOpen(false);
+  const [cancelReason, setCancelReason] = useState<string | undefined>();
+  const handleCancelEvent = async () => {
+    try {
+      if (event.status === EVENT_STATUS.DRAFT) {
+        await cancelEvent(cancelReason ?? "No reason provided.");
+      } else {
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsCancelModalOpen(false);
+      setCancelReason(undefined);
+    }
   };
 
-  const canUpdate = status !== EVENT_STATUS.PUBLISHED;
+  const canUpdate = [EVENT_STATUS.DRAFT].includes(event.status);
+  const canCancel = event.status !== EVENT_STATUS.CANCELLED;
+  const canSendNotification = event.status === EVENT_STATUS.PUBLISHED;
 
   return (
     <>
@@ -52,7 +67,7 @@ export default function DetailActionButtons({
             <span>Update Event</span>
           </Button>
 
-          {status === EVENT_STATUS.DRAFT && (
+          {event.status === EVENT_STATUS.DRAFT && (
             <Button
               disabled={!canPublished}
               className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
@@ -62,30 +77,34 @@ export default function DetailActionButtons({
             </Button>
           )}
 
-          {status === EVENT_STATUS.PUBLISHED && (
+          {event.status === EVENT_STATUS.PUBLISHED && (
             <Button className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors">
               <EyeOff className="h-4 w-4" />
               <span>Unpublish Event</span>
             </Button>
           )}
 
-          <Button
-            onClick={() => setIsCancelModalOpen(true)}
-            className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-          >
-            <Trash2 className="h-4 w-4" />
-            <span>Cancel Event</span>
-          </Button>
+          {canCancel && (
+            <Button
+              onClick={() => setIsCancelModalOpen(true)}
+              className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>Cancel Event</span>
+            </Button>
+          )}
 
-          <Button className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+          {/* <Button className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
             <Download className="h-4 w-4" />
             <span>Export Attendees</span>
-          </Button>
+          </Button> */}
 
-          <Button className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
-            <Bell className="h-4 w-4" />
-            <span>Send Notification</span>
-          </Button>
+          {canSendNotification && (
+            <Button className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+              <Bell className="h-4 w-4" />
+              <span>Send Notification</span>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -101,14 +120,41 @@ export default function DetailActionButtons({
               refunded based on your event policy.
             </p>
           </DialogHeader>
-          <DialogFooter>
+
+          {/* Input lý do */}
+          <div className="mt-4">
+            <label
+              htmlFor="cancel-reason"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Reason (optional)
+            </label>
+            <Textarea
+              id="cancel-reason"
+              placeholder="No reason provided"
+              className="resize-none"
+              rows={3}
+              value={cancelReason}
+              maxLength={300}
+              onChange={(e) => setCancelReason(e.target.value)}
+            />
+          </div>
+
+          <DialogFooter className="mt-6">
             <Button
               variant="outline"
-              onClick={() => setIsCancelModalOpen(false)}
+              onClick={() => {
+                setIsCancelModalOpen(false);
+                setCancelReason(undefined);
+              }}
             >
               No, keep event
             </Button>
-            <Button variant="destructive" onClick={handleCancelEvent}>
+            <Button
+              loading={isCancelling}
+              variant="destructive"
+              onClick={handleCancelEvent}
+            >
               Yes, cancel event
             </Button>
           </DialogFooter>

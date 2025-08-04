@@ -2,7 +2,6 @@ import {
     APPLY_STATUS,
     catchAsync,
     ROLE,
-    USER_APPROVED_AS_ORGANIZER,
 } from "@event_ticket_booking_system/shared";
 
 export class OrganizerController {

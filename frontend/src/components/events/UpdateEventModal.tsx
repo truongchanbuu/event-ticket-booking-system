@@ -31,7 +31,7 @@ import {
   UpdateEventSchema,
 } from "@/schema/events/update-event.schema";
 import { toDatetimeLocalString, toISOStringFromLocal } from "@/lib/utils";
-import { UpdateEventFn } from "@/types/update-type";
+import { UpdateEventFn } from "@/types/event.api";
 import { toUpperCaseFirstLetter } from "@/lib/helpers/string.helper";
 
 interface UpdateEventModalProps {

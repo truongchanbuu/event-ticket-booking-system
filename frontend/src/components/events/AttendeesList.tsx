@@ -41,12 +41,12 @@ export default function AttendeeManagement({
             Attendee Management
           </h2>
           <div className="flex space-x-2">
-            <Button
+            {/* <Button
               type="button"
               className="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
               Export List
-            </Button>
+            </Button> */}
             <Button
               type="button"
               className="px-3 py-1 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700"

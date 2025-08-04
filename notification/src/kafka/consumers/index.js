@@ -21,7 +21,13 @@ export class ConsumerOrchestrator {
   async startAll() {
     this.logger.info('Starting all Kafka consumers for this service...');
 
-    const { topics, dlqTopics, consumerGroups } = this.config.kafka;
+    const {
+      topics,
+      dlqTopics,
+      consumerGroups,
+      sessionTimeout,
+      heartbeatInterval,
+    } = this.config.kafka;
 
     const consumerDefinitions = [
       {
@@ -66,6 +72,10 @@ export class ConsumerOrchestrator {
         retryDelays: def.retryDelays,
         dlqTopic: def.dlqTopic,
         handler: def.handler,
+        consumerConfig: {
+          sessionTimeout,
+          heartbeatInterval,
+        },
       });
     }
 
@@ -75,8 +85,17 @@ export class ConsumerOrchestrator {
     }));
 
     await this.kafkaService.createGlobalRetryHandlerConsumer({
-      groupId: 'global-retry-handler-group',
+      groupId: consumerGroups.global_retry_group,
       retryConfigs: allRetryConfigs,
+    });
+
+    await this.kafkaService.createDlqConsumer({
+      groupId: consumerGroups.dlq_group,
+      dlqTopic: dlqTopics.main_events_dlq,
+      consumerConfig: {
+        sessionTimeout,
+        heartbeatInterval,
+      },
     });
 
     this.logger.info(

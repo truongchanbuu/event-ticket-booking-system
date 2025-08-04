@@ -72,12 +72,10 @@ export async function updateOrganizerEvent(
   });
 }
 
-/**
- * DELETE: Xóa một sự kiện
- */
-export async function deleteOrganizerEvent(eventID: string): Promise<void> {
-  return fetchEvents<void>(`/me/events/${eventID}`, {
-    method: "DELETE",
+export async function cancelEvent(eventID: string, cancelledReason?: string) {
+  return fetchEvents(`/me/events/${eventID}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ cancelledReason }),
   });
 }
 

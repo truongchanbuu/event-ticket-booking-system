@@ -39,13 +39,16 @@ export default {
             initialRetryTime: 100,
             retries: 5,
         },
-
+        sessionTimeout: 300000,
+        heartbeatInterval: 10000,
         topics: {
             ticket_type_events: TICKET_TYPES_EVENTS,
         },
         consumerGroups: {
             main_events: "event-service-main-group",
             ticket_type_group: "event-service-ticket-type-group",
+            dlq_group: "event-service-dlq",
+            global_retry_group: "event-service-global-retry-handler",
         },
         dlqTopics: {
             main_events_dlq: "event-service.main.dlq",

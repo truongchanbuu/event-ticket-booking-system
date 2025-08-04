@@ -23,7 +23,8 @@ const EventManagementDashboard = () => {
   const { eventId } = useParams<{ eventId: string }>();
   const router = useRouter();
 
-  const { eventQuery, updateEvent, isUpdating } = useEventDetail(eventId);
+  const { eventQuery, updateEvent, cancelEvent, isCancelling } =
+    useEventDetail(eventId);
   const { data, isLoading, refetch } = eventQuery;
 
   const {
@@ -143,8 +144,9 @@ const EventManagementDashboard = () => {
         {/* Action Buttons */}
         <DetailActionButtons
           updateEvent={updateEvent}
+          cancelEvent={cancelEvent}
+          isCancelling={isCancelling}
           event={eventDetail}
-          status={eventDetail.status}
           canPublished={canPublished}
         />
 

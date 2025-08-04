@@ -1,3 +1,4 @@
+import { EventReponse } from "@/lib/api/events/api";
 import { Event } from "@/schema";
 import { UseMutateAsyncFunction } from "@tanstack/react-query";
 
@@ -8,4 +9,11 @@ export type UpdateEventFn = UseMutateAsyncFunction<
   Error,
   EventUpdateInput,
   unknown
+>;
+
+export type CancelFunction = UseMutateAsyncFunction<
+  EventReponse,
+  Error,
+  string | undefined,
+  { previousData: EventReponse | undefined }
 >;
