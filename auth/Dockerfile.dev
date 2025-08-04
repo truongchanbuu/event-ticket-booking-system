@@ -1,12 +1,23 @@
+# Use the Node.js 22 Alpine image as the base.
 FROM node:22-alpine
 
+# Set the working directory inside the container.
 WORKDIR /app
 
+# Copy the package.json and package-lock.json files to leverage Docker's build cache.
+# This is a best practice, as Docker will only re-run 'npm install' if these files change.
+COPY package*.json ./
+
+# Install the dependencies.
+# This command will now work without the '--workspace' flag because we are installing
+# dependencies for a single project.
+RUN npm install
+
+# Copy the rest of the application source code into the container.
 COPY . .
 
-RUN npm install --workspace auth
-
-WORKDIR /app/auth
-
+# Expose the port the application listens on.
 EXPOSE 3000
+
+# Define the command to run the application.
 CMD ["npm", "run", "dev"]

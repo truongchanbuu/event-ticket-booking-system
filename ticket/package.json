@@ -21,9 +21,12 @@
   "author": "",
   "license": "ISC",
   "description": "",
+
   "dependencies": {
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
+    "ioredis": "^5.4.1",
+    "kafkajs": "^2.2.4",
     "firebase-admin": "^13.4.0"
   },
   "devDependencies": {
