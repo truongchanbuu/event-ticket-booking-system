@@ -183,7 +183,7 @@ const TicketModal = ({
             <Button
               type="button"
               variant="destructive"
-              loading={isLoading}
+              disabled={isLoading}
               onClick={onClose}
               className="bg-gray-100 text-gray-700 hover:bg-gray-200"
             >
@@ -192,6 +192,7 @@ const TicketModal = ({
             <Button
               type="submit"
               variant="secondary"
+              disabled={isLoading}
               loading={isLoading}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
@@ -238,6 +239,7 @@ const TicketManagement = ({
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTicket, setEditingTicket] = useState<TicketType | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const methods = useForm({
     resolver: zodResolver(TicketFormSchema),
@@ -282,6 +284,7 @@ const TicketManagement = ({
   };
 
   const onSubmit = async (data) => {
+    setIsSubmitting(true);
     try {
       if (editingTicket) {
         const changedFields = Object.entries(formState.dirtyFields).reduce(
@@ -308,15 +311,20 @@ const TicketManagement = ({
     } catch (err) {
       console.error("Failed to submit:", err);
       alert(`Error: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const deleteTicket = async (ticketTypeID) => {
+    setIsSubmitting(true);
     try {
       await onDelete(ticketTypeID);
     } catch (err) {
       console.error("Failed to delete:", err);
       alert(`Error: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -397,7 +405,7 @@ const TicketManagement = ({
             onClose={closeModal}
             onSubmit={handleSubmit(onSubmit)}
             editingTicket={editingTicket}
-            isLoading={isLoading}
+            isLoading={isLoading || isSubmitting}
             methods={methods}
           />
         </div>
