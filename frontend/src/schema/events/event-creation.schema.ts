@@ -1,8 +1,7 @@
 import { z } from "zod";
-import { LocationSchema } from "./event.schema";
+import { EventContributorSchema, LocationSchema } from "./event.schema";
 
 const START_DELAY_TIME = 1000 * 60 * 60;
-
 export const CreateTicketTypeSchema = z.object({
   name: z.string().min(1, "Ticket type name cannot be empty."),
   price: z
@@ -50,6 +49,7 @@ export const CreateEventFormSchema = z
         message: "Invalid Date.",
       })
       .transform((val) => new Date(val).toISOString()),
+    eventContributors: z.array(EventContributorSchema),
     isFeatured: z.boolean().default(false),
     ticketTypes: z.array(CreateTicketTypeSchema).optional(),
   })

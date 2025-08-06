@@ -64,7 +64,6 @@ export class ConsumerOrchestrator {
 
     await this.kafkaService.ensureTopicsExist(allTopicsToEnsure);
 
-    // --- BƯỚC 3: TẠO CÁC CONSUMER NGHIỆP VỤ ---
     for (const def of consumerDefinitions) {
       await this.kafkaService.createConsumer({
         groupId: def.groupId,

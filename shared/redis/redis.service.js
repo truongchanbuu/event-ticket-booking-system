@@ -1,4 +1,3 @@
-// file: redis.service.js
 import { serialize, deserialize } from "./serialize.js";
 
 /**
@@ -8,15 +7,12 @@ import { serialize, deserialize } from "./serialize.js";
  */
 export class RedisService {
   constructor({ config, logger, redisClient }) {
-    // Lấy các giá trị config cụ thể mà service này cần
     this.prefix = config.redis.prefix || "app";
     this.defaultTTL = config.redis.defaultTTL || 300;
 
-    // Lưu lại các dependency
     this.logger = logger;
     this.redisClient = redisClient;
 
-    // Chỉ cần log cảnh báo nếu client không có sẵn
     if (!this.redisClient) {
       this.logger.warn(
         "[RedisService] Redis client is not available. Caching will be disabled."
@@ -53,6 +49,29 @@ export class RedisService {
         error: err.message,
       });
       return false;
+    }
+  }
+
+  /**
+   * Thực thi lệnh SET nguyên tử với các tùy chọn NX và PX.
+   * Dùng riêng cho việc tạo khóa.
+   * @returns {Promise<"OK" | null>} Trả về "OK" nếu thành công, null nếu thất bại.
+   */
+  async setnx(key, value, ttlMilliseconds) {
+    if (!this.redisClient) return null;
+    try {
+      // Hầu hết các client hiện đại (ioredis, @upstash/redis) đều hỗ trợ cú pháp này
+      const result = await this.redisClient.set(this._key(key), value, {
+        PX: ttlMilliseconds,
+        NX: true,
+      });
+      return result;
+    } catch (err) {
+      this.logger.error(`[RedisService] SETNX error`, {
+        key: this._key(key),
+        error: err.message,
+      });
+      return null;
     }
   }
 
@@ -94,7 +113,7 @@ export class RedisService {
     try {
       // Kiểm tra xem client có hỗ trợ `mget` nhận một mảng không (chuẩn của ioredis)
       // `mget.length` sẽ là 1 cho hàm `function(arg1){...}`
-      if (this.redisClient.mget.length === 1) {
+      if (this.redisClient?.mget?.length === 1) {
         const results = await this.redisClient.mget(fullKeys);
         return results.map(deserialize);
       }
@@ -151,6 +170,63 @@ export class RedisService {
       op.value !== undefined
     ) {
       queue.set(key, serialize(op.value), { EX: op.ttl || this.defaultTTL });
+    }
+  }
+
+  async eval(script, keys = [], args = []) {
+    if (!this.redisClient) {
+      this.logger.warn(
+        "[RedisService] EVAL cannot run. Redis client not available."
+      );
+      return null;
+    }
+    if (!script) {
+      this.logger.error("[RedisService] EVAL error: script is empty.");
+      return null;
+    }
+
+    if (!Array.isArray(keys)) keys = [keys];
+    if (!Array.isArray(args)) args = [args];
+
+    const prefixedKeys = keys.map((k) => this._key(k));
+    const serializedArgs = args.map(serialize);
+
+    try {
+      if (this.redisClient?.eval?.length >= 3) {
+        this.logger.debug(
+          "[RedisService] Executing EVAL using Upstash/modern API"
+        );
+        return await this.redisClient.eval(
+          script,
+          prefixedKeys,
+          serializedArgs
+        );
+      } else {
+        this.logger.debug(
+          "[RedisService] Executing EVAL using ioredis/legacy API"
+        );
+
+        const numKeys = prefixedKeys.length;
+        const redisArgs = [script, numKeys, ...prefixedKeys, ...serializedArgs];
+
+        return await this.redisClient.eval(...redisArgs);
+      }
+    } catch (err) {
+      this.logger.error(`[RedisService] EVAL error`, {
+        scriptSignature: script.substring(0, 100) + "...",
+        error: err.message,
+      });
+      return null;
+    }
+  }
+
+  async invalidateKeysByPrefix(prefix) {
+    const keys = await this.redisClient.keys(`${prefix}*`);
+    if (keys.length > 0) {
+      await this.redisClient.del(keys);
+      console.info(
+        `Invalidated ${keys.length} cache keys with prefix: ${prefix}`
+      );
     }
   }
 }

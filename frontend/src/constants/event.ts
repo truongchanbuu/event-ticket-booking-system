@@ -5,6 +5,11 @@ export const QUERY_KEYS = {
     userID,
     { ...params },
   ],
-  eventAttendees: (eventID: string) => ["event-attendees", eventID],
+  eventAttendees: (eventID: string, params?: object) => [
+    "eventAttendees",
+    eventID,
+    params,
+  ],
   eventTicketTypes: (eventID: string) => ["event-tickets", eventID],
+  eventContributors: (eventID: string) => ["event-contributors", eventID],
 };

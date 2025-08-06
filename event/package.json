@@ -3,9 +3,6 @@
     "name": "event-service",
     "version": "1.0.0",
     "main": "index.js",
-    "directories": {
-        "test": "tests"
-    },
     "scripts": {
         "start": "node src/server.js",
         "dev": "node --watch src/server.js",
@@ -31,9 +28,12 @@
         "express-validator": "^7.2.1",
         "firebase": "^11.9.0",
         "firebase-admin": "^13.4.0",
+        "ioredis": "^5.7.0",
         "kafka": "^0.2.3",
         "kafkajs": "^2.2.4",
-        "pino": "^9.7.0"
+        "pino": "^9.7.0",
+        "qrcode": "^1.5.4",
+        "zod": "^4.0.14"
     },
     "devDependencies": {
         "@babel/preset-env": "^7.27.2",

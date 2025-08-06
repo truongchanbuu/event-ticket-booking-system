@@ -36,7 +36,6 @@ export class CreateTicketTypeSnapshotUseCase {
                 price: payload.price,
                 priceCurrency: payload.priceCurrency,
                 totalQuantity: payload.totalQuantity,
-                soldQuantity: 0,
                 checkedInQuantity: 0,
                 createdAt: new Date().toISOString(),
                 ticketTypeID: ticketTypeId,

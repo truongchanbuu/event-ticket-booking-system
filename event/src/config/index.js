@@ -1,9 +1,21 @@
 import "dotenv/config";
-import { TICKET_TYPES_EVENTS } from "../../../shared/kafka/topics.js";
+import {
+    EVENT_LIFECYCLE_EVENTS,
+    TICKET_TYPES_EVENTS,
+} from "../../../shared/kafka/topics.js";
+
 export default {
     app: {
         port: process.env.PORT || 3000,
         nodeEnv: process.env.NODE_ENV || "development",
+    },
+
+    service_keys: {
+        ticket_service: process.env.TICKET_SERVICE_SECRET_KEY,
+    },
+
+    service_urls: {
+        ticket_service: "http://localhost:3003/",
     },
 
     redis: {
@@ -41,7 +53,9 @@ export default {
         },
         sessionTimeout: 300000,
         heartbeatInterval: 10000,
+        producer_name: process.env.KAFKA_PRODUCER_SERVICE_NAME || "app",
         topics: {
+            main_events: EVENT_LIFECYCLE_EVENTS,
             ticket_type_events: TICKET_TYPES_EVENTS,
         },
         consumerGroups: {

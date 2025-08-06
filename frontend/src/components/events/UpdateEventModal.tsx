@@ -60,7 +60,6 @@ const UpdateEventModal: React.FC<UpdateEventModalProps> = ({
       endTime: "",
       location: {
         address: "",
-        coordinates: undefined,
       },
       status: EVENT_STATUS.DRAFT,
       isFeatured: false,
@@ -153,29 +152,6 @@ const UpdateEventModal: React.FC<UpdateEventModalProps> = ({
                           className="min-h-[100px]"
                           {...field}
                         />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Status</FormLabel>
-                      <FormControl>
-                        <select
-                          {...field}
-                          className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          {Object.values(EVENT_STATUS).map((status) => (
-                            <option key={status} value={status}>
-                              {toUpperCaseFirstLetter(status)}
-                            </option>
-                          ))}
-                        </select>
                       </FormControl>
                       <FormMessage />
                     </FormItem>

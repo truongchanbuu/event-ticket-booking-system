@@ -2,7 +2,7 @@
 
 import {
     EVENTS_COLLECTION,
-    TICKET_TYPES_SUB_COLLECTION,
+    TICKET_TYPES_SUBCOLLECTION,
 } from "../config/constants/collection.js";
 
 export class TicketTypeSnapshotRepo {
@@ -27,7 +27,7 @@ export class TicketTypeSnapshotRepo {
         return this.db
             .collection(EVENTS_COLLECTION)
             .doc(eventId)
-            .collection(TICKET_TYPES_SUB_COLLECTION)
+            .collection(TICKET_TYPES_SUBCOLLECTION)
             .doc(ticketTypeId);
     }
 
@@ -57,7 +57,7 @@ export class TicketTypeSnapshotRepo {
     async createOrUpdate(eventId, ticketTypeId, data) {
         const eventRef = this.db.collection(EVENTS_COLLECTION).doc(eventId);
         const ticketTypeRef = eventRef
-            .collection(TICKET_TYPES_SUB_COLLECTION)
+            .collection(TICKET_TYPES_SUBCOLLECTION)
             .doc(ticketTypeId);
 
         await this.db.runTransaction(async (transaction) => {

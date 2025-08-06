@@ -490,7 +490,6 @@ export class KafkaService {
   }
 
   createTopicSender(topic, eventSourceName) {
-    // Trả về một hàm async mới
     return async (payload) => {
       if (this.connectionState !== "CONNECTED") {
         this.logger?.error(
@@ -500,7 +499,7 @@ export class KafkaService {
         throw new Error("Kafka is not connected.");
       }
 
-      const { key, value, eventType } = payload;
+      const { key, value, eventType, partition } = payload; // Thêm partition vào payload
 
       if (!eventType) {
         this.logger?.warn(
@@ -510,30 +509,37 @@ export class KafkaService {
       }
 
       // Tạo một child logger với context của event này
-      // const eventLogger = this.logger?.child({
-      //   eventSourceName,
-      //   topic,
-      //   eventType,
-      //   messageKey: key,
-      // });
+      const eventLogger = this.logger?.child({
+        eventSourceName,
+        topic,
+        eventType,
+        messageKey: key,
+      });
 
       try {
-        this.logger?.info("Attempting to send event...");
-        await this.send(topic, [
-          {
-            key: key,
-            value: value,
-            headers: {
-              "x-event-type": eventType || "unknown",
-              "x-source-service":
-                process.env.KAFKA_PRODUCER_SERVICE_NAME || "unknown-service",
-            },
-          },
-        ]);
+        eventLogger?.info("Attempting to send event...");
 
-        this.logger?.info("✅ Event sent successfully.");
+        const message = {
+          key: key,
+          value: value,
+          headers: {
+            "event-type": eventType || "unknown",
+            "source-service":
+              process.env.KAFKA_PRODUCER_SERVICE_NAME || "unknown-service",
+          },
+        };
+
+        // Chỉ thêm partition nếu được cung cấp
+        if (partition !== undefined) {
+          message.partition = partition;
+        }
+
+        await this.send(topic, [message]);
+
+        eventLogger?.info("✅ Event sent successfully.");
       } catch (error) {
-        this.logger?.error({ err: error }, "❌ Failed to send event.");
+        eventLogger?.error({ err: error }, "❌ Failed to send event.");
+        // Cân nhắc thêm logic xử lý lỗi cụ thể ở đây nếu cần
         throw error;
       }
     };

@@ -40,9 +40,7 @@ export default class EventValidator extends BaseValidator {
                     }
                     return true;
                 }),
-            body("images.*") // Validate từng phần tử trong array
-                .isURL()
-                .withMessage("Image must be a valid url."),
+            body("images.*").isURL().withMessage("Image must be a valid url."),
 
             body("categories")
                 .isArray({ min: 1 })
@@ -53,22 +51,8 @@ export default class EventValidator extends BaseValidator {
                 .withMessage("Category name cannot be empty."),
 
             // --- Time ---
-            body("startTime")
-                .isISO8601()
-                .withMessage("Invalid Date for startTime.")
-                .toDate(),
-
-            body("endTime")
-                .isISO8601()
-                .withMessage("Invalid Date for endTime.")
-                .toDate() // Chuyển đổi thành đối tượng Date
-                // refine: endTime > startTime
-                .custom((endTime, { req }) => {
-                    if (endTime <= req.body.startTime) {
-                        throw new Error("End time must be after start time");
-                    }
-                    return true;
-                }),
+            ...this.validateStartTime({ required: true }),
+            ...this.validateEndTime({ required: true }),
 
             // --- Location ---
             body("location.address")
@@ -84,6 +68,34 @@ export default class EventValidator extends BaseValidator {
                 .optional()
                 .isFloat({ min: -180, max: 180 })
                 .withMessage("Longitude must be between -180 and 180."),
+
+            body("eventContributors")
+                .optional()
+                .isArray()
+                .withMessage("eventContributors must be an array."),
+
+            body("eventContributors.*.fullname")
+                .isString()
+                .notEmpty()
+                .withMessage(
+                    "Contributor name is required for each contributor.",
+                ),
+
+            body("eventContributors.*.photoUrl")
+                .optional()
+                .isURL()
+                .withMessage("Profile picture must be a valid URL."),
+
+            body("eventContributors.*.role")
+                .isString()
+                .notEmpty()
+                .withMessage("Role is required for each contributor."),
+
+            body("eventContributors.*.isHeadliner")
+                .isBoolean()
+                .withMessage(
+                    "isHeadliner must be a boolean (true/false) for each contributor.",
+                ),
 
             // --- Other Fields ---
             body("status")
@@ -105,7 +117,22 @@ export default class EventValidator extends BaseValidator {
             ...this.validateIDParam({ paramName: "eventID" }),
             ...this.validateEventTitle(),
             ...this.validateEventDesc(),
-            ...this.validateLocation(),
+            body("location.address")
+                .isString()
+                .notEmpty()
+                .withMessage("Location address cannot be empty.")
+                .optional(),
+
+            body("location.coordinates.latitude")
+                .optional()
+                .isFloat({ min: -90, max: 90 })
+                .withMessage("Latitude must be between -90 and 90.")
+                .optional(),
+            body("location.coordinates.longitude")
+                .optional()
+                .isFloat({ min: -180, max: 180 })
+                .withMessage("Longitude must be between -180 and 180.")
+                .optional(),
             ...this.validateCategory(),
             ...this.validateStartTime(),
             ...this.validateEndTime(),
@@ -128,6 +155,68 @@ export default class EventValidator extends BaseValidator {
                 .isLength({ max: 300 })
                 .withMessage("cancelledReason is too long"),
         ];
+    }
+
+    static validateCreateContributor() {
+        return [
+            body("fullname")
+                .isString()
+                .notEmpty()
+                .withMessage(
+                    "Contributor name is required for each contributor.",
+                ),
+
+            body("photoUrl")
+                .optional()
+                .isURL()
+                .withMessage("Profile picture must be a valid URL."),
+
+            body("role")
+                .isString()
+                .notEmpty()
+                .withMessage("Role is required for each contributor."),
+
+            body("isHeadliner")
+                .isBoolean()
+                .withMessage(
+                    "isHeadliner must be a boolean (true/false) for each contributor.",
+                ),
+        ];
+    }
+
+    static validateUpdateContributor() {
+        return [
+            body("fullname")
+                .isString()
+                .notEmpty()
+                .withMessage(
+                    "Contributor name is required for each contributor.",
+                )
+                .optional(),
+
+            body("photoUrl")
+                .optional()
+                .isURL()
+                .withMessage("Profile picture must be a valid URL.")
+                .optional(),
+
+            body("role")
+                .isString()
+                .notEmpty()
+                .withMessage("Role is required for each contributor.")
+                .optional(),
+
+            body("isHeadliner")
+                .isBoolean()
+                .withMessage(
+                    "isHeadliner must be a boolean (true/false) for each contributor.",
+                )
+                .optional(),
+        ];
+    }
+
+    static validateRemoveContributor() {
+        return [param("eventID").notEmpty(), param("contributorID").notEmpty()];
     }
 
     // Shared validation
@@ -195,23 +284,6 @@ export default class EventValidator extends BaseValidator {
         }
 
         return validations;
-    }
-
-    static validateLocation({ required = false } = {}) {
-        const chain = body("location")
-            .isString()
-            .trim()
-            .isLength({ min: 5, max: 500 })
-            .withMessage("Location must be between 5-500 characters");
-
-        return required
-            ? [
-                  body("location")
-                      .notEmpty()
-                      .withMessage("Location is required"),
-                  chain,
-              ]
-            : [chain.optional()];
     }
 
     static validateStartTime({ required = false } = {}) {

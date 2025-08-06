@@ -7,14 +7,13 @@ import { randomUUID } from "crypto";
 // }
 
 export class RedisLock {
-  constructor({ redisClient, key, options }) {
+  constructor({ redisService, key, options }) {
     if (!key) {
       throw new Error("Lock key cannot be empty.");
     }
-    this.redisClient = redisClient;
+    this.redisService = redisService;
     this.key = `lock:${key}`;
-
-    // Gán giá trị mặc định cho các options
+    this.lockValue = null;
     this.options = {
       lockTimeout: options?.lockTimeout || 10000, // 10 giây
       retryDelay: options?.retryDelay || 50, // 50 ms
@@ -26,38 +25,24 @@ export class RedisLock {
     this.lockValue = randomUUID();
 
     for (let i = 0; i < this.options.retryCount; i++) {
-      const result = await this.redis.set(
+      const result = await this.redisService.setnx(
         this.key,
         this.lockValue,
-        "PX", // Đơn vị là milliseconds
-        this.options.lockTimeout,
-        "NX" // Chỉ set nếu key chưa tồn tại
+        this.options.lockTimeout
       );
 
-      if (result === "OK") {
-        // Lấy khóa thành công!
+      if (result === "OK" || result === 1) {
+        console.log(`[Lock] Acquired lock for key ${this.key}`);
         return true;
       }
 
-      // Thất bại, chờ và thử lại
-      const delay = Math.random() * this.options.retryDelay + 50; // Jitter backoff
+      const delay = Math.random() * this.options.retryDelay + 50;
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
 
-    // Hết số lần thử, thất bại
     this.lockValue = null;
     return false;
   }
-
-  //   async with(fn) {
-  //     const acquired = await this.acquire();
-  //     if (!acquired) throw new Error("Failed to acquire lock");
-  //     try {
-  //       return await fn();
-  //     } finally {
-  //       await this.release();
-  //     }
-  //   }
 
   static RELEASE_SCRIPT = `
     if redis.call("get", KEYS[1]) == ARGV[1] then
@@ -69,20 +54,21 @@ export class RedisLock {
 
   async release() {
     if (!this.lockValue) {
-      // Không có khóa nào đang được giữ bởi instance này
       return;
     }
 
+    console.log(
+      `[Lock] Releasing lock for key ${this.key} with value ${this.lockValue}`
+    );
+
     try {
       // Gọi Lua script để giải phóng khóa một cách nguyên tử
-      await this.redis.eval(
+      await this.redisService.eval(
         RedisLock.RELEASE_SCRIPT,
-        1, // Số lượng key
-        this.key, // KEYS[1]
-        this.lockValue // ARGV[1]
+        [this.key],
+        [this.lockValue]
       );
     } finally {
-      // Dù thành công hay thất bại, reset trạng thái của instance
       this.lockValue = null;
     }
   }

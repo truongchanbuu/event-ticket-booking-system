@@ -13,6 +13,7 @@ import UpdateEventModal from "./UpdateEventModal";
 import { Event } from "@/schema";
 import { CancelFunction, UpdateEventFn } from "@/types/event.api";
 import { Textarea } from "../ui/textarea";
+import { toast } from "@/hooks/use-toast";
 
 interface DetailActionButtonsProps {
   event: Event;
@@ -35,10 +36,7 @@ export default function DetailActionButtons({
   const [cancelReason, setCancelReason] = useState<string | undefined>();
   const handleCancelEvent = async () => {
     try {
-      if (event.status === EVENT_STATUS.DRAFT) {
-        await cancelEvent(cancelReason ?? "No reason provided.");
-      } else {
-      }
+      await cancelEvent(cancelReason ?? "No reason provided.");
     } catch (e) {
       console.error(e);
     } finally {
@@ -47,8 +45,23 @@ export default function DetailActionButtons({
     }
   };
 
-  const canUpdate = [EVENT_STATUS.DRAFT].includes(event.status);
-  const canCancel = event.status !== EVENT_STATUS.CANCELLED;
+  const isEventStarted = new Date(event.startTime).getTime() <= Date.now();
+  const openCancelModal = () => {
+    if (isEventStarted) {
+      toast({
+        variant: "info",
+        title: "You cannot cancel a started event.",
+      });
+      return;
+    }
+
+    setIsCancelModalOpen(true);
+  };
+
+  const canUpdate = [EVENT_STATUS.DRAFT, EVENT_STATUS.CANCELLED].includes(
+    event.status
+  );
+  const canCancel = event.status !== EVENT_STATUS.CANCELLED && !isEventStarted;
   const canSendNotification = event.status === EVENT_STATUS.PUBLISHED;
 
   return (
@@ -86,7 +99,7 @@ export default function DetailActionButtons({
 
           {canCancel && (
             <Button
-              onClick={() => setIsCancelModalOpen(true)}
+              onClick={openCancelModal}
               className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
             >
               <Trash2 className="h-4 w-4" />

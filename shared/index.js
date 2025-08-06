@@ -22,6 +22,7 @@ export {
 } from "./firebase/index.js";
 
 export { default as BaseValidator } from "./validator/BaseValidator.js";
+export * from "./validator/verify-token.verification.js";
 export { default as ROLE } from "./enums/role.enum.js";
 export { default as NOTIFICATION_REF } from "./enums/notification_ref.enum.js";
 export { default as NOTIFICATION_STATUS } from "./enums/notification_status.enum.js";

@@ -1,6 +1,4 @@
-// file: services/applicationEvent.service.js
-
-// Import các hằng số định nghĩa loại sự kiện
+// TODO: cần test với hàm createTopic mới
 import {
     APPLICATION_APPROVED,
     APPLICATION_REJECTED,

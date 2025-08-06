@@ -1,12 +1,16 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { QUERY_KEYS } from "@/constants/event";
-import { getEventTicketTypes, TicketTypesResponse } from "@/lib/api/events/api";
+import {
+  createTicketType,
+  getEventTicketTypes,
+  TicketTypesResponse,
+  updateTicketType,
+} from "@/lib/api/ticket/api";
+import { toast } from "./use-toast";
+import { TicketFormData } from "@/schema";
 
-/**
- * Hook để lấy danh sách các loại vé của một sự kiện.
- * @param eventID - ID của sự kiện. Hook sẽ không chạy nếu ID không được cung cấp.
- */
 export function useEventTicketTypes(eventID: string) {
+  const queryClient = useQueryClient();
   const queryKey = QUERY_KEYS.eventTicketTypes(eventID);
 
   const ticketTypesQuery = useQuery<TicketTypesResponse>({
@@ -16,5 +20,44 @@ export function useEventTicketTypes(eventID: string) {
     staleTime: 1000 * 60 * 5,
   });
 
-  return ticketTypesQuery;
+  const createTicketTypeMutation = useMutation({
+    mutationFn: (ticketType) => createTicketType(ticketType),
+    onSuccess: () => {
+      toast({ variant: "success", title: "Create successfully!" });
+    },
+    onError: () => {
+      toast({ variant: "destructive", title: "Created failed!" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey });
+    },
+  });
+
+  const updateTicketTypeMutation = useMutation({
+    mutationFn: ({
+      ticketTypeID,
+      ticketType,
+    }: {
+      ticketTypeID: string;
+      ticketType: TicketFormData;
+    }) => updateTicketType(ticketTypeID, ticketType),
+    onSuccess: (data) => {
+      console.log("Data: ", JSON.stringify(data));
+      toast({ variant: "success", title: "Updated successfully!" });
+    },
+    onError: () => {
+      toast({ variant: "destructive", title: "Updated failed!" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey });
+    },
+  });
+
+  return {
+    ticketTypesQuery,
+    createTicketType: createTicketTypeMutation.mutateAsync,
+    isCreating: createTicketTypeMutation.isPending,
+    updateTicketType: updateTicketTypeMutation.mutateAsync,
+    isUpdating: updateTicketTypeMutation.isPending,
+  };
 }

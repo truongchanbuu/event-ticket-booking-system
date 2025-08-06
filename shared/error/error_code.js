@@ -18,6 +18,8 @@ const ERROR_CODE = {
   MISSING_DATA: "MISSING_DATA",
   INVALID_DATA: "INVALID_DATA",
 
+  RESOURCE_CONFLICT: "RESOURCE_CONFLICT",
+
   // Firebase Auth Errors
   AUTH_INVALID_EMAIL: "auth/invalid-email",
   AUTH_USER_DISABLED: "auth/user-disabled",

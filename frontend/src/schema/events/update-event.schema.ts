@@ -16,7 +16,11 @@ export const UpdateEventSchema = z
       .max(100, "Title cannot be more than 100 characters")
       .optional(),
 
-    description: z.string().min(1, "Description cannot be empty").optional(),
+    description: z
+      .string()
+      .min(10, "Description cannot be empty.")
+      .max(300, "Description must be less than 300.")
+      .optional(),
 
     images: z
       .array(z.string().url("Image must be a valid URL"))

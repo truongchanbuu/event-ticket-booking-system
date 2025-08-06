@@ -9,7 +9,7 @@ import EventFilterBar from "@/components/events/event-filter-bar";
 import EventLoadingSkeleton from "@/components/events/event-loading-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Event, EventFilters } from "@/schema";
-import { useDebounce } from "@/hooks/use-debounce";
+import { useDebounce } from "@/hooks/use-debounce-callback";
 import { AppUser } from "@/schema/user";
 
 const MAX_SUGGEST_ORGANIZER = 6;

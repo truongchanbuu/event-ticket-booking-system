@@ -1,20 +1,12 @@
-import { Attendee, Event, TicketType } from "@/schema";
+import { Attendee, Event, EventContributor, TicketType } from "@/schema";
 import { fetchAPI } from "../base";
-import { APIResponse } from "@/schema/api";
+import { APIResponse, GetParams } from "@/schema/api";
 
 export interface EventsResponse extends APIResponse<Event[]> {}
 export interface EventReponse extends APIResponse<Event> {}
-export interface AttendeeResponse extends APIResponse<Attendee[]> {}
-export interface TicketTypesResponse extends APIResponse<TicketType[]> {}
-
-export interface GetEventsParams {
-  page?: number;
-  limit?: number;
-  search?: string;
-  status?: string;
-  sortBy?: string;
-  sortOrder?: "asc" | "desc";
-}
+export interface AttendeesResponse extends APIResponse<Attendee[]> {}
+export interface CRUDAttendeeResponse extends APIResponse<Attendee> {}
+export interface contributorsResponse extends APIResponse<EventContributor[]> {}
 
 async function fetchEvents<T>(
   path: string,
@@ -23,11 +15,8 @@ async function fetchEvents<T>(
   return fetchAPI<T>(`${path}`, options);
 }
 
-/**
- * GET: Lấy danh sách sự kiện của người tổ chức
- */
 export async function getOrganizerEvents(
-  params?: GetEventsParams
+  params?: GetParams
 ): Promise<EventsResponse> {
   const searchParams = new URLSearchParams();
   if (params) {
@@ -52,7 +41,7 @@ export async function getEventByID(eventID: string): Promise<EventReponse> {
  */
 export async function createOrganizerEvent(
   eventData: Partial<Event>
-): Promise<{ data: Event }> {
+): Promise<{ eventID: string }> {
   return fetchEvents<{ data: Event }>("/me/events", {
     method: "POST",
     body: JSON.stringify(eventData),
@@ -80,13 +69,57 @@ export async function cancelEvent(eventID: string, cancelledReason?: string) {
 }
 
 // Attendees
-export async function getAttendees(eventID: string): Promise<AttendeeResponse> {
-  return fetchEvents<AttendeeResponse>(`/public/events/${eventID}/attendees`);
+export async function getAttendees(
+  eventID: string,
+  params: GetParams
+): Promise<AttendeesResponse> {
+  const searchParams = new URLSearchParams();
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        searchParams.append(key, value.toString());
+      }
+    });
+  }
+
+  const queryString = searchParams.toString();
+  const url = `/public/events/${eventID}/attendees${queryString ? `?${queryString}` : ""}`;
+  return fetchEvents<AttendeesResponse>(url);
 }
 
-// Ticket Type
-export async function getEventTicketTypes(
-  eventID: string
-): Promise<TicketTypesResponse> {
-  return fetchEvents<AttendeeResponse>(`/public/events/${eventID}/tickets`);
+export async function createAttendee(
+  eventID: string,
+  data
+): Promise<CRUDAttendeeResponse> {
+  return fetchEvents(`/me/events/${eventID}/create-attendee`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+// Contributors
+export async function removeContributor(eventID, contributorID) {
+  return fetchEvents(
+    `/public/events/${eventID}/contributors/${contributorID}`,
+    {
+      method: "DELETE",
+    }
+  );
+}
+
+export async function createContributorAPI(eventID, data) {
+  return fetchEvents(`/public/events/${eventID}/contributors`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateContributorAPI(eventID, contributorID, data) {
+  return fetchEvents(
+    `/public/events/${eventID}/contributors/${contributorID}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }
+  );
 }

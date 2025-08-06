@@ -4,6 +4,7 @@ import { initializeFirebaseAdmin } from "@/lib/firebase-admin";
 
 const serviceRegistry = {
   users: process.env.USER_SERVICE_URL,
+  tickets: process.env.TICKET_SERVICE_URL,
   organizers: process.env.USER_SERVICE_URL,
   events: process.env.EVENT_SERVICE_URL,
   auth: process.env.AUTH_SERVICE_URL,

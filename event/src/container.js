@@ -9,6 +9,7 @@ import {
     createRedisClient,
     db,
     MessageDispatcher,
+    RedisLockService,
     RedisService,
     TICKET_CANCELLED,
     TICKET_CHECK_IN_REVERSED,
@@ -22,11 +23,15 @@ import { createKafkaService } from "./services/kafka.service.js";
 import { EventService } from "./services/event.service.js";
 import { EventRoutes } from "./routes/event.routes.js";
 import { EventController } from "./controllers/event.controller.js";
+import { InternalController } from "./controllers/internal.controller.js";
 import { ProfileRoutes } from "./routes/profile.routes.js";
 import { TicketTypeSnapshotRepo } from "./repositories/TicketRepository.js";
 import { CreateTicketTypeSnapshotUseCase } from "./kafka/consumer/CreateTicketTypeSnapshot.js";
 import { UpdateTicketTypeSnapshotUseCase } from "./kafka/consumer/UpdateTicketTypeSnapshot.js";
 import { DeleteTicketTypeSnapshotUseCase } from "./kafka/consumer/DeleteTicketTypeSnapshot.js";
+import { EventLifecycleEventService } from "./kafka/events.kafka.event.js";
+import { ContributorService } from "./services/contributor.service.js";
+import { InternalRoutes } from "./routes/internal.routes.js";
 
 /**
  * Hàm factory để tạo, đăng ký, và khởi động DI container.
@@ -66,13 +71,20 @@ export async function configureContainer() {
 
         kafkaService: asValue(kafkaServiceInstance),
         redisClient: asFunction(createRedisClient).singleton(),
-        eventService: asClass(EventService).singleton(),
         redisService: asClass(RedisService).singleton(),
+        redisLockService: asClass(RedisLockService).singleton(),
+        contributorService: asClass(ContributorService).singleton(),
+        eventService: asClass(EventService).singleton(),
+        eventLifecycleEventService: asClass(
+            EventLifecycleEventService,
+        ).singleton(),
 
         eventController: asClass(EventController).scoped(),
+        internalController: asClass(InternalController).scoped(),
 
         eventRoutes: asClass(EventRoutes).singleton(),
         profileRoutes: asClass(ProfileRoutes).singleton(),
+        internalRoutes: asClass(InternalRoutes).singleton(),
         apiRoutes: asClass(ApiRoutes).singleton(),
 
         createTicketTypeSnapshotUseCase: asClass(

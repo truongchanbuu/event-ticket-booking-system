@@ -1,0 +1,391 @@
+import React, { useState } from "react";
+import { FormProvider, useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Plus, Edit2, Trash2, X, Loader2 } from "lucide-react";
+import { TicketFormData, TicketFormSchema, TicketType } from "@/schema";
+import { ProgressBar } from "../ui/progress-bar";
+import { Button } from "../ui/button";
+import { PriceField } from "../ui/price-form-field";
+import { CurrencySelect } from "../ui/currency-form-select";
+import { Label } from "../ui/label";
+import { Input } from "../ui/input";
+import LoadingSpinner from "../ui/loading";
+
+const TicketRow = ({ ticket, onEdit, onDelete }) => (
+  <tr className="hover:bg-gray-50">
+    <td className="px-6 py-4 whitespace-nowrap max-w-xs">
+      <div
+        className="text-sm font-medium text-gray-900 truncate"
+        title={ticket.name}
+      >
+        {ticket.name}
+      </div>
+    </td>
+    <td className="px-6 py-4 whitespace-nowrap">
+      <div className="text-sm text-gray-900">
+        {typeof ticket.price === "number" ? ticket.price.toFixed(2) : "0.00"}{" "}
+        {ticket.currency || ""}
+      </div>
+    </td>
+    <td className="px-6 py-4 whitespace-nowrap">
+      <div className="text-sm text-gray-900">{ticket.totalQuantity}</div>
+    </td>
+    <td className="px-6 py-4 whitespace-nowrap">
+      <div className="text-sm text-gray-900">
+        {(ticket.totalQuantity ?? 0) - (ticket.remainingQuantity ?? 0)}
+      </div>
+    </td>
+    <td className="px-6 py-4 whitespace-nowrap">
+      <div className="text-sm text-gray-900">{ticket.checkInQuantity}</div>
+    </td>
+    <td className="px-6 py-4 whitespace-nowrap">
+      <div className="w-24">
+        <ProgressBar
+          current={ticket.remainingQuantity}
+          total={ticket.totalQuantity}
+        />
+        <div className="text-xs text-gray-500 mt-1">
+          {ticket.totalQuantity > 0
+            ? `${Math.round(
+                (((ticket.totalQuantity ?? 0) -
+                  (ticket.remainingQuantity ?? 0)) /
+                  (ticket.totalQuantity ?? 1)) *
+                  100
+              )}%`
+            : "0%"}
+        </div>
+      </div>
+    </td>
+    <td className="px-6 py-4 whitespace-nowrap">
+      <div className="text-sm font-medium text-green-600">
+        {(
+          (ticket.price ?? 0) *
+          ((ticket.totalQuantity ?? 0) - (ticket.remainingQuantity ?? 0))
+        ).toFixed(2)}{" "}
+        {ticket.currency ?? ""}
+      </div>
+    </td>
+    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+      <div className="flex space-x-2">
+        <Button
+          variant="ghost"
+          onClick={() => onEdit(ticket)}
+          className="text-blue-600 hover:text-blue-900 transition-colors hover:bg-gray-50"
+        >
+          <Edit2 className="w-4 h-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          onClick={() => onDelete(ticket.ticketTypeID)}
+          className="text-red-600 hover:text-red-900 transition-colors hover:bg-gray-50"
+        >
+          <Trash2 className="w-4 h-4" />
+        </Button>
+      </div>
+    </td>
+  </tr>
+);
+
+const TicketModal = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  editingTicket,
+  isLoading,
+  methods,
+}) => {
+  if (!isOpen) return null;
+
+  const {
+    register,
+    formState: { errors },
+  } = methods;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+      <div className="w-full max-w-md mx-4 sm:px-6 py-6 bg-white rounded-xl shadow-lg">
+        <div className="flex justify-between items-center mb-5">
+          <h2 className="text-lg font-semibold text-gray-900">
+            {editingTicket ? "Edit Ticket Type" : "Create New Ticket Type"}
+          </h2>
+          <Button
+            variant="link"
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 p-1 rounded-full transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </Button>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <Label className="text-sm font-medium text-gray-700 mb-1 block">
+              Ticket Name *
+            </Label>
+            <Input
+              {...register("name")}
+              type="text"
+              placeholder="Enter ticket name"
+              className="w-full"
+            />
+            {errors.name && (
+              <p className="text-red-500 text-sm mt-1">{errors.name.message}</p>
+            )}
+          </div>
+          <PriceField />
+          <CurrencySelect />
+          <div>
+            <Label className="text-sm font-medium text-gray-700 mb-1 block">
+              Total Quantity *
+            </Label>
+            <Input
+              {...register("totalQuantity", {
+                valueAsNumber: true,
+                validate: (value) => {
+                  if (
+                    editingTicket &&
+                    value <
+                      editingTicket.totalQuantity -
+                        editingTicket.remainingQuantity
+                  ) {
+                    return `Cannot be less than sold quantity (${
+                      editingTicket.totalQuantity -
+                      editingTicket.remainingQuantity
+                    })`;
+                  }
+                  return true;
+                },
+              })}
+              type="number"
+              min={
+                editingTicket
+                  ? editingTicket.totalQuantity -
+                    editingTicket.remainingQuantity
+                  : 0
+              }
+              placeholder="0"
+              className="w-full"
+            />
+            {errors.totalQuantity && (
+              <p className="text-red-500 text-sm mt-1">
+                {errors.totalQuantity.message}
+              </p>
+            )}
+            {editingTicket && (
+              <p className="text-gray-500 text-xs mt-1">
+                Minimum:{" "}
+                {editingTicket.totalQuantity - editingTicket.remainingQuantity}{" "}
+                (already sold)
+              </p>
+            )}
+          </div>
+          <div className="flex justify-end gap-3 pt-5">
+            <Button
+              type="button"
+              variant="destructive"
+              loading={isLoading}
+              onClick={onClose}
+              className="bg-gray-100 text-gray-700 hover:bg-gray-200"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="secondary"
+              loading={isLoading}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {editingTicket ? "Update" : "Create"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const EmptyState = () => (
+  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+    <div className="text-gray-500">
+      No ticket types found. Create your first ticket type to get started.
+    </div>
+  </div>
+);
+
+interface TicketManagementProps {
+  tickets: TicketType[];
+  isLoading: boolean;
+  error: string | null | undefined;
+  onCreate: (data: TicketFormData) => Promise<void>;
+  onUpdate: (ticketTypeID: string, data: any) => Promise<void>;
+  onDelete: (ticketTypeID: string) => Promise<void>;
+}
+
+const TicketManagement = ({
+  tickets,
+  isLoading = false,
+  error,
+  onCreate,
+  onUpdate,
+  onDelete,
+}: TicketManagementProps) => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTicket, setEditingTicket] = useState<TicketType | null>(null);
+
+  const methods = useForm({
+    resolver: zodResolver(TicketFormSchema),
+  });
+
+  const { handleSubmit, reset, clearErrors, formState } = methods;
+
+  const openCreateModal = () => {
+    clearErrors();
+    setEditingTicket(null);
+    reset({
+      name: "",
+      price: 0,
+      currency: "VND",
+      totalQuantity: 1,
+    });
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (ticket) => {
+    setEditingTicket(ticket);
+    reset({
+      name: ticket.name,
+      price: ticket.price,
+      currency: ticket.currency,
+      totalQuantity: ticket.totalQuantity,
+    });
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingTicket(null);
+    clearErrors();
+    reset();
+  };
+
+  const onSubmit = async (data) => {
+    try {
+      if (editingTicket) {
+        const changedFields = Object.keys(formState.dirtyFields).reduce(
+          (result, key) => {
+            result[key] = data[key];
+            return result;
+          },
+          {}
+        );
+
+        if (Object.keys(changedFields).length === 0) {
+          console.log("No fields changed");
+          closeModal();
+          return;
+        }
+
+        await onUpdate(editingTicket.ticketTypeID, changedFields);
+      } else {
+        await onCreate(data);
+      }
+      closeModal();
+    } catch (err) {
+      console.error("Failed to submit:", err);
+      alert(`Error: ${err.message}`);
+    }
+  };
+
+  const deleteTicket = async (ticketTypeID) => {
+    if (!window.confirm("Are you sure you want to delete this ticket type?")) {
+      return;
+    }
+    try {
+      await onDelete(ticketTypeID);
+    } catch (err) {
+      console.error("Failed to delete:", err);
+      alert(`Error: ${err.message}`);
+    }
+  };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (error) return <div className="p-6 text-red-500">{error}</div>;
+
+  return (
+    <FormProvider {...methods}>
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <div className="max-w-6xl mx-auto">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold text-gray-900">Ticket Types</h1>
+            <Button
+              onClick={openCreateModal}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              Create New Ticket Type
+            </Button>
+          </div>
+
+          {tickets.length > 0 ? (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+              <div className="w-full overflow-x-auto">
+                <table className="min-w-[800px] table-auto">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Ticket Name
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Price
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Total Quantity
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Sold
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Checked-in
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Progress
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Revenue
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {tickets.map((ticket) => (
+                      <TicketRow
+                        key={ticket.ticketTypeID}
+                        ticket={ticket}
+                        onEdit={openEditModal}
+                        onDelete={deleteTicket}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <EmptyState />
+          )}
+
+          <TicketModal
+            isOpen={isModalOpen}
+            onClose={closeModal}
+            onSubmit={handleSubmit(onSubmit)}
+            editingTicket={editingTicket}
+            isLoading={isLoading}
+            methods={methods}
+          />
+        </div>
+      </form>
+    </FormProvider>
+  );
+};
+
+export default TicketManagement;

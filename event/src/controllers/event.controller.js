@@ -3,7 +3,6 @@ import {
     catchAsync,
     ERROR_CODE,
 } from "@event_ticket_booking_system/shared";
-import { EVENT_STATUS } from "../enums/event-status.js";
 
 export class EventController {
     constructor({ logger, eventService }) {
@@ -14,11 +13,18 @@ export class EventController {
         this.getMyEventByID = catchAsync(this.getMyEventByID.bind(this));
         this.createEvent = catchAsync(this.createEvent.bind(this));
         this.updateMyEvent = catchAsync(this.updateMyEvent.bind(this));
+        this.cancelMyEvent = catchAsync(this.cancelMyEvent.bind(this));
+
         this.getEventAttendees = catchAsync(this.getEventAttendees.bind(this));
         this.getEventTicketTypes = catchAsync(
             this.getEventTicketTypes.bind(this),
         );
-        this.cancelMyEvent = catchAsync(this.cancelMyEvent.bind(this));
+        this.getEventContributors = catchAsync(
+            this.getEventContributors.bind(this),
+        );
+        this.removeContributor = catchAsync(this.removeContributor.bind(this));
+        this.createContributor = catchAsync(this.createContributor.bind(this));
+        this.updateContributor = catchAsync(this.updateContributor.bind(this));
     }
 
     async getMyEvents(req, res) {
@@ -112,44 +118,16 @@ export class EventController {
         const { eventID } = req.params;
         const userID = req.user.uid;
 
-        const event = await this.eventService.getEventByID(eventID);
-        if (!event) {
-            return res
-                .status(404)
-                .json({ success: false, message: "Failed to cancel." });
-        }
-
-        if (event.organizer.organizerID !== userID) {
-            return res.status(403).json({
-                success: false,
-                message: "You are not allowed to cancel this event.",
-            });
-        }
-
-        // if ((event?.stats?.participantCount || 0) > 0) {
-        // }
-
-        if (event.status === EVENT_STATUS.CANCELLED) {
-            return res.status(200).json({
-                success: true,
-                message: "Event has been cancelled.",
-                data: event,
-            });
-        }
-
-        const updatedData = {
-            cancelledReason: "No reason provided.",
-            ...req.body,
-            status: EVENT_STATUS.CANCELLED,
-            cancelledAt: new Date().toISOString(),
-            cancelledBy: "self",
+        const actor = {
+            userID,
+            username: req.user.name,
+            email: req.user.email,
         };
-
-        const result = await this.eventService.updateEvent(
+        const result = await this.eventService.cancelEvent(
             eventID,
-            updatedData,
+            actor,
+            req.body.cancelledReason,
         );
-
         console.log(`res: ${JSON.stringify(result)}`);
 
         return res.status(200).json({ success: true, data: result });
@@ -174,16 +152,65 @@ export class EventController {
             });
         }
 
-        const attendees = await this.eventService.getEventAttendees(eventID);
+        const result = await this.eventService.getEventAttendees(eventID);
 
-        if (attendees === null) {
-            return res.status(404).json({
-                success: false,
-                message: `Event with ID '${eventID}' not found.`,
+        if (!result) {
+            return new AppError({
+                statusCode: 404,
+                errorCode: ERROR_CODE.NOT_FOUND,
+                message: "Not Found.",
             });
         }
 
-        return res.status(200).json({ success: true, data: attendees });
+        return res.status(200).json(result);
+    }
+
+    async createAttendee(req, res) {
+        const { eventID } = req.params;
+        const result = await this.eventService.createEventAttendee(
+            eventID,
+            req.body,
+        );
+
+        return res.status(200).json(result);
+    }
+
+    async createContributor(req, res) {
+        const { eventID } = req.params;
+        const result = await this.eventService.createContributor(
+            eventID,
+            req.body,
+        );
+
+        return res.status(200).json({
+            success: true,
+            data: result,
+        });
+    }
+
+    async updateContributor(req, res) {
+        const { eventID, contributorID } = req.params;
+        const result = await this.eventService.updateContributor(
+            eventID,
+            contributorID,
+            req.body,
+        );
+        console.log(`RESULT: ${JSON.stringify(result)}`);
+
+        return res.status(200).json({ success: true, data: result });
+    }
+
+    async removeContributor(req, res) {
+        const userID = req.user.uid;
+        const { eventID, contributorID } = req.params;
+
+        await this.eventService.removeContributor(
+            eventID,
+            contributorID,
+            userID,
+        );
+
+        return res.status(200).json({ success: true });
     }
 
     async getEventTicketTypes(req, res) {
@@ -210,4 +237,6 @@ export class EventController {
 
         return res.status(200).json({ success: true, data: ticketTypes });
     }
+
+    async getEventContributors(req, res) {}
 }

@@ -64,6 +64,23 @@ export const createRedisClient = ({ config, logger = console }) => {
             exec: async () => await pipeline.exec(),
           };
         },
+
+        eval: async (script, numKeys, ...args) => {
+          return await localRedis.eval(script, numKeys, ...args);
+        },
+
+        evalsha(sha, numKeys, ...args) {
+          // Bạn cần dịch lời gọi này sang lời gọi eval của client của bạn
+          // API của @upstash/redis thường là eval(script, keys, args)
+          const keys = args.slice(0, numKeys);
+          const scriptArgs = args.slice(numKeys);
+
+          // Đây là một phỏng đoán, bạn cần kiểm tra tài liệu của client bạn đang dùng
+          // Lưu ý: @upstash/redis có thể không có cách gọi trực tiếp evalsha,
+          // bạn có thể phải dùng eval với toàn bộ script.
+          // Điều này làm cho việc sử dụng adapter trở nên rất phức tạp.
+          return this.actualClient.evalsha(sha, keys, scriptArgs);
+        },
       };
 
       logger?.info("[Redis] Local Redis adapter created successfully.");

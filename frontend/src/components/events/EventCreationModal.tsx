@@ -8,6 +8,11 @@ import {
   Tag,
   Info,
   AlertTriangle,
+  Users,
+  Star,
+  UserPlus,
+  Camera,
+  AlertCircle,
 } from "lucide-react";
 import { categories } from "@/constants/categories";
 import {
@@ -28,9 +33,9 @@ import { Controller, FormProvider, useFieldArray } from "react-hook-form";
 import { CreateEventFormValues } from "@/schema/events/event-creation.schema";
 import { Textarea } from "../ui/textarea";
 import MultipleDocumentUploader from "../ui/multi-document-uploader";
-import { fileToBase64 } from "@/lib/helpers/file.helper";
-import { uploadToCloudinary } from "@/services/cloudinary.service";
+import { EventManagementService } from "@/services/event-management.service";
 import { useUserProfile } from "@/hooks/user-store-hooks";
+import { toast } from "@/hooks/use-toast";
 
 interface CreateEventModalProps {
   isOpen: boolean;
@@ -47,7 +52,8 @@ const CreateEventModal = ({
   onSubmit,
   onOpenChange,
 }: CreateEventModalProps) => {
-  const [submitting, setIsSubmitting] = useState(false);
+  const userProfile = useUserProfile();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const methods = useEventCreationForm();
   const {
@@ -56,13 +62,28 @@ const CreateEventModal = ({
     handleSubmit,
     trigger,
     watch,
+    setValue,
     reset,
+    clearErrors,
     formState: { errors, isDirty },
   } = methods;
 
-  const { fields, append, remove } = useFieldArray({
+  const {
+    fields: ticketFields,
+    append: appendTicket,
+    remove: removeTicket,
+  } = useFieldArray({
     control,
     name: "ticketTypes",
+  });
+
+  const {
+    fields: contributorFields,
+    append: appendContributor,
+    remove: removeContributor,
+  } = useFieldArray({
+    control,
+    name: "eventContributors",
   });
 
   const handlCancel = () => {
@@ -83,6 +104,9 @@ const CreateEventModal = ({
       ];
     } else if (currentStep === 2) {
       fieldsToValidate = ["categories"];
+    } else if (currentStep === 3) {
+      // Contributors step - optional validation
+      fieldsToValidate = ["eventContributors"];
     }
 
     const isValid = await trigger(fieldsToValidate);
@@ -94,27 +118,57 @@ const CreateEventModal = ({
   const handlePrevStep = () => setCurrentStep((prev) => prev - 1);
 
   const onFinalSubmit = async (data: CreateEventFormValues) => {
-    setIsSubmitting(true);
+    if (!userProfile) {
+      toast({ variant: "destructive", title: "No user found." });
+      return;
+    }
     console.log("Form data is valid:", data);
+    setIsSubmitting(true);
 
     try {
-      const imgUrls = await handleFiles(data.images);
+      const userID = userProfile!.userID;
+      const eventImages = await handleThumbnails(userID, data.images);
+      const contributors = await Promise.all(
+        data.eventContributors.map(async (contributor) => {
+          let photoUrl = "";
+          if (contributor.photo instanceof File) {
+            const url = await EventManagementService.uploadContributorUrls({
+              userID,
+              file: contributor.photo,
+            });
+            photoUrl = url;
+          } else if (typeof contributor.photo === "string") {
+            photoUrl = contributor.photo;
+          }
+
+          return {
+            ...contributor,
+            photoUrl,
+          };
+        })
+      );
+
       const finalData = {
         ...data,
-        images: imgUrls,
+        photo: undefined,
+        images: eventImages,
+        eventContributors: contributors,
       };
-      onSubmit(finalData);
+
       console.log(`FINAL DATA: ${JSON.stringify(finalData)}`);
+      onSubmit(finalData);
     } catch (e) {
       console.error(e);
     } finally {
       onOpenChange(false);
       setCurrentStep(1);
       reset();
+      setIsSubmitting(false);
     }
   };
 
   const ticketTypesValues = watch("ticketTypes");
+  const contributorsValues = watch("eventContributors");
 
   return (
     <Dialog
@@ -130,16 +184,18 @@ const CreateEventModal = ({
         <form>
           <DialogContent
             onInteractOutside={(e) => {
-              if (!allowClose) e.preventDefault(); // Ngăn click ra ngoài
+              if (!allowClose) e.preventDefault();
             }}
             onEscapeKeyDown={(e) => {
-              if (!allowClose) e.preventDefault(); // Ngăn nhấn ESC
+              if (!allowClose) e.preventDefault();
             }}
             className={cn(
-              "max-w-7xl px-5 py-1",
+              "w-full max-w-7xl",
+              "mx-4 sm:mx-6 md:mx-8 lg:mx-10 xl:mx-12",
+              "my-2 sm:my-4 md:my-6",
               "flex flex-col justify-start",
-              "h-[80vh]",
-              "overflow-y-auto"
+              "min-h-[70vh] h-[80vh] max-h-screen sm:h-[82vh] md:h-[85vh]",
+              "overflow-y-auto overflow-x-hidden scroll-smooth"
             )}
           >
             {/* Header */}
@@ -149,7 +205,7 @@ const CreateEventModal = ({
                   Create New Event
                 </DialogTitle>
                 <div className="flex items-center space-x-2">
-                  {[1, 2, 3].map((step) => (
+                  {[1, 2, 3, 4].map((step) => (
                     <div key={step} className="flex items-center">
                       <div
                         className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
@@ -160,7 +216,7 @@ const CreateEventModal = ({
                       >
                         {step}
                       </div>
-                      {step < 3 && (
+                      {step < 4 && (
                         <div
                           className={`w-12 h-0.5 ${step < currentStep ? "bg-indigo-600" : "bg-gray-200"}`}
                         />
@@ -175,7 +231,9 @@ const CreateEventModal = ({
                   "Tell us some basic details about your event."}
                 {currentStep === 2 &&
                   "Select categories that best describe your event."}
-                {currentStep === 3 && "Set up your ticket types and pricing."}
+                {currentStep === 3 &&
+                  "Add event contributor, speakers, or performers to your event."}
+                {currentStep === 4 && "Set up your ticket types and pricing."}
               </DialogDescription>
             </DialogHeader>
 
@@ -365,37 +423,321 @@ const CreateEventModal = ({
                 />
               )}
 
-              {/* Step 3: Ticket Types */}
+              {/* Step 3: Contributors */}
               {currentStep === 3 && (
-                <div className="space-y-6">
-                  <div className="space-y-4">
-                    {/* Dùng `fields` từ useFieldArray */}
-                    {fields.map((field, index) => (
-                      <div key={field.id} className="bg-gray-50 p-6 ...">
-                        <div className="flex items-center justify-between mb-4">
-                          <h5>Ticket Type {index + 1}</h5>
-                          {fields.length > 1 && (
-                            <Button onClick={() => remove(index)}>
-                              <X className="w-5 h-5" />
+                <div className="space-y-8">
+                  <div className="space-y-6">
+                    {contributorFields.map((field, index) => (
+                      <div
+                        key={field.id}
+                        className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200"
+                      >
+                        <div className="flex items-center justify-between mb-6">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center">
+                              <Users className="w-5 h-5 text-white" />
+                            </div>
+                            <h5 className="text-xl font-semibold text-gray-900">
+                              Contributor {index + 1}
+                            </h5>
+                            <Controller
+                              name={`eventContributors.${index}.isHeadliner`}
+                              control={control}
+                              render={({ field: headlinerField }) => (
+                                <label className="flex items-center space-x-2 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={headlinerField.value}
+                                    onChange={headlinerField.onChange}
+                                    className="sr-only"
+                                  />
+                                  <div
+                                    className={`flex items-center space-x-2 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                                      headlinerField.value
+                                        ? "bg-gradient-to-r from-yellow-400 to-orange-500 text-white shadow-md"
+                                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                    }`}
+                                  >
+                                    <Star
+                                      className={`w-4 h-4 ${headlinerField.value ? "text-white" : "text-gray-400"}`}
+                                    />
+                                    <span>Headliner</span>
+                                  </div>
+                                </label>
+                              )}
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              removeContributor(index);
+                              clearErrors(`eventContributors.${index}`);
+                            }}
+                            className="w-8 h-8 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                          {/* Photo Upload Section */}
+                          <div className="lg:col-span-1">
+                            <Label className="text-sm font-medium text-gray-700 mb-3 block">
+                              Profile Photo
+                            </Label>
+
+                            <div className="space-y-3">
+                              <label
+                                htmlFor={`photo-upload-${index}`}
+                                className="w-32 h-32 mx-auto lg:mx-0 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 flex items-center justify-center hover:border-indigo-300 hover:bg-indigo-50 transition-colors group cursor-pointer"
+                              >
+                                {contributorsValues?.[index]?.photo ? (
+                                  typeof contributorsValues[index].photo ===
+                                  "string" ? (
+                                    <img
+                                      src={contributorsValues[index].photo}
+                                      alt="Contributor"
+                                      className="w-full h-full object-cover rounded-2xl"
+                                    />
+                                  ) : (
+                                    <img
+                                      src={URL.createObjectURL(
+                                        contributorsValues[index].photo
+                                      )}
+                                      alt="Contributor"
+                                      className="w-full h-full object-cover rounded-2xl"
+                                    />
+                                  )
+                                ) : (
+                                  <div className="text-center">
+                                    <Camera className="w-8 h-8 text-gray-400 group-hover:text-indigo-500 mx-auto mb-2" />
+                                    <p className="text-xs text-gray-500 group-hover:text-indigo-600">
+                                      Upload Photo
+                                    </p>
+                                  </div>
+                                )}
+                              </label>
+
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                id={`photo-upload-${index}`}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    setValue(
+                                      `eventContributors.${index}.photo`,
+                                      file,
+                                      {
+                                        shouldValidate: true,
+                                        shouldDirty: true,
+                                      }
+                                    );
+                                  }
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Form Fields */}
+                          <div className="lg:col-span-2 space-y-6">
+                            <div>
+                              <Label
+                                htmlFor={`eventContributors.${index}.name`}
+                                className="text-sm font-medium text-gray-700"
+                              >
+                                Full Name *
+                              </Label>
+                              <Input
+                                id={`eventContributors.${index}.fullname`}
+                                placeholder="Enter contributor's full name"
+                                {...register(
+                                  `eventContributors.${index}.fullname`
+                                )}
+                                className="mt-2 h-12 rounded-xl border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 placeholder-gray-400"
+                              />
+                              {errors.eventContributors?.[index]?.fullname && (
+                                <p className="text-sm text-red-500 mt-2 flex items-center">
+                                  <AlertCircle className="w-4 h-4 mr-1" />
+                                  {
+                                    errors.eventContributors[index].fullname
+                                      .message
+                                  }
+                                </p>
+                              )}
+                            </div>
+
+                            <div>
+                              <Label
+                                htmlFor={`eventContributors.${index}.role`}
+                                className="text-sm font-medium text-gray-700"
+                              >
+                                Role & Title *
+                              </Label>
+                              <Input
+                                id={`eventContributors.${index}.role`}
+                                placeholder="e.g., Keynote Speaker, Master of Ceremonies, Featured Artist"
+                                {...register(`eventContributors.${index}.role`)}
+                                className="mt-2 h-12 rounded-xl border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 placeholder-gray-400"
+                              />
+                              {errors.eventContributors?.[index]?.role && (
+                                <p className="text-sm text-red-500 mt-2 flex items-center">
+                                  <AlertCircle className="w-4 h-4 mr-1" />
+                                  {errors.eventContributors[index].role.message}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Add Contributor Button */}
+                    <Button
+                      type="button"
+                      onClick={() =>
+                        appendContributor({
+                          fullname: "",
+                          photo: "",
+                          role: "",
+                          isHeadliner: false,
+                        })
+                      }
+                      className="w-full h-16 border-2 border-dashed border-gray-200 rounded-2xl bg-white text-gray-600 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-all duration-200 font-medium"
+                    >
+                      <UserPlus className="w-6 h-6 mr-3" />
+                      Add New Contributor
+                    </Button>
+
+                    {/* Status Messages */}
+                    <div className="space-y-4">
+                      {contributorFields.length === 0 && (
+                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-6">
+                          <div className="flex items-start space-x-4">
+                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                              <Info className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <div>
+                              <h6 className="font-semibold text-blue-900 mb-1">
+                                No Contributors Added Yet
+                              </h6>
+                              <p className="text-sm text-blue-700 leading-relaxed">
+                                Add speakers, performers, hosts, or other key
+                                contributors to showcase them prominently on
+                                your event page. This helps attendees know who
+                                they'll be learning from or seeing perform.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {contributorsValues?.some(
+                        (contributor) => contributor.isHeadliner
+                      ) && (
+                        <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-2xl p-6">
+                          <div className="flex items-start space-x-4">
+                            <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center flex-shrink-0">
+                              <Star className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <h6 className="font-semibold text-yellow-900 mb-1">
+                                ⭐{" "}
+                                {
+                                  contributorsValues.filter(
+                                    (c) => c.isHeadliner
+                                  ).length
+                                }{" "}
+                                Headliner
+                                {contributorsValues.filter((c) => c.isHeadliner)
+                                  .length > 1
+                                  ? "s"
+                                  : ""}{" "}
+                                Selected
+                              </h6>
+                              <p className="text-sm text-yellow-700 leading-relaxed">
+                                These contributors will be featured prominently
+                                at the top of your event page and in promotional
+                                materials to attract more attendees.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 4: Ticket Types */}
+              {currentStep === 4 && (
+                <div className="space-y-8">
+                  <div className="space-y-6">
+                    {/* Ticket Fields */}
+                    {ticketFields.map((field, index) => (
+                      <div
+                        key={field.id}
+                        className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow duration-200"
+                      >
+                        <div className="flex items-center justify-between mb-6">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                              <span className="text-sm font-semibold text-indigo-600">
+                                {index + 1}
+                              </span>
+                            </div>
+                            <h5 className="text-lg font-semibold text-gray-900">
+                              Ticket Type {index + 1}
+                            </h5>
+                          </div>
+                          {ticketFields.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                removeTicket(index);
+                                clearErrors(`ticketTypes.${index}`);
+                              }}
+                              className="text-gray-400 hover:text-red-500 border-gray-200 hover:border-red-200 hover:bg-red-50 transition-colors"
+                            >
+                              <X className="w-4 h-4" />
                             </Button>
                           )}
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div>
-                            <Label>Ticket Name</Label>
 
-                            <Input {...register(`ticketTypes.${index}.name`)} />
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          <div className="space-y-2">
+                            <Label
+                              htmlFor={`ticketTypes.${index}.name`}
+                              className="text-sm font-medium text-gray-700"
+                            >
+                              Ticket Name
+                            </Label>
+                            <Input
+                              id={`ticketTypes.${index}.name`}
+                              {...register(`ticketTypes.${index}.name`)}
+                              className="border-gray-200 focus:border-indigo-300 focus:ring-indigo-200 rounded-lg"
+                              placeholder="e.g., General Admission"
+                            />
                             {errors.ticketTypes?.[index]?.name && (
-                              <p className="text-sm text-red-500 mt-1">
+                              <p className="text-sm text-red-500 mt-1 flex items-center">
+                                <span className="w-1 h-1 bg-red-500 rounded-full mr-2"></span>
                                 {errors.ticketTypes[index].name.message}
                               </p>
                             )}
                           </div>
-                          <div>
-                            <Label htmlFor={`ticketTypes.${index}.price`}>
+
+                          <div className="space-y-2">
+                            <Label
+                              htmlFor={`ticketTypes.${index}.price`}
+                              className="text-sm font-medium text-gray-700"
+                            >
                               Price (VND)
                             </Label>
-
                             <Controller
                               name={`ticketTypes.${index}.price`}
                               control={control}
@@ -410,20 +752,27 @@ const CreateEventModal = ({
                                   onValueChange={(values) => {
                                     field.onChange(values.floatValue);
                                   }}
+                                  className="border-gray-200 focus:border-indigo-300 focus:ring-indigo-200 rounded-lg"
                                 />
                               )}
                             />
-                            {/* Phần hiển thị lỗi không đổi */}
                             {errors.ticketTypes?.[index]?.price && (
-                              <p className="text-sm text-red-500 mt-1">
+                              <p className="text-sm text-red-500 mt-1 flex items-center">
+                                <span className="w-1 h-1 bg-red-500 rounded-full mr-2"></span>
                                 {errors.ticketTypes[index].price.message}
                               </p>
                             )}
                           </div>
-                          <div>
-                            <Label>Quantity</Label>
 
+                          <div className="space-y-2">
+                            <Label
+                              htmlFor={`ticketTypes.${index}.totalQuantity`}
+                              className="text-sm font-medium text-gray-700"
+                            >
+                              Quantity
+                            </Label>
                             <Input
+                              id={`ticketTypes.${index}.totalQuantity`}
                               type="number"
                               {...register(
                                 `ticketTypes.${index}.totalQuantity`,
@@ -431,9 +780,12 @@ const CreateEventModal = ({
                                   valueAsNumber: true,
                                 }
                               )}
+                              className="border-gray-200 focus:border-indigo-300 focus:ring-indigo-200 rounded-lg"
+                              placeholder="100"
                             />
                             {errors.ticketTypes?.[index]?.totalQuantity && (
-                              <p className="text-sm text-red-500 mt-1">
+                              <p className="text-sm text-red-500 mt-1 flex items-center">
+                                <span className="w-1 h-1 bg-red-500 rounded-full mr-2"></span>
                                 {
                                   errors.ticketTypes[index].totalQuantity
                                     .message
@@ -445,57 +797,76 @@ const CreateEventModal = ({
                       </div>
                     ))}
 
+                    {/* Add Ticket Button */}
                     <Button
                       type="button"
                       onClick={() =>
-                        append({
+                        appendTicket({
                           name: "",
                           price: 0,
                           totalQuantity: 1,
                         })
                       }
-                      className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-white hover:border-indigo-400 hover:text-white transition-colors"
+                      className="w-full py-4 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50 text-gray-600 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-all duration-200 font-medium"
                     >
-                      + Add Another Ticket Type
+                      <svg
+                        className="w-5 h-5 mr-2"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                        />
+                      </svg>
+                      Add Another Ticket Type
                     </Button>
 
-                    <div className="mt-4 space-y-4">
-                      {fields.length === 0 && (
+                    {/* Status Alerts */}
+                    <div className="space-y-4">
+                      {ticketFields.length === 0 && (
                         <div
-                          className="bg-yellow-50 border-l-4 border-yellow-400 text-yellow-800 p-4 rounded-r-lg"
+                          className="bg-amber-50 border border-amber-200 rounded-xl p-4"
                           role="alert"
                         >
-                          <div className="flex">
-                            <div className="py-1">
-                              <AlertTriangle className="h-5 w-5 text-yellow-500 mr-3" />
+                          <div className="flex items-start">
+                            <div className="flex-shrink-0">
+                              <AlertTriangle className="h-5 w-5 text-amber-500" />
                             </div>
-                            <div>
-                              <p className="font-bold">No Ticket Found</p>
-                              <p className="text-sm">
-                                Your events need at least a ticket type to
-                                publish. It will only draft mode.
+                            <div className="ml-3">
+                              <p className="font-semibold text-amber-800">
+                                No Tickets Found
+                              </p>
+                              <p className="text-sm text-amber-700 mt-1">
+                                Your event needs at least one ticket type to
+                                publish. It will only be in draft mode.
                               </p>
                             </div>
                           </div>
                         </div>
                       )}
 
-                      {fields.length > 0 &&
+                      {ticketFields.length > 0 &&
                         ticketTypesValues?.every(
                           (ticket) => ticket.price === 0
                         ) && (
                           <div
-                            className="bg-blue-50 border-l-4 border-blue-400 text-blue-800 p-4 rounded-r-lg"
+                            className="bg-blue-50 border border-blue-200 rounded-xl p-4"
                             role="alert"
                           >
-                            <div className="flex">
-                              <div className="py-1">
-                                <Info className="h-5 w-5 text-blue-500 mr-3" />
+                            <div className="flex items-start">
+                              <div className="flex-shrink-0">
+                                <Info className="h-5 w-5 text-blue-500" />
                               </div>
-                              <div>
-                                <p className="font-bold">Free Event</p>
-                                <p className="text-sm">
-                                  All tickets are free. This events will be
+                              <div className="ml-3">
+                                <p className="font-semibold text-blue-800">
+                                  Free Event
+                                </p>
+                                <p className="text-sm text-blue-700 mt-1">
+                                  All tickets are free. This event will be
                                   marked as free for everyone.
                                 </p>
                               </div>
@@ -505,35 +876,51 @@ const CreateEventModal = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      type="checkbox"
-                      id="isFeatured"
-                      {...register("isFeatured")}
-                      className="h-4 w-4"
-                    />
-                    <Label htmlFor="isFeatured" className="text-sm">
-                      Mark as Feature
-                    </Label>
+                  {/* Featured Checkbox */}
+                  <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
+                    <div className="flex items-center space-x-3">
+                      <Input
+                        type="checkbox"
+                        id="isFeatured"
+                        {...register("isFeatured")}
+                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                      />
+                      <div>
+                        <Label
+                          htmlFor="isFeatured"
+                          className="text-sm font-medium text-gray-900"
+                        >
+                          Mark as Featured
+                        </Label>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Featured events get highlighted placement and
+                          increased visibility
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
             </div>
 
             {/* Footer */}
-            <DialogFooter className="flex items-center justify-between p-6 ...">
-              <Button
-                type="button"
-                onClick={handlePrevStep}
-                disabled={currentStep === 1}
-              >
-                Previous
-              </Button>
-              <div className="flex space-x-3">
-                <DialogClose asChild>
-                  <Button onClick={handlCancel}>Cancel</Button>
-                </DialogClose>
-                {currentStep < 3 ? (
+            <DialogFooter className="flex items-center p-6 border-t border-gray-200">
+              <DialogClose asChild>
+                <Button variant="outline" onClick={handlCancel}>
+                  Cancel
+                </Button>
+              </DialogClose>
+
+              <div className="flex ml-auto space-x-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handlePrevStep}
+                  disabled={currentStep === 1}
+                >
+                  Previous
+                </Button>
+                {currentStep < 4 ? (
                   <Button
                     disabled={Object.values(errors).length > 0 || !isDirty}
                     type="button"
@@ -543,12 +930,17 @@ const CreateEventModal = ({
                   </Button>
                 ) : (
                   <Button
-                    disabled={Object.values(errors).length > 0}
-                    loading={isCreating || submitting}
+                    disabled={
+                      Object.values(errors).length > 0 ||
+                      isCreating ||
+                      isSubmitting
+                    }
                     type="submit"
                     onClick={handleSubmit(onFinalSubmit)}
                   >
-                    Create Event
+                    {isCreating || isSubmitting
+                      ? "Creating..."
+                      : "Create Event"}
                   </Button>
                 )}
               </div>
@@ -562,13 +954,13 @@ const CreateEventModal = ({
 
 export default CreateEventModal;
 
-const handleFiles = async (images) => {
+const handleThumbnails = async (userID: string, images) => {
   const files = images.map((img) => {
     return img.file;
   });
 
   const uploadPromises = files.map((file) =>
-    uploadToCloudinary(file, "events")
+    EventManagementService.uploadThumbnails({ userID, file })
   );
 
   const imageUrls = await Promise.all(uploadPromises);

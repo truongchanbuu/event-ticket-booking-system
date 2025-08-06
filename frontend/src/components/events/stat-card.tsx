@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import React from "react";
 
 interface StatCardProps {
@@ -6,6 +7,7 @@ interface StatCardProps {
   subtitle?: string;
   color?: string;
   value: string;
+  className: string;
 }
 
 const StatCard = ({
@@ -14,8 +16,11 @@ const StatCard = ({
   value,
   subtitle,
   color = "text-blue-600",
+  className,
 }: StatCardProps) => (
-  <div className="bg-white rounded-lg shadow-sm border p-6">
+  <div
+    className={cn("bg-white rounded-lg shadow-sm border p-6", className ?? "")}
+  >
     <div className="flex items-center">
       <div
         className={`p-2 rounded-lg ${color.replace("text-", "bg-").replace("-600", "-100")}`}

@@ -73,7 +73,6 @@ export class OrganizerController {
     }
 
     async applyOrganizer(req, res) {
-        this.logger?.debug("req: ", req.body);
         const userID = req.user.uid;
 
         const applicationData = {

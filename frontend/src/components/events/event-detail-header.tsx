@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
 import { createImagesFromUrls, ImageItem, ImageSlider } from "../image-slider";
-import {
-  deleteImageFromCloudinary,
-  uploadToCloudinary,
-} from "@/services/cloudinary.service";
+import { deleteImageFromCloudinary } from "@/services/cloudinary.service";
 import {
   Calendar,
   Clock,
@@ -21,10 +18,11 @@ import { Event } from "@/schema";
 import { toUpperCaseFirstLetter } from "@/lib/helpers/string.helper";
 import { UpdateEventFn } from "@/types/event.api";
 import CategoryDialog from "../ui/category-modal";
+import { EventManagementService } from "@/services/event-management.service";
+import { useUserProfile } from "@/hooks/user-store-hooks";
 import { toast } from "@/hooks/use-toast";
 
 interface EventDetailHeaderProps {
-  eventId: string;
   eventDetail: Event;
   images: string[];
   updateEvent: UpdateEventFn;
@@ -33,9 +31,9 @@ interface EventDetailHeaderProps {
 export default function EventDetailHeader({
   eventDetail,
   images: imgs,
-  eventId,
   updateEvent,
 }: EventDetailHeaderProps) {
+  const userProfile = useUserProfile();
   const [isUploading, setIsUploading] = useState(false);
   const [isCategoriesModalOpen, setIsCategoriesModalOpen] = useState(false);
 
@@ -58,6 +56,11 @@ export default function EventDetailHeader({
   };
 
   const handleSave = async (newImages: ImageItem[]) => {
+    if (!userProfile?.userID) {
+      toast({ variant: "destructive", title: "No user found!" });
+      return;
+    }
+
     setIsUploading(true);
 
     try {
@@ -69,12 +72,11 @@ export default function EventDetailHeader({
 
       const uploaded = await Promise.all(
         added.map(async (img) => {
-          const url = await uploadToCloudinary(
-            img.file!,
-            "thumbnails",
-            `events`,
-            eventId
-          );
+          const url = await EventManagementService.uploadThumbnails({
+            userID: userProfile!.userID,
+            file: img.file,
+          });
+
           return { ...img, src: url, file: undefined };
         })
       );
@@ -116,7 +118,7 @@ export default function EventDetailHeader({
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center space-x-4">
             <img
-              src={eventDetail.organizer.avatar}
+              src={eventDetail.organizer.photoUrl}
               alt={eventDetail.organizer.name}
               className="w-16 h-16 rounded-full border-4 border-white shadow-lg"
             />
@@ -202,12 +204,14 @@ export default function EventDetailHeader({
                     </div>
                   )}
 
-                  {eventDetail.cancelledBy && (
+                  {eventDetail?.cancelledByUsername && (
                     <div className="flex items-center space-x-2">
                       <User className="h-4 w-4 text-red-500" />
                       <span>
                         <span className="font-medium">Cancelled by:</span>{" "}
-                        {toUpperCaseFirstLetter(eventDetail.cancelledBy)}
+                        {toUpperCaseFirstLetter(
+                          eventDetail.cancelledByUsername
+                        )}
                       </span>
                     </div>
                   )}

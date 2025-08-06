@@ -1,5 +1,6 @@
 import express from "express";
 import { checkAdmin, verifyToken } from "@event_ticket_booking_system/shared";
+import EventValidator from "../middlewares/validator.js";
 
 export class EventRoutes {
     constructor({ eventController }) {
@@ -16,11 +17,42 @@ export class EventRoutes {
             verifyToken,
             this.eventController.getEventAttendees,
         );
+        this.router.post(
+            "/:eventID/attendees",
+            verifyToken,
+            this.eventController.createAttendee,
+        );
 
         this.router.get(
             "/:eventID/tickets",
-            verifyToken,
             this.eventController.getEventTicketTypes,
+        );
+
+        this.router.post(
+            "/:eventID/contributors",
+            verifyToken,
+            EventValidator.validateCreateContributor(),
+            EventValidator.handleValidationErrors,
+            this.eventController.createContributor,
+        );
+
+        this.router.put(
+            "/:eventID/contributors/:contributorID",
+            verifyToken,
+            EventValidator.validateUpdateContributor(),
+            EventValidator.handleValidationErrors,
+            this.eventController.updateContributor,
+        );
+        this.router.delete(
+            "/:eventID/contributors/:contributorID",
+            verifyToken,
+            EventValidator.validateRemoveContributor(),
+            EventValidator.handleValidationErrors,
+            this.eventController.removeContributor,
+        );
+        this.router.get(
+            "/:eventID/contributors",
+            this.eventController.getEventContributors,
         );
     }
 }

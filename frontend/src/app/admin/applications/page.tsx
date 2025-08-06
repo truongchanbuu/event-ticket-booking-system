@@ -27,6 +27,7 @@ import ApplicationCard from "@/components/application/application-card";
 import ApplicationCardSkeleton from "@/components/application/application-card-skeleton";
 import { APPLY_STATUS } from "@/schema";
 import { useAdminApplication } from "@/hooks/use-admin-application";
+import LoadingSpinner from "@/components/ui/loading";
 
 // Helper để hiển thị tên trạng thái thân thiện hơn
 const statusLabels: { [key in APPLY_STATUS]: string } = {
@@ -283,14 +284,7 @@ export default function ApplicationManagementPage() {
               variant="outline"
               className="w-48"
             >
-              {isFetchingNextPage ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Loading...
-                </>
-              ) : (
-                "Load More"
-              )}
+              {isFetchingNextPage ? <LoadingSpinner /> : "Load More"}
             </Button>
           )}
         </div>

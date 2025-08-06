@@ -10,7 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
  * Hook để quản lý danh sách sự kiện, bao gồm lấy dữ liệu,
  * tạo mới và xóa sự kiện.
  */
-export function useProfileEvents(params?, userID?) {
+export function useProfileEvents(userID: string, params?) {
   const queryClient = useQueryClient();
   const queryKey = QUERY_KEYS.profileEvents(userID, params);
 

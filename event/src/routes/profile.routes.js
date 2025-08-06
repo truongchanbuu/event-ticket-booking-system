@@ -39,6 +39,19 @@ export class ProfileRoutes {
             this.eventController.cancelMyEvent,
         );
 
+        // UNPUBLISHED
+        // this.router.post(
+        //     "/events/:eventID/unpublished",
+        //     verifyToken,
+        //     EventValidator.validateUnpublished,
+        // );
+
+        this.router.post(
+            "/events/:eventID/create-attendee",
+            verifyToken,
+            this.eventController.createAttendee,
+        );
+
         this.router.delete("/events/:eventID", verifyToken);
 
         this.router.post(

@@ -13,10 +13,12 @@ import { Event } from "@/schema";
 import EventCard from "@/components/events/event-card";
 import { EVENT_STATUS } from "@/schema/enums/event-status";
 import { toUpperCaseFirstLetter } from "@/lib/helpers/string.helper";
+import { useRouter } from "next/navigation";
 
 const MAX_PER_PAGE = 10;
 
 const EventManagementDashboard = () => {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -56,7 +58,11 @@ const EventManagementDashboard = () => {
 
   const handleCreateEvent = async (data: CreateEventFormValues) => {
     try {
-      await createEvent(data);
+      const eventID = await createEvent(data);
+
+      if (eventID) {
+        router.push(`/profile/events/dashboard/${eventID}`);
+      }
     } catch (e) {
       toast({ variant: "destructive", title: "failed to create event." });
       console.error(`Failed to create event: ${e}`);
