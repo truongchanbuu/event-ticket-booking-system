@@ -24,7 +24,7 @@ export function PriceField() {
     const rawValue = e.target.value.replace(/[^\d]/g, "");
     const numeric = parseInt(rawValue || "0", 10);
 
-    setValue("price", numeric, { shouldValidate: true });
+    setValue("price", numeric, { shouldValidate: true, shouldDirty: true });
     setDisplayValue(formatCurrency(numeric));
   };
 

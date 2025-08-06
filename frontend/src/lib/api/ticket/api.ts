@@ -23,3 +23,7 @@ export async function updateTicketType(ticketTypeID: string, ticketData) {
     body: JSON.stringify(ticketData),
   });
 }
+
+export async function deleteTicketType(ticketTypeID: string) {
+  return fetchAPI(`/public/tickets/${ticketTypeID}`, { method: "DELETE" });
+}

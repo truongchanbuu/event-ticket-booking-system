@@ -78,15 +78,6 @@ export class TicketValidator extends BaseValidator {
                 errorMessage: "Ticket Type is required.",
             },
         },
-        eventID: {
-            isString: {
-                errorMessage: "Event ID is required.",
-            },
-            notEmpty: {
-                errorMessage: "Event ID cannot be empty.",
-            },
-        },
-
         name: {
             notEmpty: {
                 errorMessage: "Ticket name is required.",
@@ -135,6 +126,18 @@ export class TicketValidator extends BaseValidator {
                     "Total quantity must be an integer greater than or equal to 1.",
             },
             optional: true,
+        },
+    });
+
+    static validateTicketTypeDelete = checkSchema({
+        ticketTypeID: {
+            in: ["params"],
+            isString: {
+                errorMessage: "Invalid Ticket Type.",
+            },
+            notEmpty: {
+                errorMessage: "It cannot be empty.",
+            },
         },
     });
 }

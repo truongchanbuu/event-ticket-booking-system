@@ -10,6 +10,7 @@ export class TicketController {
         this.getEventTicketTypes = catchAsync(
             this.getEventTicketTypes.bind(this),
         );
+        this.deleteTicket = catchAsync(this.deleteTicket.bind(this));
     }
 
     async getEventTicketTypes(req, res) {
@@ -56,11 +57,20 @@ export class TicketController {
     }
 
     async updateTicket(req, res) {
-        console.log("params:", req.params); // 👈 Xem có ticketTypeID không
-        console.log("body:", req.body);
         const userID = req.user.uid;
+        const ticketTypeID = req.params.ticketTypeID;
+
+        const ticketToAuth =
+            await this.ticketService.getTicketForAuth(ticketTypeID);
+
+        if (!ticketToAuth) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Ticket type not found." });
+        }
+
         const isAuthorized = await this.internalService.isEventOrganizer(
-            req.body.eventID,
+            ticketToAuth.eventID,
             userID,
         );
 
@@ -70,7 +80,6 @@ export class TicketController {
                 .json({ error: "Forbidden: Not event owner." });
         }
 
-        const ticketTypeID = req.body.ticketTypeID;
         const updatedTicketTypeID = await this.ticketService.updateTicketType(
             ticketTypeID,
             req.body,
@@ -80,6 +89,38 @@ export class TicketController {
             success: true,
             data: updatedTicketTypeID,
             message: "Ticket type created.",
+        });
+    }
+
+    async deleteTicket(req, res) {
+        const userID = req.user.uid;
+        const { ticketTypeID } = req.params;
+
+        const ticketToAuth =
+            await this.ticketService.getTicketForAuth(ticketTypeID);
+
+        if (!ticketToAuth) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Ticket type not found." });
+        }
+
+        const isAuthorized = await this.internalService.isEventOrganizer(
+            ticketToAuth.eventID,
+            userID,
+        );
+
+        if (!isAuthorized) {
+            return res.status(403).json({
+                error: "Forbidden: You are not the organizer for this ticket's event.",
+            });
+        }
+
+        await this.ticketService.deleteTicketType(ticketTypeID);
+
+        return res.status(200).json({
+            success: true,
+            message: "Ticket type deleted successfully.",
         });
     }
 }

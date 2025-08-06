@@ -17,11 +17,6 @@ export class TicketService {
         };
     }
 
-    /**
-     * Create a new ticket type for an event.
-     * @param {Ticket Type Data} ticketData
-     * @returns Ticket Type ID
-     */
     async findOrCreateTicketType(ticketData) {
         const { eventID, name, price, totalQuantity } = ticketData;
         const query = this.ticketTypeCollection
@@ -59,11 +54,6 @@ export class TicketService {
         return docRef.id;
     }
 
-    /**
-     * Lấy tất cả các loại vé cho một sự kiện.
-     * @param {string} eventID ID của sự kiện
-     * @returns {Promise<object[]>} Danh sách các loại vé
-     */
     async getTicketTypesByEvent(eventID) {
         const cacheKey = this.CACHE_KEYS.TICKET_TYPES_BY_EVENTID(eventID);
         const fiveMinutesInSeconds = 300;
@@ -91,13 +81,6 @@ export class TicketService {
         );
     }
 
-    /**
-     * Cập nhật thông tin của một loại vé.
-     * Hàm này được thiết kế để an toàn khi chạy đồng thời với các hoạt động đặt vé.
-     * @param {string} ticketTypeID ID của loại vé cần cập nhật.
-     * @param {object} updateData Đối tượng chứa các trường cần cập nhật (ví dụ: { price: 550000, name: "Vé VIP Mới" }).
-     * @returns {Promise<{success: boolean, id: string}>}
-     */
     async updateTicketType(ticketTypeID, updateData) {
         const allowedUpdates = ["name", "price", "totalQuantity"];
         const validUpdateData = {};
@@ -121,9 +104,8 @@ export class TicketService {
                 `Lock acquired for resource: ${resourceKey}. Starting update transaction.`,
             );
 
-            let eventID; // Biến để lưu eventID cho việc xóa cache sau này
+            let eventID;
 
-            // 2. Chạy logic cập nhật bên trong một Firestore Transaction để đảm bảo tính nguyên tử.
             await this.db.runTransaction(async (transaction) => {
                 const ticketRef = this.ticketTypeCollection.doc(ticketTypeID);
                 const ticketDoc = await transaction.get(ticketRef);
@@ -176,14 +158,78 @@ export class TicketService {
         });
     }
 
-    /**
-     * Xử lý logic đặt vé cho người dùng.
-     * @param {string} userID ID của người dùng đặt vé
-     * @param {string} eventID ID của sự kiện
-     * @param {string} ticketTypeID ID của loại vé cần đặt
-     * @param {number} quantity Số lượng vé muốn đặt
-     * @returns {Promise<{bookingId: string}>} Đối tượng chứa ID của đơn đặt vé thành công
-     */
+    async deleteTicketType(ticketTypeID) {
+        if (!ticketTypeID) {
+            throw new AppError({
+                message: "Ticket Type ID is required.",
+                statusCode: 400,
+                errorCode: ERROR_CODE.INVALID_DATA,
+            });
+        }
+
+        const resourceKey = `ticket_type:${ticketTypeID}`;
+        return this.redisLockService.executeWithLock(resourceKey, async () => {
+            console.log(
+                `Lock acquired for resource: ${resourceKey}. Starting delete transaction.`,
+            );
+
+            let eventID;
+
+            await this.db.runTransaction(async (transaction) => {
+                const ticketRef = this.ticketTypeCollection.doc(ticketTypeID);
+                const ticketDoc = await transaction.get(ticketRef);
+
+                if (!ticketDoc.exists) {
+                    const err = new Error(
+                        `Cannot delete: Ticket type with ID ${ticketTypeID} not found.`,
+                    );
+                    err.code = "TICKET_NOT_FOUND";
+                    throw err;
+                }
+
+                const ticketData = ticketDoc.data();
+                eventID = ticketData.eventID; // Lấy eventID để xóa cache
+
+                const soldQuantity =
+                    ticketData.totalQuantity - ticketData.remainingQuantity;
+                if (soldQuantity > 0) {
+                    const err = new Error(
+                        `Cannot delete ticket type ${ticketTypeID} because ${soldQuantity} ticket(s) have already been sold.`,
+                    );
+                    err.code = "CANNOT_DELETE_SOLD_TICKET_TYPE";
+                    throw err;
+                }
+
+                transaction.delete(ticketRef);
+                console.log(
+                    `Ticket type ${ticketTypeID} marked for deletion within transaction.`,
+                );
+            });
+
+            if (eventID) {
+                const cacheKey =
+                    this.CACHE_KEYS.TICKET_TYPES_BY_EVENTID(eventID);
+                await this.redisService.del(cacheKey);
+                console.log(
+                    `Transaction successful. Cache invalidated for event ${eventID}.`,
+                );
+            }
+
+            return { success: true, id: ticketTypeID };
+        });
+    }
+
+    async getTicketForAuth(ticketTypeID) {
+        const ticketRef = this.ticketTypeCollection.doc(ticketTypeID);
+        const doc = await ticketRef.get();
+
+        if (!doc.exists) {
+            return null;
+        }
+
+        return { eventID: doc.data().eventID };
+    }
+
     async bookTicket(userID, eventID, ticketTypeID, quantity = 1) {
         if (quantity <= 0) {
             throw new Error("Quantity must be a positive number.");

@@ -46,6 +46,8 @@ const EventManagementDashboard = () => {
     isCreating: isTicketCreating,
     updateTicketType,
     isUpdating: isTicketUpdating,
+    deleteTicketType,
+    isDeleting: isTicketDeleting,
   } = useEventTicketTypes(eventId);
 
   const ticketTypes = ticketQuery.data?.data ?? [];
@@ -81,7 +83,8 @@ const EventManagementDashboard = () => {
     ticketSoldCount: eventDetail.stats.ticketSoldCount ?? 0,
   };
 
-  const isTicketMutating = isTicketCreating || isTicketUpdating;
+  const isTicketMutating =
+    isTicketCreating || isTicketUpdating || isTicketDeleting;
   const handleCreateTicketType = async (data) => {
     try {
       const dataToSubmit = { ...data, eventID: eventId };
@@ -93,11 +96,18 @@ const EventManagementDashboard = () => {
 
   const handleUpdateTicketType = async (ticketTypeID, data) => {
     try {
-      const dataToSubmit = { ...data, eventID: eventId };
       await updateTicketType({
         ticketTypeID: ticketTypeID,
-        ticketType: dataToSubmit,
+        ticketType: data,
       });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDelete = async (ticketTypeID) => {
+    try {
+      await deleteTicketType(ticketTypeID);
     } catch (e) {
       console.error(e);
     }
@@ -329,18 +339,14 @@ const EventManagementDashboard = () => {
         </div>
 
         {/* Ticket Management */}
-        {ticketQuery.isLoading ? (
-          <LoadingSpinner />
-        ) : (
-          <TicketManagement
-            isLoading={isTicketMutating}
-            tickets={ticketTypes}
-            error={ticketQuery.error?.message}
-            onCreate={handleCreateTicketType}
-            onDelete={async () => {}}
-            onUpdate={handleUpdateTicketType}
-          />
-        )}
+        <TicketManagement
+          isLoading={ticketQuery.isLoading}
+          tickets={ticketTypes}
+          error={ticketQuery.error?.message}
+          onCreate={handleCreateTicketType}
+          onDelete={handleDelete}
+          onUpdate={handleUpdateTicketType}
+        />
 
         {/* Attendee Management */}
         <AttendeeManagement

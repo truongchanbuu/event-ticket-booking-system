@@ -26,6 +26,14 @@ export class TicketRoutes {
             this.ticketController.updateTicket,
         );
 
+        this.router.delete(
+            "/:ticketTypeID",
+            verifyToken,
+            TicketValidator.validateTicketTypeDelete,
+            TicketValidator.handleValidationErrors,
+            this.ticketController.deleteTicket,
+        );
+
         this.router.post(
             "/",
             verifyToken,

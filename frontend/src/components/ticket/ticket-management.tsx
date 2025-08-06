@@ -10,6 +10,8 @@ import { CurrencySelect } from "../ui/currency-form-select";
 import { Label } from "../ui/label";
 import { Input } from "../ui/input";
 import LoadingSpinner from "../ui/loading";
+import { formatCurrency } from "@/lib/utils";
+import { ConfirmDeleteModal } from "../ui/confirm-dialog";
 
 const TicketRow = ({ ticket, onEdit, onDelete }) => (
   <tr className="hover:bg-gray-50">
@@ -58,11 +60,10 @@ const TicketRow = ({ ticket, onEdit, onDelete }) => (
     </td>
     <td className="px-6 py-4 whitespace-nowrap">
       <div className="text-sm font-medium text-green-600">
-        {(
+        {formatCurrency(
           (ticket.price ?? 0) *
-          ((ticket.totalQuantity ?? 0) - (ticket.remainingQuantity ?? 0))
-        ).toFixed(2)}{" "}
-        {ticket.currency ?? ""}
+            ((ticket.totalQuantity ?? 0) - (ticket.remainingQuantity ?? 0))
+        )}
       </div>
     </td>
     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -144,12 +145,12 @@ const TicketModal = ({
                   if (
                     editingTicket &&
                     value <
-                      editingTicket.totalQuantity -
-                        editingTicket.remainingQuantity
+                      (editingTicket?.totalQuantity ?? 0) -
+                        (editingTicket?.remainingQuantity ?? 0)
                   ) {
                     return `Cannot be less than sold quantity (${
-                      editingTicket.totalQuantity -
-                      editingTicket.remainingQuantity
+                      (editingTicket?.totalQuantity ?? 0) -
+                      (editingTicket?.remainingQuantity ?? 0)
                     })`;
                   }
                   return true;
@@ -228,11 +229,24 @@ const TicketManagement = ({
   onUpdate,
   onDelete,
 }: TicketManagementProps) => {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<{
+    confirm: boolean;
+    ticketTypeID?: string;
+  }>({
+    confirm: false,
+    ticketTypeID: undefined,
+  });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTicket, setEditingTicket] = useState<TicketType | null>(null);
 
   const methods = useForm({
     resolver: zodResolver(TicketFormSchema),
+    defaultValues: editingTicket ?? {
+      name: "",
+      price: 0,
+      currency: "VND",
+      totalQuantity: 1,
+    },
   });
 
   const { handleSubmit, reset, clearErrors, formState } = methods;
@@ -270,9 +284,11 @@ const TicketManagement = ({
   const onSubmit = async (data) => {
     try {
       if (editingTicket) {
-        const changedFields = Object.keys(formState.dirtyFields).reduce(
-          (result, key) => {
-            result[key] = data[key];
+        const changedFields = Object.entries(formState.dirtyFields).reduce(
+          (result, [key, isDirty]) => {
+            if (isDirty && data[key] !== editingTicket[key]) {
+              result[key] = data[key];
+            }
             return result;
           },
           {}
@@ -296,9 +312,6 @@ const TicketManagement = ({
   };
 
   const deleteTicket = async (ticketTypeID) => {
-    if (!window.confirm("Are you sure you want to delete this ticket type?")) {
-      return;
-    }
     try {
       await onDelete(ticketTypeID);
     } catch (err) {
@@ -363,7 +376,12 @@ const TicketManagement = ({
                         key={ticket.ticketTypeID}
                         ticket={ticket}
                         onEdit={openEditModal}
-                        onDelete={deleteTicket}
+                        onDelete={() =>
+                          setShowDeleteConfirm({
+                            confirm: true,
+                            ticketTypeID: ticket.ticketTypeID,
+                          })
+                        }
                       />
                     ))}
                   </tbody>
@@ -383,6 +401,21 @@ const TicketManagement = ({
             methods={methods}
           />
         </div>
+
+        {/* Delete Modal */}
+        <ConfirmDeleteModal
+          onCancel={() =>
+            setShowDeleteConfirm({ confirm: false, ticketTypeID: undefined })
+          }
+          open={showDeleteConfirm.confirm}
+          onConfirm={async () => {
+            if (showDeleteConfirm.ticketTypeID) {
+              await deleteTicket(showDeleteConfirm.ticketTypeID);
+            }
+          }}
+          title="Delete Ticket Type"
+          description="Do you want to delete this ticket type?"
+        />
       </form>
     </FormProvider>
   );
