@@ -1,5 +1,9 @@
 import express from "express";
-import { checkAdmin, verifyToken } from "@event_ticket_booking_system/shared";
+import {
+    checkAdmin,
+    checkOwnerOrAdmin,
+    verifyToken,
+} from "@event_ticket_booking_system/shared";
 import EventValidator from "../middlewares/validator.js";
 
 export class EventRoutes {
@@ -12,11 +16,37 @@ export class EventRoutes {
     initRoutes() {
         this.router.get("/", verifyToken, checkAdmin);
 
+        this.router.put(
+            "/:eventID/contributors/:contributorID",
+            verifyToken,
+            EventValidator.validateUpdateContributor(),
+            EventValidator.handleValidationErrors,
+            this.eventController.updateContributor,
+        );
+
+        this.router.delete(
+            "/:eventID/contributors/:contributorID",
+            verifyToken,
+            EventValidator.validateRemoveContributor(),
+            EventValidator.handleValidationErrors,
+            this.eventController.removeContributor,
+        );
+
+        this.router.post(
+            "/:eventID/publish",
+            verifyToken,
+            checkOwnerOrAdmin,
+            EventValidator.validatePublishEvent(),
+            EventValidator.handleValidationErrors,
+            this.eventController.publishEvent,
+        );
+
         this.router.get(
             "/:eventID/attendees",
             verifyToken,
             this.eventController.getEventAttendees,
         );
+
         this.router.post(
             "/:eventID/attendees",
             verifyToken,
@@ -36,20 +66,6 @@ export class EventRoutes {
             this.eventController.createContributor,
         );
 
-        this.router.put(
-            "/:eventID/contributors/:contributorID",
-            verifyToken,
-            EventValidator.validateUpdateContributor(),
-            EventValidator.handleValidationErrors,
-            this.eventController.updateContributor,
-        );
-        this.router.delete(
-            "/:eventID/contributors/:contributorID",
-            verifyToken,
-            EventValidator.validateRemoveContributor(),
-            EventValidator.handleValidationErrors,
-            this.eventController.removeContributor,
-        );
         this.router.get(
             "/:eventID/contributors",
             this.eventController.getEventContributors,

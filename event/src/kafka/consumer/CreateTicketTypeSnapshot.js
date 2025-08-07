@@ -12,45 +12,44 @@ export class CreateTicketTypeSnapshotUseCase {
     /**
      * Xử lý sự kiện TICKET_TYPE_CREATED.
      * @param {object} payload - Dữ liệu từ message Kafka.
-     * @param {string} payload.ticketTypeId
-     * @param {string} payload.eventId
+     * @param {string} payload.ticketTypeID
+     * @param {string} payload.eventID
      * @param {string} payload.name
      * @param {number} payload.price
      * @param {number} payload.quantity
      */
     async handle(payload) {
-        const { ticketTypeId, eventId } = payload;
+        const { ticketTypeID, eventID } = payload;
 
         this.logger.info(
             "Handling TICKET_TYPE_CREATED event for Firestore...",
             {
-                ticketTypeId,
-                eventId,
+                ticketTypeID,
+                eventID,
             },
         );
 
         try {
             const dataToStore = {
                 name: payload.name,
-                description: payload.description,
                 price: payload.price,
-                priceCurrency: payload.priceCurrency,
+                currency: payload.currency,
                 totalQuantity: payload.totalQuantity,
                 checkedInQuantity: 0,
                 createdAt: new Date().toISOString(),
-                ticketTypeID: ticketTypeId,
+                ticketTypeID: ticketTypeID,
             };
 
             await this.ticketTypeSnapshotRepo.createOrUpdate(
-                eventId,
-                ticketTypeId,
+                eventID,
+                ticketTypeID,
                 dataToStore,
             );
 
             this.logger.info(
                 "✅ Successfully created ticket type snapshot in Firestore.",
                 {
-                    path: `events/${eventId}/ticketTypes/${ticketTypeId}`,
+                    path: `events/${eventID}/ticketTypes/${ticketTypeID}`,
                 },
             );
         } catch (error) {

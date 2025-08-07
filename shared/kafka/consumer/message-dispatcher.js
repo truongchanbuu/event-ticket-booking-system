@@ -1,5 +1,5 @@
 export class MessageDispatcher {
-  constructor({ handlerMap, logger }) {
+  constructor({ handlerMap, logger = console }) {
     this.handlerMap = handlerMap;
     this.logger = logger;
   }
@@ -44,6 +44,7 @@ export class MessageDispatcher {
       }
 
       const handlerName = this.handlerMap[type];
+      console.log(`type: ${type} - HANDLER: ${handlerName}`);
       if (!handlerName) {
         console.warn(
           `No handler registered for message type "${type}". Skipping.`

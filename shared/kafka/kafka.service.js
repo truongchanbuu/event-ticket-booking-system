@@ -28,7 +28,6 @@ export class KafkaService {
     });
 
     this.admin = this.kafka.admin();
-    this.logger = logger;
   }
 
   /**
@@ -43,7 +42,7 @@ export class KafkaService {
       return this.connectionPromise;
     }
 
-    this.logger?.info("KafkaService is connecting...");
+    console.log("KafkaService is connecting...");
     this.connectionState = "CONNECTING";
 
     this.connectionPromise = (async () => {
@@ -51,10 +50,10 @@ export class KafkaService {
         await this.admin.connect();
         await this.producer.connect();
         this.connectionState = "CONNECTED";
-        this.logger?.info("✅ KafkaService connected successfully.");
+        console.log("✅ KafkaService connected successfully.");
       } catch (error) {
         this.connectionState = "DISCONNECTED";
-        this.logger?.error("❌ Failed to connect KafkaService.", {
+        console.error("❌ Failed to connect KafkaService.", {
           error: error.message,
         });
         throw error;
@@ -94,7 +93,7 @@ export class KafkaService {
         messages: kafkaMessages,
       });
     } catch (error) {
-      this.logger?.error(`❌ Failed to send messages to topic '${topic}'`, {
+      console.error(`❌ Failed to send messages to topic '${topic}'`, {
         error: error.message,
       });
       throw error;
@@ -129,7 +128,7 @@ export class KafkaService {
         try {
           await handler(payload);
         } catch (error) {
-          this.logger?.error(
+          console.error(
             `Handler failed for message. Initiating retry/DLQ process.`,
             {
               topic: payload.topic,
@@ -158,7 +157,7 @@ export class KafkaService {
     });
 
     this.consumers.set(groupId, consumer);
-    this.logger?.info(
+    console.log(
       `✅ Retrying consumer created for topic '${topic}' with group '${groupId}'`
     );
   }
@@ -188,7 +187,7 @@ export class KafkaService {
     }
 
     if (!nextTopic) {
-      this.logger?.error(
+      console.error(
         "No more retry topics and no DLQ configured. Message will be dropped.",
         {
           offset: message.offset,
@@ -197,7 +196,7 @@ export class KafkaService {
       return;
     }
 
-    this.logger?.log(`Moving message to topic: ${nextTopic}`, {
+    console.log(`Moving message to topic: ${nextTopic}`, {
       attempt: attempt + 1,
     });
 
@@ -227,7 +226,7 @@ export class KafkaService {
   async createGlobalRetryHandlerConsumer({
     groupId,
     retryConfigs,
-    consumerConfig = {}, // Thêm tham số này!
+    consumerConfig = {},
   }) {
     if (this.connectionState !== "CONNECTED") {
       throw new Error("Kafka not connected");
@@ -238,75 +237,96 @@ export class KafkaService {
     );
 
     if (allRetryTopics.length === 0) {
-      this.logger?.warn(
-        "No retry topics configured for the global retry handler."
-      );
+      console.warn("No retry topics configured for the global retry handler.");
       return;
     }
-
-    // Tự động tính toán độ trễ dài nhất từ tất cả các cấu hình
-    const longestDelayMs = retryConfigs
-      .flatMap((rc) => rc.retryDelays.map((delay) => ms(delay)))
-      .reduce((max, current) => Math.max(max, current), 0);
-
-    this.logger?.info(
-      `Global retry handler configured with longest delay: ${longestDelayMs}ms.`
-    );
 
     const sleep = (duration) =>
       new Promise((resolve) => setTimeout(resolve, duration));
 
     const consumer = this.kafka.consumer({
       groupId,
-      // Đặt sessionTimeout lớn hơn một chút so với độ trễ dài nhất
-      sessionTimeout: longestDelayMs + 15000, // Thêm 15 giây dự phòng
-      // Heartbeat nên bằng khoảng 1/3 sessionTimeout
-      heartbeatInterval: Math.floor((longestDelayMs + 15000) / 3),
-      // Cho phép người dùng ghi đè các giá trị trên hoặc thêm cấu hình khác
+      sessionTimeout: 10000,
+      heartbeatInterval: 3000,
       ...consumerConfig,
     });
 
     await consumer.connect();
     await consumer.subscribe({ topics: allRetryTopics, fromBeginning: true });
 
-    this.logger?.info(
+    console.log(
       `✅ Global Retry Handler consumer listening to ${
         allRetryTopics.length
       } topics: [${allRetryTopics.join(", ")}]`
     );
 
     await consumer.run({
-      eachMessage: async ({ topic, message }) => {
-        // ... logic xử lý `eachMessage` của bạn giữ nguyên ...
-        const delayString = topic.split(".").pop();
+      autoCommit: false,
+      eachMessage: async ({ topic, partition, message }) => {
+        const delayString = topic.split(".").pop() || "0s";
         const delayMs = ms(delayString);
 
-        this.logger?.info(
-          `Received message from retry topic '${topic}'. Waiting for ${delayString}...`
+        console.log(
+          `[RETRY-HANDLER] Received message. Waiting for ${delayString}...`,
+          {
+            topic,
+            offset: message.offset,
+          }
         );
+
         await sleep(delayMs);
 
-        const originalTargetTopic =
-          message.headers["x-original-topic"]?.toString();
-        if (!originalTargetTopic) {
-          this.logger?.error(
-            "Cannot re-drive message, 'x-original-topic' header is missing."
+        try {
+          const originalTargetTopic =
+            message.headers["x-original-topic"]?.toString();
+
+          if (!originalTargetTopic) {
+            throw new Error(
+              "Cannot re-drive message, 'x-original-topic' header is missing."
+            );
+          }
+
+          console.log(
+            `[RETRY-HANDLER] Woke up. Re-driving message to original topic: ${originalTargetTopic}`,
+            {
+              offset: message.offset,
+            }
           );
-          return;
+
+          const safeValue = ensureSafeValue(message.value);
+
+          await this.send(originalTargetTopic, [
+            {
+              key: message.key,
+              value: safeValue,
+              headers: message.headers, // Giữ nguyên toàn bộ headers
+            },
+          ]);
+
+          console.log(
+            `[RETRY-HANDLER] Re-drive successful. Committing offset.`,
+            {
+              offset: message.offset,
+            }
+          );
+
+          await consumer.commitOffsets([
+            {
+              topic,
+              partition,
+              offset: (Number(message.offset) + 1).toString(),
+            },
+          ]);
+        } catch (error) {
+          console.error(
+            `[RETRY-HANDLER] FAILED to re-drive message. It will be re-processed automatically later.`,
+            {
+              topic: topic,
+              offset: message.offset,
+              error: error.message,
+            }
+          );
         }
-
-        this.logger?.info(
-          `Re-driving message back to original topic: ${originalTargetTopic}`
-        );
-
-        const safeValue = ensureSafeValue(message.value);
-        await this.send(originalTargetTopic, [
-          {
-            key: message.key,
-            value: safeValue,
-            headers: message.headers,
-          },
-        ]);
       },
     });
 
@@ -331,13 +351,11 @@ export class KafkaService {
     consumerConfig = {},
   }) {
     if (this.connectionState !== "CONNECTED") {
-      throw new Error(
-        "Kafka chưa được kết nối. Vui lòng gọi initialize() trước."
-      );
+      throw new Error("Kafka is unavailable. Please initialize() first.");
     }
 
-    this.logger?.info(
-      `Đang tạo DLQ consumer cho topic '${dlqTopic}' với group '${groupId}'...`
+    console.log(
+      `Creating DLQ consumer for topic '${dlqTopic}' with group '${groupId}'...`
     );
 
     const consumer = this.kafka.consumer({
@@ -360,7 +378,7 @@ export class KafkaService {
           message.headers["x-original-topic"]?.toString() ||
           "Cannot find root topic.";
 
-        this.logger?.error(`🚨 Messages cannot processed sent to DLQ`, {
+        console.error(`🚨 Messages cannot processed sent to DLQ`, {
           dlqTopic: topic,
           dlqPartition: partition,
           dlqOffset: message.offset,
@@ -379,22 +397,17 @@ export class KafkaService {
         try {
           await finalDlqHandler(payload);
         } catch (error) {
-          this.logger?.error(
-            `❌ Serious! DLQ handler failed to process message.`,
-            {
-              dlqTopic: payload.topic,
-              offset: payload.message.offset,
-              error: error.message,
-            }
-          );
+          console.error(`❌ Serious! DLQ handler failed to process message.`, {
+            dlqTopic: payload.topic,
+            offset: payload.message.offset,
+            error: error.message,
+          });
         }
       },
     });
 
     this.consumers.set(groupId, consumer);
-    this.logger?.info(
-      `✅ DLQ consumer is ready and listend on '${dlqTopic}' topic.`
-    );
+    console.log(`✅ DLQ consumer is ready and listend on '${dlqTopic}' topic.`);
   }
 
   /**
@@ -413,7 +426,7 @@ export class KafkaService {
       return;
     }
 
-    this.logger?.info("Ensuring required topics exist...", {
+    console.log("Ensuring required topics exist...", {
       topics: topicsToEnsure.map((t) => t.topic),
     });
 
@@ -433,14 +446,14 @@ export class KafkaService {
           ],
         })),
       });
-      this.logger?.info("✅ All topics are ready.");
+      console.log("✅ All topics are ready.");
     } catch (error) {
       if (error.name === "TopicAlreadyExistsError") {
-        this.logger?.warn("Topics already exist, which is fine.");
+        console.warn("Topics already exist, which is fine.");
         return;
       }
 
-      this.logger?.error("❌ Failed to create topics.", {
+      console.error("❌ Failed to create topics.", {
         error: error.message,
       });
       throw error;
@@ -454,25 +467,25 @@ export class KafkaService {
   async disconnect() {
     if (this.connectionState === "DISCONNECTED") return;
 
-    this.logger?.info("KafkaService is disconnecting...");
+    console.log("KafkaService is disconnecting...");
     try {
       for (const [groupId, consumer] of this.consumers) {
         await consumer.disconnect();
-        this.logger?.info(`✅ Consumer '${groupId}' disconnected.`);
+        console.log(`✅ Consumer '${groupId}' disconnected.`);
       }
       this.consumers.clear();
 
       await this.producer.disconnect();
-      this.logger?.info("✅ Producer disconnected.");
+      console.log("✅ Producer disconnected.");
 
       await this.admin.disconnect();
-      this.logger?.info("✅ Admin client disconnected.");
+      console.log("✅ Admin client disconnected.");
 
       this.connectionState = "DISCONNECTED";
       this.connectionPromise = null;
-      this.logger?.info("✅ KafkaService disconnected completely.");
+      console.log("✅ KafkaService disconnected completely.");
     } catch (error) {
-      this.logger?.error("❌ Error during Kafka disconnection.", {
+      console.error("❌ Error during Kafka disconnection.", {
         error: error.message,
       });
       throw error;
@@ -492,7 +505,7 @@ export class KafkaService {
   createTopicSender(topic, eventSourceName) {
     return async (payload) => {
       if (this.connectionState !== "CONNECTED") {
-        this.logger?.error(
+        console.error(
           { eventSourceName, topic },
           "Cannot send event, Kafka is not connected."
         );
@@ -502,22 +515,14 @@ export class KafkaService {
       const { key, value, eventType, partition } = payload; // Thêm partition vào payload
 
       if (!eventType) {
-        this.logger?.warn(
+        console.warn(
           { eventSourceName, topic },
           "Sending event without an 'eventType'. This is not recommended."
         );
       }
 
-      // Tạo một child logger với context của event này
-      const eventLogger = this.logger?.child({
-        eventSourceName,
-        topic,
-        eventType,
-        messageKey: key,
-      });
-
       try {
-        eventLogger?.info("Attempting to send event...");
+        console.log("Attempting to send event...");
 
         const message = {
           key: key,
@@ -536,9 +541,9 @@ export class KafkaService {
 
         await this.send(topic, [message]);
 
-        eventLogger?.info("✅ Event sent successfully.");
+        console.log("✅ Event sent successfully.");
       } catch (error) {
-        eventLogger?.error({ err: error }, "❌ Failed to send event.");
+        console.error({ err: error }, "❌ Failed to send event.");
         // Cân nhắc thêm logic xử lý lỗi cụ thể ở đây nếu cần
         throw error;
       }

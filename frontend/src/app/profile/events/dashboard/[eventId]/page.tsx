@@ -36,8 +36,14 @@ const EventManagementDashboard = () => {
   const { eventId } = useParams<{ eventId: string }>();
   const router = useRouter();
 
-  const { eventQuery, updateEvent, cancelEvent, isCancelling } =
-    useEventDetail(eventId);
+  const {
+    eventQuery,
+    updateEvent,
+    cancelEvent,
+    isCancelling,
+    publishEvent,
+    isPublishing,
+  } = useEventDetail(eventId);
   const { data, isLoading, refetch } = eventQuery;
 
   const {
@@ -133,8 +139,10 @@ const EventManagementDashboard = () => {
         {/* Action Buttons */}
         <DetailActionButtons
           updateEvent={updateEvent}
+          publishedEvent={publishEvent}
           cancelEvent={cancelEvent}
           isCancelling={isCancelling}
+          isPublishing={isPublishing}
           event={eventDetail}
           canPublished={canPublished}
         />
@@ -345,6 +353,7 @@ const EventManagementDashboard = () => {
           error={ticketQuery.error?.message}
           onCreate={handleCreateTicketType}
           onDelete={handleDelete}
+          refetch={ticketQuery.refetch}
           onUpdate={handleUpdateTicketType}
         />
 

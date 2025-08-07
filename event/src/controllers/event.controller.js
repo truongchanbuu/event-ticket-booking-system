@@ -13,6 +13,7 @@ export class EventController {
         this.getMyEventByID = catchAsync(this.getMyEventByID.bind(this));
         this.createEvent = catchAsync(this.createEvent.bind(this));
         this.updateMyEvent = catchAsync(this.updateMyEvent.bind(this));
+        this.publishEvent = catchAsync(this.publishEvent.bind(this));
         this.cancelMyEvent = catchAsync(this.cancelMyEvent.bind(this));
 
         this.getEventAttendees = catchAsync(this.getEventAttendees.bind(this));
@@ -112,6 +113,18 @@ export class EventController {
         );
 
         return res.status(200).json({ success: true, data: updatedEvent });
+    }
+
+    async publishEvent(req, res) {
+        const user = req.user;
+        const { eventID } = req.params;
+
+        await this.eventService.publishEvent(eventID, user.uid);
+
+        return res.status(200).json({
+            success: true,
+            message: "Event published successfully.",
+        });
     }
 
     async cancelMyEvent(req, res) {

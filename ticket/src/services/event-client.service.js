@@ -1,35 +1,42 @@
-import axios from "axios";
 import { AppError, ERROR_CODE } from "@event_ticket_booking_system/shared";
 
-export class InternalService {
-    constructor({ config }) {
+export class EventClientService {
+    constructor({ config, internalHttpClient }) {
         this.eventUrl = config.service_urls.event_service;
         this.eventServiceKey = config.service_keys.event_service;
+        this.internalGet = internalHttpClient.get;
     }
 
     async isEventOrganizer(eventID, uid) {
+        if (!eventID) return [];
         const url = `${this.eventUrl}/internal/events/${eventID}/get-organizer-id`;
 
         try {
-            const response = await axios.get(url, {
-                headers: {
-                    "x-api-key": this.eventServiceKey,
-                },
-                timeout: 3000, // ⏰ quan trọng để tránh treo nếu service kia chết
+            const response = await this.internalGet({
+                url,
+                apiKey: this.eventServiceKey,
             });
 
-            const organizerId = response.data?.data;
+            const organizerId = response.data;
+            if (!organizerId) {
+                return new AppError({
+                    message: "Not Found.",
+                    statusCode: 404,
+                    errorCode: ERROR_CODE.NOT_FOUND,
+                });
+            }
 
             if (!organizerId) {
                 throw new AppError({
                     message: "Organizer ID not found in response",
                     statusCode: 500,
-                    errorCode: ERROR_CODE.INTERNAL_SERVER_ERROR,
+                    errorCode: ERROR_CODE.INTERNAL_ERROR,
                 });
             }
 
             return organizerId === uid;
         } catch (error) {
+            console.log(`ERROR: ${error}`);
             const isAxiosError = error.isAxiosError;
 
             const status = error.response?.status || 500;

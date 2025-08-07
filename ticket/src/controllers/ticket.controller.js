@@ -1,9 +1,9 @@
 import { catchAsync } from "@event_ticket_booking_system/shared";
 
 export class TicketController {
-    constructor({ ticketService, internalService }) {
+    constructor({ ticketService, eventClientService }) {
         this.ticketService = ticketService;
-        this.internalService = internalService;
+        this.eventClientService = eventClientService;
 
         this.createTicket = catchAsync(this.createTicket.bind(this));
         this.updateTicket = catchAsync(this.updateTicket.bind(this));
@@ -16,7 +16,7 @@ export class TicketController {
     async getEventTicketTypes(req, res) {
         const userID = req.user.uid;
         const { eventID } = req.params;
-        const isAuthorized = await this.internalService.isEventOrganizer(
+        const isAuthorized = await this.eventClientService.isEventOrganizer(
             eventID,
             userID,
         );
@@ -34,7 +34,7 @@ export class TicketController {
 
     async createTicket(req, res) {
         const userID = req.user.uid;
-        const isAuthorized = await this.internalService.isEventOrganizer(
+        const isAuthorized = await this.eventClientService.isEventOrganizer(
             req.body.eventID,
             userID,
         );
@@ -69,7 +69,7 @@ export class TicketController {
                 .json({ success: false, message: "Ticket type not found." });
         }
 
-        const isAuthorized = await this.internalService.isEventOrganizer(
+        const isAuthorized = await this.eventClientService.isEventOrganizer(
             ticketToAuth.eventID,
             userID,
         );
@@ -105,7 +105,7 @@ export class TicketController {
                 .json({ success: false, message: "Ticket type not found." });
         }
 
-        const isAuthorized = await this.internalService.isEventOrganizer(
+        const isAuthorized = await this.eventClientService.isEventOrganizer(
             ticketToAuth.eventID,
             userID,
         );

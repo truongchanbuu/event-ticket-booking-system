@@ -21,6 +21,7 @@ export class EventService {
         redisService,
         redisLockService,
         contributorService,
+        ticketClientService,
         eventLifecycleEventService,
     }) {
         console = logger;
@@ -29,6 +30,7 @@ export class EventService {
         this.contributorService = contributorService;
         this.redisService = redisService;
         this.redisLockService = redisLockService;
+        this.ticketClientService = ticketClientService;
         this.eventLifecycleEventService = eventLifecycleEventService;
 
         this.CACHE_KEYS = {
@@ -351,6 +353,83 @@ export class EventService {
         return updatedEvent;
     }
 
+    async publishEvent(eventID, organizerID) {
+        const eventTicketTypes =
+            await this.ticketClientService.getEventTicketTypes(eventID);
+        if (
+            !eventTicketTypes ||
+            eventTicketTypes.length === 0 ||
+            !Array.isArray(eventTicketTypes)
+        ) {
+            throw new AppError({
+                message:
+                    "An event must have at least one ticket type before it can be published.",
+                errorCode: ERROR_CODE.INVALID_DATA,
+                statusCode: 400,
+            });
+        }
+
+        const eventRef = this.eventCollection.doc(eventID);
+        let eventData;
+        await this.db.runTransaction(async (tx) => {
+            const eventDoc = await tx.get(eventRef);
+
+            if (!eventDoc.exists) {
+                throw new AppError({
+                    message: "Event Not Found.",
+                    errorCode: ERROR_CODE.NOT_FOUND,
+                    statusCode: 404,
+                });
+            }
+
+            const event = eventDoc.data();
+            eventData = event;
+
+            if (event.organizer.organizerID !== organizerID) {
+                throw new AppError({
+                    message: "Unauthorized",
+                    errorCode: ERROR_CODE.UNAUTHORIZED,
+                    statusCode: 401,
+                });
+            }
+
+            if (event.status === EVENT_STATUS.PUBLISHED) {
+                throw new AppError({
+                    message: "This event has already been published.",
+                    errorCode: ERROR_CODE.INVALID_OPERATION,
+                    statusCode: 400,
+                });
+            }
+
+            if (new Date(event.startTime) < new Date()) {
+                throw new AppError({
+                    message: "Cannot publish an event that has already passed.",
+                    errorCode: ERROR_CODE.INVALID_DATA,
+                    statusCode: 400,
+                });
+            }
+
+            // Tất cả kiểm tra đã qua, tiến hành cập nhật.
+            tx.update(eventRef, {
+                status: EVENT_STATUS.PUBLISHED,
+                publishedAt: new Date().toISOString(),
+            });
+        });
+
+        if (eventData) {
+            await this.eventLifecycleEventService.sendEventPublished({
+                eventID: eventID,
+                organizerID: organizerID,
+                eventData: eventData, // Gửi "Fat Event"
+            });
+        } else {
+            this.logger?.error(
+                "Transaction succeeded but eventData was not captured.",
+                { eventID },
+            );
+        }
+    }
+
     // TODO: TEST CANCELLED KAFKA MESSAGE (CHƯA TEST) & NOTIFICATION nhận và thông báo + PAYMENT nhận & refund
     async cancelEvent(eventID, actor, cancelReason = "No reason provided") {
         const { userID, username, email } = actor;
@@ -463,7 +542,6 @@ export class EventService {
             }
         }
 
-        // Validate time constraints if both times are being updated
         if (eventData.startTime && eventData.endTime) {
             const startTime = new Date(eventData.startTime);
             const endTime = new Date(eventData.endTime);

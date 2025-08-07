@@ -15,28 +15,28 @@ export class DeleteTicketTypeSnapshotUseCase {
     /**
      * Xử lý sự kiện TICKET_TYPE_DELETED.
      * @param {object} payload
-     * @param {string} payload.ticketTypeId
-     * @param {string} payload.eventId
+     * @param {string} payload.ticketTypeID
+     * @param {string} payload.eventID
      * @param {string} [payload.name]
      * @param {string} [payload.description]
      * @param {number} [payload.price]
-     * @param {string} [payload.priceCurrency]
+     * @param {string} [payload.currency]
      * @param {number} [payload.totalQuantity]
      */
     async handle(payload) {
-        const { ticketTypeId, eventId } = payload;
+        const { ticketTypeID, eventID } = payload;
 
         this.logger.info(
             "Handling TICKET_TYPE_DELETED event for Firestore...",
             {
-                ticketTypeId,
-                eventId,
+                ticketTypeID,
+                eventID,
             },
         );
 
         try {
-            await this.ticketTypeSnapshotRepo.delete(eventId, ticketTypeId);
-            this.logger.log(`✅ Deleted ticketType ${ticketTypeId}`);
+            await this.ticketTypeSnapshotRepo.delete(eventID, ticketTypeID);
+            this.logger.log(`✅ Deleted ticketType ${ticketTypeID}`);
         } catch (error) {
             this.logger.error("❌ Failed to update ticket type snapshot.", {
                 error: error.message,

@@ -38,3 +38,5 @@ export * from "./types/category.js";
 export { default as checkJson } from "./validator/helpers/syntax.validator.js";
 
 export * from "./redis/index.js";
+
+export * from "./axios/index.js";

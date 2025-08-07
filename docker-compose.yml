@@ -1,20 +1,23 @@
+version: "3.8"
+
 services:
   kafka:
     image: bitnami/kafka:latest
-    container_name: kafka # Thêm container name cố định
+    container_name: kafka
     ports:
-      - "${KAFKA_PORT}:${KAFKA_PORT}"
+      - "9092:9092" # Host ↔ Kafka (local services dùng)
+      - "29092:29092" # Docker ↔ Kafka (Kafka UI dùng)
     environment:
       - KAFKA_KRAFT_MODE=true
+      - KAFKA_CFG_NODE_ID=0
       - KAFKA_CFG_PROCESS_ROLES=broker,controller
-      - KAFKA_CFG_NODE_ID=${KAFKA_NODE_ID}
-      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=${KAFKA_NODE_ID}@kafka:9093
-      - KAFKA_CFG_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092
-      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://0.0.0.0:9092,PLAINTEXT_DOCKER://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092,PLAINTEXT_DOCKER://kafka:29092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_DOCKER:PLAINTEXT
       - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
       - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - ALLOW_PLAINTEXT_LISTENER=yes
     healthcheck:
       test:
         [
@@ -30,11 +33,12 @@ services:
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
     ports:
       - "8080:8080"
     environment:
       - KAFKA_CLUSTERS_0_NAME=local
-      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=${KAFKA_BROKER}
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:29092
     depends_on:
       kafka:
         condition: service_healthy
@@ -45,163 +49,19 @@ services:
     image: redis:alpine
     container_name: redis
     ports:
-      - "${REDIS_PORT}:6379"
+      - "6379:6379" # Host ↔ Redis
     networks:
       - event-ticket-booking-system-network
 
   redis-commander:
     image: rediscommander/redis-commander:latest
+    container_name: redis-commander
     environment:
       REDIS_HOSTS: local:redis:6379
     ports:
       - "8081:8081"
     depends_on:
       - redis
-    networks:
-      - event-ticket-booking-system-network
-
-  auth-service:
-    build:
-      context: .
-      dockerfile: auth/Dockerfile.dev
-    env_file:
-      - .env
-      - ./auth/.env
-    ports:
-      - "${AUTH_PORT}:3000"
-    volumes:
-      - ${FIREBASE_KEY_PATH}:${FIREBASE_CREDENTIALS}:ro
-    environment:
-      - FIREBASE_CREDENTIALS=${FIREBASE_CREDENTIALS}
-      - KAFKA_BROKER=${KAFKA_BROKER}
-      - REDIS_HOST=${REDIS_HOST}
-    depends_on:
-      kafka:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    networks:
-      - event-ticket-booking-system-network
-
-  user-service:
-    build:
-      context: .
-      dockerfile: user/Dockerfile.dev
-    env_file:
-      - .env
-      - ./user/.env
-    ports:
-      - "${USER_PORT}:3000"
-    volumes:
-      - ${FIREBASE_KEY_PATH}:${FIREBASE_CREDENTIALS}:ro
-    environment:
-      - FIREBASE_CREDENTIALS=${FIREBASE_CREDENTIALS}
-      - KAFKA_BROKER=${KAFKA_BROKER}
-      - REDIS_HOST=${REDIS_HOST}
-    depends_on:
-      kafka:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    networks:
-      - event-ticket-booking-system-network
-
-  ticket-service:
-    build:
-      context: .
-      dockerfile: ticket/Dockerfile.dev
-    env_file:
-      - .env
-      - ./ticket/.env
-    ports:
-      - "${TICKET_PORT}:3000"
-    volumes:
-      - ./firebase:/app/firebase
-    environment:
-      - FIREBASE_CREDENTIALS=${FIREBASE_CREDENTIALS}
-      - KAFKA_BROKER=${KAFKA_BROKER}
-      - REDIS_HOST=${REDIS_HOST}
-    depends_on:
-      kafka:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    networks:
-      - event-ticket-booking-system-network
-
-  payment-service:
-    build:
-      context: .
-      dockerfile: payment/Dockerfile.dev
-    ports:
-      - "${PAYMENT_PORT}:3000"
-    volumes:
-      - ${FIREBASE_KEY_PATH}:${FIREBASE_CREDENTIALS}:ro
-    env_file:
-      - .env
-      - ./payment/.env
-    depends_on:
-      kafka:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    networks:
-      - event-ticket-booking-system-network
-
-  analysis-service:
-    build:
-      context: .
-      dockerfile: analysis/Dockerfile.dev
-    env_file:
-      - .env
-      - ./analysis/.env
-    ports:
-      - "${ANALYSIS_PORT}:3000"
-    volumes:
-      - ${FIREBASE_KEY_PATH}:${FIREBASE_CREDENTIALS}:ro
-    depends_on:
-      kafka:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    networks:
-      - event-ticket-booking-system-network
-
-  event-service:
-    build:
-      context: .
-      dockerfile: event/Dockerfile.dev
-    env_file:
-      - .env
-      - ./event/.env
-    ports:
-      - "${EVENT_PORT}:3000"
-    volumes:
-      - ${FIREBASE_KEY_PATH}:${FIREBASE_CREDENTIALS}:ro
-    depends_on:
-      kafka:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    networks:
-      - event-ticket-booking-system-network
-
-  notification-service:
-    build:
-      context: .
-      dockerfile: notification/Dockerfile.dev
-    env_file:
-      - .env
-      - ./notification/.env
-    ports:
-      - "${NOTIFICATION_PORT}:3000"
-    volumes:
-      - ${FIREBASE_KEY_PATH}:${FIREBASE_CREDENTIALS}:ro
-    depends_on:
-      kafka:
-        condition: service_healthy
-      redis:
-        condition: service_started
     networks:
       - event-ticket-booking-system-network
 

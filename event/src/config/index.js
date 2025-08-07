@@ -3,7 +3,7 @@ import path from "path";
 import {
     EVENT_LIFECYCLE_EVENTS,
     TICKET_TYPES_EVENTS,
-} from "../../../shared/kafka/topics.js";
+} from "@event_ticket_booking_system/shared";
 
 const env = process.env.NODE_ENV || "development";
 const envFile = `.env`;
@@ -72,14 +72,13 @@ const config = {
             ticket_type_events: TICKET_TYPES_EVENTS,
         },
         consumerGroups: {
-            main_events: "event-service-main-group",
-            ticket_type_group: "event-service-ticket-type-group",
-            dlq_group: "event-service-dlq",
-            global_retry_group: "event-service-global-retry-handler",
+            main_events: "ticket-service-main-group",
+            ticket_type_group: "ticket-service-ticket-type-group",
+            dlq_group: "main-service-dlq",
+            global_retry_group: "ticket-service-global-retry-handler",
         },
         dlqTopics: {
-            main_events_dlq: "event-service.main.dlq",
-            ticket_type_dlq: "event-service.ticket-type.dlq",
+            main_events_dlq: "main_events_dlq_topic_name",
         },
     },
 };

@@ -17,3 +17,10 @@ export type CancelFunction = UseMutateAsyncFunction<
   string | undefined,
   { previousData: EventReponse | undefined }
 >;
+
+export type PublishEventFunction = UseMutateAsyncFunction<
+  EventReponse,
+  Error,
+  string | undefined,
+  { previousData: EventReponse | undefined }
+>;

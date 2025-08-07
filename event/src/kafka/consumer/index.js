@@ -1,12 +1,4 @@
 export class ConsumerOrchestrator {
-    /**
-     * @param {object} dependencies - DI
-     * @param {import('awilix').AwilixContainer} dependencies.container - DI container.
-     * @param {import('./kafka.service').KafkaService} dependencies.kafkaService - Service hạ tầng Kafka.
-     * @param {MessageDispatcher} dependencies.messageDispatcher - Service điều phối logic.
-     * @param {object} dependencies.config - Config của ứng dụng.
-     * @param {object} dependencies.logger
-     */
     constructor({
         container,
         kafkaService,
@@ -21,10 +13,6 @@ export class ConsumerOrchestrator {
         this.logger = logger;
     }
 
-    /**
-     * Khởi động tất cả các consumer mà service này cần.
-     * Hàm này sẽ được gọi một lần duy nhất trong quá trình bootstrap.
-     */
     async startAll() {
         this.logger.info("Starting all Kafka consumers for this service...");
 
@@ -52,15 +40,33 @@ export class ConsumerOrchestrator {
             },
         ];
 
+        for (const def of consumerDefinitions) {
+            if (!def.topic || typeof def.topic !== "string") {
+                throw new Error(
+                    `Invalid or missing topic name for consumer. Please check 'config.kafka.topics'.`,
+                );
+            }
+            if (!def.dlqTopic || typeof def.dlqTopic !== "string") {
+                throw new Error(
+                    `Invalid or missing DLQ topic name for topic '${def.topic}'. Please check 'config.kafka.dlqTopics'.`,
+                );
+            }
+        }
+
+        this.logger.info("Ensuring all necessary Kafka topics exist...");
+
         const allTopicsToEnsure = consumerDefinitions.flatMap((def) => [
             { topic: def.topic, numPartitions: 3 },
             ...def.retryDelays.map((delay) => ({
                 topic: `${def.topic}.retry.${delay}`,
             })),
-            { topic: def.dlqTopic },
+            { topic: def.dlqTopic, numPartitions: 3 },
         ]);
 
         await this.kafkaService.ensureTopicsExist(allTopicsToEnsure);
+        this.logger.info("✅ All Kafka topics are ready.");
+
+        this.logger.info("Creating and starting all consumers...");
 
         for (const def of consumerDefinitions) {
             await this.kafkaService.createConsumer({

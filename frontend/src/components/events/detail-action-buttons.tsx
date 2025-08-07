@@ -19,17 +19,22 @@ interface DetailActionButtonsProps {
   event: Event;
   canPublished?: boolean;
   isCancelling: boolean;
+  isPublishing: boolean;
   updateEvent: UpdateEventFn;
   cancelEvent: CancelFunction;
+  publishedEvent: any;
 }
 
 export default function DetailActionButtons({
   event,
   canPublished = true,
   isCancelling,
+  isPublishing,
   updateEvent,
   cancelEvent,
+  publishedEvent,
 }: DetailActionButtonsProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [isUpdateModalOpen, setIsUploadModalOpen] = useState(false);
 
@@ -58,6 +63,17 @@ export default function DetailActionButtons({
     setIsCancelModalOpen(true);
   };
 
+  const handlePublish = async () => {
+    setIsSubmitting(true);
+    try {
+      await publishedEvent(event.eventID);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const canUpdate = [EVENT_STATUS.DRAFT, EVENT_STATUS.CANCELLED].includes(
     event.status
   );
@@ -82,6 +98,8 @@ export default function DetailActionButtons({
 
           {event.status === EVENT_STATUS.DRAFT && (
             <Button
+              loading={isPublishing || isSubmitting}
+              onClick={handlePublish}
               disabled={!canPublished}
               className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
             >

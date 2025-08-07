@@ -5,9 +5,11 @@ import config from "./config/index.js";
 import { ApiRoutes } from "./routes/api.routes.js";
 
 import {
+    createKafkaService,
     createLoggerFactory,
     createRedisClient,
     db,
+    internalHttpClient,
     MessageDispatcher,
     RedisLockService,
     RedisService,
@@ -19,7 +21,6 @@ import {
     TICKET_TYPE_DELETED,
     TICKET_TYPE_UPDATED,
 } from "@event_ticket_booking_system/shared";
-import { createKafkaService } from "./services/kafka.service.js";
 import { EventService } from "./services/event.service.js";
 import { EventRoutes } from "./routes/event.routes.js";
 import { EventController } from "./controllers/event.controller.js";
@@ -32,10 +33,8 @@ import { DeleteTicketTypeSnapshotUseCase } from "./kafka/consumer/DeleteTicketTy
 import { EventLifecycleEventService } from "./kafka/events.kafka.event.js";
 import { ContributorService } from "./services/contributor.service.js";
 import { InternalRoutes } from "./routes/internal.routes.js";
+import { TicketClientService } from "./services/ticket-client.service.js";
 
-/**
- * Hàm factory để tạo, đăng ký, và khởi động DI container.
- */
 export async function configureContainer() {
     // const logger = createLoggerFactory(config.app).logger;
     const logger = console;
@@ -66,6 +65,7 @@ export async function configureContainer() {
         config: asValue(config),
         db: asValue(db),
         handlerMap: asValue(handlerMap),
+        internalHttpClient: asValue(internalHttpClient),
 
         ticketTypeSnapshotRepo: asClass(TicketTypeSnapshotRepo).singleton(),
 
@@ -73,6 +73,7 @@ export async function configureContainer() {
         redisClient: asFunction(createRedisClient).singleton(),
         redisService: asClass(RedisService).singleton(),
         redisLockService: asClass(RedisLockService).singleton(),
+        ticketClientService: asClass(TicketClientService).singleton(),
         contributorService: asClass(ContributorService).singleton(),
         eventService: asClass(EventService).singleton(),
         eventLifecycleEventService: asClass(

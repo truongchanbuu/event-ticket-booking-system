@@ -27,6 +27,7 @@ export const TICKET_CHECK_IN_REVERSED = "TICKET_CHECK_IN_REVERSED";
 
 // Events' event
 export const EVENT_CANCELLED = "EVENT_CANCELLED";
+export const EVENT_PUBLISHED = "EVENT_PUBLISHED";
 
 // Attendee events
 export const ATTENDEE_CREATED = "ATTENDEE_CREATED";

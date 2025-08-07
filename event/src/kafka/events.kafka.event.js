@@ -1,4 +1,7 @@
-import { EVENT_CANCELLED } from "@event_ticket_booking_system/shared";
+import {
+    EVENT_CANCELLED,
+    EVENT_PUBLISHED,
+} from "@event_ticket_booking_system/shared";
 
 export class EventLifecycleEventService {
     /**
@@ -70,6 +73,38 @@ export class EventLifecycleEventService {
         await this.topicSender({
             eventType: ATTENDEE_CREATED,
             key: payload.attendeeID,
+            value: JSON.stringify(eventMessage),
+        });
+    }
+
+    /**
+     * Gửi sự kiện khi một sự kiện được publish
+     * @param {object} payload - {
+     *    eventId: string,
+     *    organizerID: string,
+     *    title: string,
+     *    description?: string,
+     *    startTime: string,
+     *    endTime?: string,
+     *    location?: string,
+     *    ticketTypes?: array
+     * }
+     */
+    async sendEventPublished(payload) {
+        const enrichedPayload = {
+            ...payload,
+            action: "published",
+            publishedAt: new Date().toISOString(),
+        };
+
+        const eventMessage = {
+            type: EVENT_PUBLISHED,
+            payload: enrichedPayload,
+        };
+
+        await this.topicSender({
+            eventType: EVENT_PUBLISHED,
+            key: payload.eventId,
             value: JSON.stringify(eventMessage),
         });
     }

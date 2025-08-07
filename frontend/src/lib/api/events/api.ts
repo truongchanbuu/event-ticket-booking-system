@@ -61,6 +61,12 @@ export async function updateOrganizerEvent(
   });
 }
 
+export async function publishEventAPI(eventID) {
+  return fetchEvents(`/public/events/${eventID}/publish`, {
+    method: "POST",
+  });
+}
+
 export async function cancelEvent(eventID: string, cancelledReason?: string) {
   return fetchEvents(`/me/events/${eventID}/cancel`, {
     method: "POST",

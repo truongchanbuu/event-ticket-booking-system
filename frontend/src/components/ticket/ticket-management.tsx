@@ -12,6 +12,8 @@ import { Input } from "../ui/input";
 import LoadingSpinner from "../ui/loading";
 import { formatCurrency } from "@/lib/utils";
 import { ConfirmDeleteModal } from "../ui/confirm-dialog";
+import EmptyStateUI from "../reload";
+import { ErrorMessage } from "../ui/error-ui-with-reload";
 
 const TicketRow = ({ ticket, onEdit, onDelete }) => (
   <tr className="hover:bg-gray-50">
@@ -220,6 +222,7 @@ interface TicketManagementProps {
   onCreate: (data: TicketFormData) => Promise<void>;
   onUpdate: (ticketTypeID: string, data: any) => Promise<void>;
   onDelete: (ticketTypeID: string) => Promise<void>;
+  refetch: any;
 }
 
 const TicketManagement = ({
@@ -229,6 +232,7 @@ const TicketManagement = ({
   onCreate,
   onUpdate,
   onDelete,
+  refetch,
 }: TicketManagementProps) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<{
     confirm: boolean;
@@ -329,7 +333,7 @@ const TicketManagement = ({
   };
 
   if (isLoading) return <LoadingSpinner />;
-  if (error) return <div className="p-6 text-red-500">{error}</div>;
+  if (error) return <ErrorMessage error={error} onReload={refetch} />;
 
   return (
     <FormProvider {...methods}>

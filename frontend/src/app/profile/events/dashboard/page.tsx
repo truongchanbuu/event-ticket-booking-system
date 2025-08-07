@@ -56,7 +56,7 @@ const EventManagementDashboard = () => {
       },
     })) ?? [];
 
-  const handleCreateEvent = async (data: CreateEventFormValues) => {
+  const handleCreateEvent = async (data) => {
     try {
       const eventID = await createEvent(data);
 
@@ -241,7 +241,7 @@ const EventManagementDashboard = () => {
         {/* Events Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredEvents.map((event) => (
-            <EventCard event={event} />
+            <EventCard key={event.eventID} event={event} />
           ))}
         </div>
 

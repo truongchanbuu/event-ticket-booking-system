@@ -11,7 +11,6 @@ export class InternalController {
     async getEventOrganizerID(req, res) {
         const { eventID } = req.params;
         const result = await this.eventService.getEventByID(eventID);
-        console.log(`RES: ${JSON.stringify(result)}`);
 
         return res.status(200).json({
             success: true,

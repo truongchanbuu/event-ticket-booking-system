@@ -19,7 +19,7 @@ async function sendMessage(ticketId, eventId) {
             name: `Test Ticket ${ticketId}`,
             description: "This is a test ticket.",
             price: 100000,
-            priceCurrency: "USD",
+            currency: "USD",
             totalQuantity: 500,
         },
     };

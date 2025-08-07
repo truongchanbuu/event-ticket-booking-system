@@ -4,10 +4,16 @@ const TICKET_TYPE_COLLECTION = "ticketTypes";
 const BOOKING_COLLECTION = "bookings";
 
 export class TicketService {
-    constructor({ db, redisService, redisLockService }) {
+    constructor({
+        db,
+        redisService,
+        redisLockService,
+        ticketLifecycleEventService,
+    }) {
         this.db = db;
         this.ticketTypeCollection = this.db.collection(TICKET_TYPE_COLLECTION);
         this.bookingCollection = this.db.collection(BOOKING_COLLECTION);
+        this.ticketLifecycleEventService = ticketLifecycleEventService;
         this.redisService = redisService;
         this.redisLockService = redisLockService;
 
@@ -31,6 +37,7 @@ export class TicketService {
             console.log(
                 `Found existing ticket type ${existingTicketTypeId} for event ${eventID}.`,
             );
+
             return existingTicketTypeId;
         }
 
@@ -43,13 +50,19 @@ export class TicketService {
 
         const docRef = await this.ticketTypeCollection.add(newTicketTypeData);
 
-        // 4. Xóa cache Redis
         const cacheKey = this.CACHE_KEYS.TICKET_TYPES_BY_EVENTID(eventID);
         await this.redisService.del(cacheKey);
 
         console.log(
             `Created new ticket type ${docRef.id} for event ${eventID}. Cache invalidated.`,
         );
+
+        const ticketTypeID = docRef.id;
+        await this.ticketLifecycleEventService.sendTicketTypeCreated({
+            ...ticketData,
+            ticketTypeID,
+            eventID,
+        });
 
         return docRef.id;
     }
@@ -82,7 +95,7 @@ export class TicketService {
     }
 
     async updateTicketType(ticketTypeID, updateData) {
-        const allowedUpdates = ["name", "price", "totalQuantity"];
+        const allowedUpdates = ["name", "price", "totalQuantity", "currency"];
         const validUpdateData = {};
         for (const key of allowedUpdates) {
             if (updateData[key] !== undefined) {
@@ -152,6 +165,11 @@ export class TicketService {
                 console.log(
                     `Transaction successful. Cache invalidated for event ${eventID}.`,
                 );
+                await this.ticketLifecycleEventService.sendTicketTypeUpdated({
+                    ticketTypeID,
+                    eventID,
+                    ...validUpdateData,
+                });
             }
 
             return ticketTypeID;
@@ -213,6 +231,10 @@ export class TicketService {
                 console.log(
                     `Transaction successful. Cache invalidated for event ${eventID}.`,
                 );
+                await this.ticketLifecycleEventService.sendTicketTypeDeleted({
+                    ticketTypeID,
+                    eventID,
+                });
             }
 
             return { success: true, id: ticketTypeID };

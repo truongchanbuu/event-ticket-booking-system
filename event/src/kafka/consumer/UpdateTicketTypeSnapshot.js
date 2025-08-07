@@ -15,56 +15,54 @@ export class UpdateTicketTypeSnapshotUseCase {
     /**
      * Xử lý sự kiện TICKET_TYPE_UPDATED.
      * @param {object} payload
-     * @param {string} payload.ticketTypeId
-     * @param {string} payload.eventId
+     * @param {string} payload.ticketTypeID
+     * @param {string} payload.eventID
      * @param {string} [payload.name]
      * @param {string} [payload.description]
      * @param {number} [payload.price]
-     * @param {string} [payload.priceCurrency]
+     * @param {string} [payload.currency]
      * @param {number} [payload.totalQuantity]
      */
     async handle(payload) {
-        const { ticketTypeId, eventId } = payload;
+        const { ticketTypeID, eventID } = payload;
 
         this.logger.info(
             "Handling TICKET_TYPE_UPDATED event for Firestore...",
             {
-                ticketTypeId,
-                eventId,
+                ticketTypeID,
+                eventID,
+                ...payload,
             },
         );
 
         try {
             const existingSnapshot = await this.ticketTypeSnapshotRepo.getById(
-                eventId,
-                ticketTypeId,
+                eventID,
+                ticketTypeID,
             );
 
             const updatedSnapshot = {
                 ...(existingSnapshot || {}),
                 ...(payload.name && { name: payload.name }),
-                ...(payload.description && {
-                    description: payload.description,
-                }),
                 ...(payload.price && { price: payload.price }),
-                ...(payload.priceCurrency && {
-                    priceCurrency: payload.priceCurrency,
+                ...(payload.currency && {
+                    currency: payload.currency,
                 }),
                 ...(payload.totalQuantity && {
                     totalQuantity: payload.totalQuantity,
                 }),
                 updatedAt: new Date().toISOString(),
-                ticketTypeId: existingSnapshot?.ticketTypeId ?? ticketTypeId,
+                ticketTypeID: existingSnapshot?.ticketTypeID ?? ticketTypeID,
             };
 
             await this.ticketTypeSnapshotRepo.createOrUpdate(
-                eventId,
-                ticketTypeId,
+                eventID,
+                ticketTypeID,
                 updatedSnapshot,
             );
 
             this.logger.info("✅ Successfully updated ticket type snapshot.", {
-                path: `events/${eventId}/ticketTypes/${ticketTypeId}`,
+                path: `events/${eventID}/ticketTypes/${ticketTypeID}`,
             });
         } catch (error) {
             this.logger.error("❌ Failed to update ticket type snapshot.", {

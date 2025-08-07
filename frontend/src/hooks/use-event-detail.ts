@@ -3,6 +3,7 @@ import {
   cancelEvent,
   EventReponse,
   getEventByID,
+  publishEventAPI,
   updateOrganizerEvent,
 } from "@/lib/api/events/api";
 import { Event } from "@/schema";
@@ -64,6 +65,51 @@ export function useEventDetail(eventID: string) {
     },
   });
 
+  const publishEventMutation = useMutation({
+    mutationFn: () => publishEventAPI(eventID),
+
+    // --- BẮT ĐẦU THÊM OPTIMISTIC UPDATE ---
+    onMutate: async () => {
+      // 1. Hủy các query đang chạy
+      await queryClient.cancelQueries({ queryKey });
+
+      // 2. Backup dữ liệu cũ
+      const previousData = queryClient.getQueryData<EventReponse>(queryKey);
+
+      if (previousData) {
+        queryClient.setQueryData<EventReponse>(queryKey, {
+          ...previousData,
+          data: {
+            ...previousData.data,
+            status: EVENT_STATUS.PUBLISHED,
+            publishedAt: new Date().toISOString(),
+          },
+        });
+      }
+
+      return { previousData };
+    },
+
+    onSuccess: () => {
+      toast({ variant: "success", title: "Your event has been published." });
+    },
+
+    onError: (_err, _variables, context) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to publish.",
+      });
+      if (context?.previousData) {
+        queryClient.setQueryData(queryKey, context.previousData);
+      }
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.profileEvents() });
+    },
+  });
+
   const cancelEventMutation = useMutation({
     mutationFn: (reason?: string) => cancelEvent(eventID, reason),
 
@@ -108,5 +154,7 @@ export function useEventDetail(eventID: string) {
     isUpdating: updateEventMutation.isPending,
     cancelEvent: cancelEventMutation.mutateAsync,
     isCancelling: cancelEventMutation.isPending,
+    publishEvent: publishEventMutation.mutateAsync,
+    isPublishing: publishEventMutation.isPending,
   };
 }

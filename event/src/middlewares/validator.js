@@ -140,13 +140,23 @@ export default class EventValidator extends BaseValidator {
         ];
     }
 
+    static validatePublishEvent() {
+        return [
+            param("eventID")
+                .notEmpty()
+                .withMessage("Event ID is required")
+                .isString()
+                .withMessage("Event ID must be a string"),
+        ];
+    }
+
     static validateCancelEvent() {
         return [
             param("eventID")
                 .notEmpty()
-                .withMessage("eventId is required")
+                .withMessage("Event ID is required")
                 .isString()
-                .withMessage("eventId must be a string"),
+                .withMessage("Event ID must be a string"),
 
             body("cancelledReason")
                 .optional()

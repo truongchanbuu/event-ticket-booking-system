@@ -8,23 +8,22 @@ import {
     createLoggerFactory,
     createRedisClient,
     db,
+    internalHttpClient,
     MessageDispatcher,
     RedisLockService,
     RedisService,
-    TICKET_CANCELLED,
-    TICKET_CHECK_IN_REVERSED,
-    TICKET_CHECKED_IN,
-    TICKET_ISSUED,
     TICKET_TYPE_CREATED,
     TICKET_TYPE_DELETED,
     TICKET_TYPE_UPDATED,
 } from "@event_ticket_booking_system/shared";
 import { createKafkaService } from "./services/kafka.service.js";
-// import { TicketTypeSnapshotRepo } from "./repositories/TicketRepository.js";
 import { TicketService } from "./services/ticket.service.js";
 import { TicketRoutes } from "./routes/ticket.routes.js";
 import { TicketController } from "./controllers/ticket.controller.js";
-import { InternalService } from "./services/internal.service.js";
+import { EventClientService } from "./services/event-client.service.js";
+import { TicketLifecycleEventService } from "./kafka/ticket-lifecycle.events.js";
+import { InternalController } from "./controllers/internal.controller.js";
+import { InternalRoutes } from "./routes/internal.routes.js";
 
 /**
  * Hàm factory để tạo, đăng ký, và khởi động DI container.
@@ -59,19 +58,23 @@ export async function configureContainer() {
         config: asValue(config),
         db: asValue(db),
         handlerMap: asValue(handlerMap),
-
-        // ticketTypeSnapshotRepo: asClass(TicketTypeSnapshotRepo).singleton(),
+        internalHttpClient: asValue(internalHttpClient),
 
         kafkaService: asValue(kafkaServiceInstance),
         redisClient: asFunction(createRedisClient).singleton(),
         redisService: asClass(RedisService).singleton(),
         redisLockService: asClass(RedisLockService).singleton(),
-        internalService: asClass(InternalService).singleton(),
+        eventClientService: asClass(EventClientService).singleton(),
         ticketService: asClass(TicketService).singleton(),
+        ticketLifecycleEventService: asClass(
+            TicketLifecycleEventService,
+        ).singleton(),
 
         ticketController: asClass(TicketController).scoped(),
+        internalController: asClass(InternalController).scoped(),
 
         ticketRoutes: asClass(TicketRoutes).singleton(),
+        internalRoutes: asClass(InternalRoutes).singleton(),
         apiRoutes: asClass(ApiRoutes).singleton(),
 
         // createTicketTypeSnapshotUseCase: asClass(
