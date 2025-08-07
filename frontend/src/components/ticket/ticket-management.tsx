@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Edit2, Trash2, X, Loader2 } from "lucide-react";
+import { Plus, Edit2, Trash2, X, Loader2, TrendingUp } from "lucide-react";
 import { TicketFormData, TicketFormSchema, TicketType } from "@/schema";
 import { ProgressBar } from "../ui/progress-bar";
 import { Button } from "../ui/button";
@@ -15,7 +15,7 @@ import { ConfirmDeleteModal } from "../ui/confirm-dialog";
 
 const TicketRow = ({ ticket, onEdit, onDelete }) => (
   <tr className="hover:bg-gray-50">
-    <td className="px-6 py-4 whitespace-nowrap max-w-xs">
+    <td className="px-6 py-4 whitespace-nowrap">
       <div
         className="text-sm font-medium text-gray-900 truncate"
         title={ticket.name}
@@ -334,7 +334,7 @@ const TicketManagement = ({
   return (
     <FormProvider {...methods}>
       <form onSubmit={handleSubmit(onSubmit)}>
-        <div className="max-w-6xl mx-auto">
+        <div className="mx-auto">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold text-gray-900">Ticket Types</h1>
             <Button
@@ -347,38 +347,47 @@ const TicketManagement = ({
           </div>
 
           {tickets.length > 0 ? (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-              <div className="w-full overflow-x-auto">
-                <table className="min-w-[800px] table-auto">
-                  <thead className="bg-gray-50">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Ticket Types
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  Manage your event tickets and track performance
+                </p>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50/50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Ticket Name
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Ticket Details
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                         Price
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Total Quantity
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Capacity
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Sold
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Sales Progress
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Checked-in
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Check-in Status
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Progress
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Performance
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                         Revenue
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-white divide-y divide-gray-100">
                     {tickets.map((ticket) => (
                       <TicketRow
                         key={ticket.ticketTypeID}

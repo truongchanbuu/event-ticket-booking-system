@@ -127,7 +127,7 @@ const AttendeeManagement = ({
   return (
     <div className="bg-gray-50 p-6">
       {/* Header */}
-      <div className="max-w-7xl mx-auto">
+      <div className="mx-auto">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">
@@ -195,7 +195,7 @@ const AttendeeManagement = ({
       </div>
 
       {/* Statistics Cards */}
-      <div className="max-w-7xl mx-auto mb-8">
+      <div className="w-full mx-auto mb-8">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
             <div className="flex items-center justify-between">
@@ -244,7 +244,7 @@ const AttendeeManagement = ({
       </div>
 
       {/* Search and Filter */}
-      <div className="max-w-7xl mx-auto mb-6">
+      <div className="w-full mx-auto mb-6">
         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
@@ -283,7 +283,7 @@ const AttendeeManagement = ({
       </div>
 
       {/* Attendees Table */}
-      <div className="max-w-7xl mx-auto">
+      <div className="w-full mx-auto">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
