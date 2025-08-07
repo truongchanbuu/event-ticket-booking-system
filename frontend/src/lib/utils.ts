@@ -13,7 +13,6 @@ export function formatCurrency(amount: number): string {
     maximumFractionDigits: 0,
   }).format(amount);
 }
-
 export function formatDate(
   date: Date | string | Timestamp | undefined
 ): string | undefined {
@@ -24,17 +23,19 @@ export function formatDate(
   }
 
   let d: Date;
+
   if (typeof date === "string") {
-    // detect if format is dd/MM/yyyy
     const parts = date.split("/");
     if (parts.length === 3) {
       const [day, month, year] = parts.map(Number);
-      d = new Date(year, month - 1, day); // JS months are 0-indexed
+      d = new Date(year, month - 1, day);
     } else {
-      d = new Date(date); // try default parsing
+      d = new Date(date);
     }
-  } else {
+  } else if (date instanceof Date) {
     d = date;
+  } else {
+    return "Invalid date";
   }
 
   if (isNaN(d.getTime())) return "Invalid date";
@@ -126,12 +127,19 @@ export function safeToDate(value: any): Date {
 
 // Chuyển ISO string → datetime-local format
 export function toDatetimeLocalString(isoString?: string) {
-  if (!isoString) return undefined;
+  if (!isoString) return "";
 
   const date = new Date(isoString);
-  const offset = date.getTimezoneOffset();
-  const localDate = new Date(date.getTime() - offset * 60 * 1000);
-  return localDate.toISOString().slice(0, 16); // YYYY-MM-DDTHH:mm
+  if (isNaN(date.getTime())) return "";
+
+  // Đảm bảo format local datetime string: YYYY-MM-DDTHH:mm
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  const hours = `${date.getHours()}`.padStart(2, "0");
+  const minutes = `${date.getMinutes()}`.padStart(2, "0");
+
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
 // Chuyển datetime-local string → ISO string

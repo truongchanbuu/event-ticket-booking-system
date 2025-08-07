@@ -3,7 +3,6 @@ import {
     AppError,
     ERROR_CODE,
     NOTIFICATION_STATUS,
-    ORGANIZER_STATUS,
     REDIS_TTL,
     ROLE,
 } from "@event_ticket_booking_system/shared";
@@ -19,10 +18,11 @@ const NOTIFICATIONS_COLLECTION = "notifcations";
 const ORGANIZERS_COLLECTION = "followedOrganizers";
 
 export class UserService {
-    constructor({ logger, redisService }) {
+    constructor({ logger, redisService, redisLockService }) {
         this.logger = logger;
         this.userCollection = db.collection("users");
         this.cache = redisService;
+        this.redisLockService = redisLockService;
     }
 
     // --- Helpers ---
@@ -76,13 +76,6 @@ export class UserService {
         }
     }
 
-    // Thêm hàm này vào trong class UserService
-    /**
-     * Lấy nhiều document user từ Firestore một cách hiệu quả bằng ID.
-     * Tự động chia nhỏ các ID thành các chunk để không vượt quá giới hạn của Firestore.
-     * @param {string[]} userIDs Mảng các ID của user cần lấy.
-     * @returns {Promise<object[]>} Mảng các object user.
-     */
     async _getUsersByIDsFromDB(userIDs) {
         if (!userIDs || userIDs.length === 0) {
             return [];
@@ -117,7 +110,6 @@ export class UserService {
         }
     }
 
-    // User
     async getUsers(params) {
         const {
             limit = 20,
@@ -266,149 +258,120 @@ export class UserService {
         return { users, nextCursor, hasMore };
     }
 
-    // Thay thế phương thức findOrCreateUser cũ bằng phương thức này
-
     async findOrCreateUser(userID, userData) {
-        let isNew = false;
-        const userCacheKey = this._getUserCacheKey(userID);
+        const resourceKey = `user-find-create:${userID}`;
 
-        // 1. Kiểm tra cache bằng ID trước tiên
-        let user = await this.cache.get(userCacheKey);
-        if (user) {
-            this.logger.debug(`[Cache HIT] findOrCreateUser by ID: ${userID}`);
-            return { user, isNew: false };
-        }
-
-        // Nếu không có email, chỉ có thể tìm/tạo bằng ID
-        if (!userData.email) {
-            // Fallback về logic cũ hơn nếu không có email để kiểm tra
-            user = await this._getUserDoc(userID);
-            if (user) {
-                await this.cache.set(
-                    userCacheKey,
-                    user,
-                    REDIS_TTL.USER_PROFILE_DEFAULT,
-                );
-                return { user, isNew: false };
-            }
-            // Logic tạo mới sẽ nằm ngoài if-else này
-        } else {
-            // 2. Nếu có email, kiểm tra cache bằng email
-            const emailCacheKey = this._getUserByEmailCacheKey(userData.email);
-            user = await this.cache.get(emailCacheKey);
-            if (user) {
-                this.logger.debug(
-                    `[Cache HIT] findOrCreateUser by Email: ${userData.email}`,
-                );
-                // Đồng thời cache lại bằng ID nếu chưa có
-                await this.cache.set(
-                    userCacheKey,
-                    user,
-                    REDIS_TTL.USER_PROFILE_DEFAULT,
-                );
-                return { user, isNew: false };
-            }
-        }
-
-        // 3. Nếu cache không có, thực hiện một giao dịch duy nhất trên DB
-        this.logger.debug(
-            `[Cache MISS] findOrCreateUser for ID: ${userID}. Using DB transaction.`,
-        );
         try {
-            const createdUser = await db.runTransaction(async (transaction) => {
-                // Kiểm tra lại trong DB bằng ID trước
-                const userRef = this.userCollection.doc(userID);
-                const userDoc = await transaction.get(userRef);
-                if (userDoc.exists) {
-                    this.logger.warn(
-                        `[Transaction] User with ID ${userID} already exists. Race condition?`,
-                    );
-                    return { id: userDoc.id, ...userDoc.data() };
-                }
-
-                // Kiểm tra lại trong DB bằng email để đảm bảo không trùng lặp
-                if (userData.email) {
-                    const emailQuery = this.userCollection
-                        .where("email", "==", userData.email)
-                        .limit(1);
-                    const querySnapshot = await transaction.get(emailQuery);
-                    if (!querySnapshot.empty) {
-                        const existingUserDoc = querySnapshot.docs[0];
-                        this.logger.warn(
-                            `[Transaction] User with email ${userData.email} already exists. Race condition?`,
+            return await this.redisLockService.executeWithLock(
+                resourceKey,
+                async () => {
+                    const userCacheKey = this._getUserCacheKey(userID);
+                    let user = await this.cache.get(userCacheKey);
+                    if (user) {
+                        this.logger.debug(
+                            `[Cache HIT inside Lock] User found: ${userID}`,
                         );
-                        return {
-                            id: existingUserDoc.id,
-                            ...existingUserDoc.data(),
-                        };
+                        return { user, isNew: false };
                     }
-                }
 
-                // Nếu không có user nào tồn tại, tiến hành tạo mới
-                isNew = true;
-                const newUser = {
-                    userID,
-                    status:
-                        userData.emailVerified || userData.phoneVerified
-                            ? USER_STATUS.ACTIVE
-                            : USER_STATUS.UNVERIFIED,
-                    email: userData.email,
-                    role: ROLE.CUSTOMER,
-                    isDeleted: false,
-                    emailVerified: !!userData.emailVerified,
-                    phoneVerified: !!userData.phoneVerified,
-                    organizerStatus: ORGANIZER_STATUS.NONE,
-                    reportCount: 0,
-                    riskScore: 0,
-                    preferenceCategories: [],
-                    createdAt: new Date().toISOString(),
-                    ...userData,
-                };
+                    this.logger.debug(
+                        `[DB Operation] Finding or creating user in DB: ${userID}`,
+                    );
 
-                transaction.set(userRef, newUser);
-                this.logger.info(
-                    `[UserService] New user document created with ID: ${userID}`,
-                );
+                    let isNew = false;
+                    const finalUser = await db.runTransaction(
+                        async (transaction) => {
+                            const userRef = this.userCollection.doc(userID);
+                            const userDoc = await transaction.get(userRef);
+                            if (userDoc.exists) {
+                                return { id: userDoc.id, ...userDoc.data() };
+                            }
+                            if (userData.email) {
+                                const emailQuery = this.userCollection
+                                    .where("email", "==", userData.email)
+                                    .limit(1);
+                                const querySnapshot =
+                                    await transaction.get(emailQuery);
+                                if (!querySnapshot.empty) {
+                                    return {
+                                        id: querySnapshot.docs[0].id,
+                                        ...querySnapshot.docs[0].data(),
+                                    };
+                                }
+                            }
+                            isNew = true;
+                            const newUser = {
+                                userID,
+                                status:
+                                    userData.emailVerified ||
+                                    userData.phoneVerified
+                                        ? USER_STATUS.ACTIVE
+                                        : USER_STATUS.UNVERIFIED,
+                                email: userData.email,
+                                role: ROLE.CUSTOMER,
+                                isDeleted: false,
+                                emailVerified: !!userData.emailVerified,
+                                phoneVerified: !!userData.phoneVerified,
+                                organizerStatus: ORGANIZER_STATUS.NONE,
+                                reportCount: 0,
+                                riskScore: 0,
+                                preferenceCategories: [],
+                                createdAt: new Date().toISOString(),
+                                ...userData,
+                            };
+                            transaction.set(userRef, newUser);
+                            return newUser;
+                        },
+                    );
 
-                // Trả về newUser để có thể sử dụng bên ngoài transaction
-                return newUser;
-            });
+                    await auth().setCustomUserClaims(finalUser.userID, {
+                        role: finalUser.role,
+                    });
 
-            // Đặt custom claims sau khi transaction thành công
-            await auth().setCustomUserClaims(userID, {
-                role: createdUser.role,
-            });
+                    this.logger.debug(
+                        `[Cache SET] Caching user ${finalUser.userID}`,
+                    );
 
-            // 4. Cập nhật cache cho cả ID và email
-            this.logger.debug(
-                `[Cache SET] Caching new user for ID ${createdUser.id} and email ${createdUser.email}`,
+                    const cachePromises = [];
+                    cachePromises.push(
+                        this.cache.set(
+                            this._getUserCacheKey(finalUser.userID),
+                            finalUser,
+                        ),
+                    );
+                    if (finalUser.email) {
+                        cachePromises.push(
+                            this.cache.set(
+                                this._getUserByEmailCacheKey(finalUser.email),
+                                finalUser,
+                            ),
+                        );
+                    }
+                    await Promise.all(cachePromises);
+
+                    return { user: finalUser, isNew };
+                },
             );
-            const ops = [];
-            ops.push({
-                type: "set",
-                key: this._getUserCacheKey(createdUser.id),
-                value: createdUser,
-                ttl: REDIS_TTL.USER_PROFILE_DEFAULT,
-            });
-            if (createdUser.email) {
-                ops.push({
-                    type: "set",
-                    key: this._getUserByEmailCacheKey(createdUser.email),
-                    value: createdUser,
-                    ttl: REDIS_TTL.USER_PROFILE_DEFAULT,
-                });
-            }
-            await this.cache.pipelineOps(ops);
-
-            return { user: createdUser, isNew };
         } catch (error) {
+            // Xử lý lỗi đặc biệt khi không thể chiếm được khóa
+            if (error.name === "LockAcquireFailedError") {
+                this.logger.warn(
+                    `[Lock] Could not acquire lock for user ${userID}, retrying operation...`,
+                );
+                // Nếu không có khóa, có nghĩa là một tiến trình khác đang xử lý.
+                // Chiến lược tốt nhất là chờ một chút và thử lại toàn bộ hàm.
+                await new Promise((resolve) => setTimeout(resolve, 200)); // Chờ 200ms
+                return this.findOrCreateUser(userID, userData);
+            }
+
+            // Xử lý các lỗi khác
             this.logger.error(
-                `[UserService] findOrCreateUser transaction failed for userID ${userID}: ${error.message}`,
+                `[UserService] findOrCreateUser failed for userID ${userID}`,
+                error,
             );
-            // Ném lỗi để tầng trên xử lý
             throw new AppError({
                 message: "Failed to find or create user.",
-                errorCode: ERROR_CODE.DATABASE_ERROR,
+                errorCode: ERROR_CODE.INTERNAL_ERROR,
                 statusCode: 500,
                 cause: error,
             });
@@ -513,83 +476,81 @@ export class UserService {
         });
     }
 
-    async updateUser(user) {
+    async updateUser(userID, updateData) {
+        const resourceKey = `user-update:${userID}`;
+
         try {
-            const userRef = this.userCollection.doc(user.userID);
-            const oldUserData = await this.getUserByID(user.userID);
-            if (!oldUserData) {
-                throw new AppError({
-                    message: "User not found",
-                    statusCode: 404,
-                });
-            }
+            const updatedUser = await this.lockService.executeWithLock(
+                resourceKey,
+                async () => {
+                    const currentUser = await this._getUserDoc(userID);
+                    if (!currentUser) {
+                        throw new AppError({
+                            message: "User not found",
+                            statusCode: 404,
+                        });
+                    }
 
-            if (user.birthday) {
-                user.birthday = normalizeBirthday(user.birthday);
-            }
+                    if (updateData.birthday) {
+                        updateData.birthday = normalizeBirthday(
+                            updateData.birthday,
+                        );
+                    }
 
-            const updatePayload = {
-                ...user,
-                updatedAt: new Date().toISOString(),
-            };
+                    const updatePayload = {
+                        ...updateData,
+                        updatedAt: new Date().toISOString(),
+                    };
 
-            // Update Firestore
-            await userRef.update(updatePayload);
+                    const userRef = this.userCollection.doc(userID);
+                    await userRef.update(updatePayload);
 
-            // Update Firebase Auth nếu có field liên quan
-            const updateAuthPayload = {};
-            if (user.username) updateAuthPayload.displayName = user.username;
-            if (user.photoUrl) updateAuthPayload.photoURL = user.photoUrl;
-            if (user.email) updateAuthPayload.email = user.email;
-            if (user.phoneNumber) {
-                updateAuthPayload.phoneNumber = formatE164PhoneNumber(
-                    user.phoneNumber,
+                    const updateAuthPayload = {};
+                    if (updateData.username)
+                        updateAuthPayload.displayName = updateData.username;
+                    if (updateData.photoUrl)
+                        updateAuthPayload.photoURL = updateData.photoUrl;
+                    if (updateData.email)
+                        updateAuthPayload.email = updateData.email;
+                    if (updateData.phoneNumber) {
+                        updateAuthPayload.phoneNumber = formatE164PhoneNumber(
+                            updateData.phoneNumber,
+                        );
+                    }
+
+                    if (Object.keys(updateAuthPayload).length > 0) {
+                        await auth().updateUser(userID, updateAuthPayload);
+                    }
+
+                    this.logger.debug(
+                        `[Cache Invalidate] Invalidating cache for user ${userID}`,
+                    );
+
+                    await this.cache.invalidateByTrackingKey(
+                        `user:${userID}:cache_keys`,
+                    );
+
+                    const finalUserData = await this._getUserDoc(userID);
+                    return finalUserData;
+                },
+            );
+
+            return { success: true, data: updatedUser };
+        } catch (error) {
+            if (error.name === "LockAcquireFailedError") {
+                this.logger.warn(
+                    `[Lock] Could not acquire lock for user update ${userID}.`,
                 );
-            }
-            if (Object.keys(updateAuthPayload).length > 0) {
-                await auth().updateUser(user.userID, updateAuthPayload);
-            }
-
-            const finalUserData = await this._getUserDoc(user.userID);
-            if (!finalUserData) {
-                // Trường hợp hiếm gặp: user vừa bị xóa ngay sau khi update
                 throw new AppError({
-                    message: "User disappeared after update",
-                    statusCode: 404,
+                    message:
+                        "User data is currently being updated. Please try again in a moment.",
+                    statusCode: 409, // 409 Conflict là một mã trạng thái tốt
+                    cause: error,
                 });
             }
 
-            const ops = [];
-            if (
-                oldUserData.email &&
-                oldUserData.email !== finalUserData.email
-            ) {
-                ops.push({
-                    type: "del",
-                    key: this._getUserByEmailCacheKey(oldUserData.email),
-                });
-            }
-            ops.push({ type: "del", key: this._getUserCacheKey(user.userID) });
-
-            ops.push({
-                type: "set",
-                key: this._getUserCacheKey(finalUserData.id),
-                value: finalUserData,
-                ttl: REDIS_TTL.USER_PROFILE_DEFAULT,
-            });
-            ops.push({
-                type: "set",
-                key: this._getUserByEmailCacheKey(finalUserData.email),
-                value: finalUserData,
-                ttl: REDIS_TTL.USER_PROFILE_DEFAULT,
-            });
-
-            await this.cache.pipelineOps(ops);
-
-            return { success: true, data: finalUserData };
-        } catch (e) {
-            this.logger.error(`# [updateUser] ERROR: ${e.message || e}`);
-            return { success: false, error: e.message || e };
+            this.logger.error(`[updateUser] ERROR for user ${userID}:`, error);
+            throw error;
         }
     }
 

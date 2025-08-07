@@ -146,7 +146,7 @@ export default function EventDetailHeader({
 
         <p className="text-gray-700 mb-4">{eventDetail.description}</p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
           <div className="flex items-center space-x-2">
             <Calendar className="h-4 w-4" />
             <span>

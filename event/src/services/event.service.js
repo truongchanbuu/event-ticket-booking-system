@@ -557,20 +557,16 @@ export class EventService {
 
     _prepareUpdateData(eventData) {
         const updateData = { ...eventData };
-
-        // Convert timestamps if provided
         if (updateData.startTime) {
-            updateData.startTime = new Date(updateData.startTime);
+            updateData.startTime = new Date(updateData.startTime).toISOString();
         }
 
         if (updateData.endTime) {
-            updateData.endTime = new Date(updateData.endTime);
+            updateData.endTime = new Date(updateData.endTime).toISOString();
         }
 
-        // Add updated timestamp
         updateData.updatedAt = new Date().toISOString();
 
-        // Remove undefined/null values
         Object.keys(updateData).forEach((key) => {
             if (updateData[key] === undefined || updateData[key] === null) {
                 delete updateData[key];

@@ -1,42 +1,55 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+import path from "path";
 import {
     EVENT_LIFECYCLE_EVENTS,
     TICKET_TYPES_EVENTS,
 } from "../../../shared/kafka/topics.js";
 
-export default {
+const env = process.env.NODE_ENV || "development";
+const envFile = `.env`;
+dotenv.config({ path: path.resolve(process.cwd(), envFile) });
+
+const isProduction = env === "production";
+const redisConfig = {
+    prefix: process.env.REDIS_PREFIX || "app",
+    defaultTTL: parseInt(process.env.REDIS_TTL, 10) || 300,
+
+    isProduction: isProduction,
+    production: {
+        url: process.env.UPSTASH_REDIS_REST_URL,
+        token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    },
+    development: {
+        url: `redis://${process.env.LOCAL_REDIS_HOST || "127.0.0.1"}:${process.env.LOCAL_REDIS_PORT || 6379}`,
+    },
+};
+
+if (
+    isProduction &&
+    (!redisConfig.production.url || !redisConfig.production.token)
+) {
+    throw new Error(
+        "FATAL ERROR: UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be defined for production.",
+    );
+}
+
+const config = {
     app: {
         port: process.env.PORT || 3000,
-        nodeEnv: process.env.NODE_ENV || "development",
+        nodeEnv: env,
     },
-
+    redis: redisConfig,
     service_keys: {
         ticket_service: process.env.TICKET_SERVICE_SECRET_KEY,
     },
-
     service_urls: {
-        ticket_service: "http://localhost:3003/",
+        ticket_service: process.env.TICKET_SERVICE_URL,
     },
-
-    redis: {
-        prefix: process.env.REDIS_PREFIX || "app",
-        defaultTTL: process.env.REDIS_TTL || 300,
-    },
-
-    upstashRedis: {
-        url: process.env.UPSTASH_REDIS_URL,
-        token: process.env.UPSTASH_REDIS_TOKEN,
-    },
-
-    localRedis: {
-        host: process.env.LOCAL_REDIS_HOST || "127.0.0.1",
-        port: process.env.LOCAL_REDIS_PORT || 6379,
-        keyPrefix: process.env.SERVICE_NAME,
-    },
-
     kafka: {
         clientId: process.env.KAFKA_CLIENT_ID,
-        brokers: process.env.KAFKA_BROKERS.split(","),
+        brokers: process.env.KAFKA_BROKERS
+            ? process.env.KAFKA_BROKERS.split(",")
+            : [],
         connectionTimeout: Number.isNaN(
             Number(process.env.KAFKA_CONNECTION_TIMEOUT),
         )
@@ -70,3 +83,10 @@ export default {
         },
     },
 };
+
+console.log(`${config.kafka.brokers} - ${process.env.KAFKA_BROKERS}`);
+if (!config.kafka.brokers || config.kafka.brokers.length === 0) {
+    throw new Error("FATAL ERROR: KAFKA_BROKERS is not defined.");
+}
+
+export default config;

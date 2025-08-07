@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -293,6 +292,7 @@ const UpdateEventModal: React.FC<UpdateEventModalProps> = ({
             <DialogFooter>
               <Button
                 type="button"
+                disabled={isLoading}
                 variant="outline"
                 onClick={() => onClose(false)}
               >

@@ -19,6 +19,7 @@ import { ProfileRoutes } from "./routes/profile.routes.js";
 import {
     createLoggerFactory,
     createRedisClient,
+    RedisLockService,
     RedisService,
 } from "@event_ticket_booking_system/shared";
 
@@ -43,6 +44,7 @@ export async function configureContainer() {
 
         // Services (thường là singleton)
         redisService: asClass(RedisService).singleton(),
+        redisLockService: asClass(RedisLockService).singleton(),
         userService: asClass(UserService).singleton(),
         organizerService: asClass(OrganizerService).singleton(),
         applicationEventService: asClass(ApplicationEventService).singleton(),
