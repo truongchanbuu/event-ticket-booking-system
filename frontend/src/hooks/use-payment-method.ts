@@ -90,7 +90,7 @@ export const usePaymentMethods = () => {
       toast({
         variant: "success",
         title: "Update successfully.",
-        description: `Payment method ${variables.paymentMethodID} has been updated.`,
+        description: `Payment method has been updated.`,
       });
     },
 

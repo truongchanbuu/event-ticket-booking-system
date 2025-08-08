@@ -16,6 +16,7 @@ import { Textarea } from "../ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { usePaymentMethods } from "@/hooks/use-payment-method";
 import { PaymentMethodModal } from "../payment/payment-add-method-modal";
+import LoadingSpinner from "../ui/loading";
 
 interface DetailActionButtonsProps {
   event: Event;
@@ -236,13 +237,16 @@ export default function DetailActionButtons({
         />
       )}
 
-      {showAddPaymentMethod && (
-        <PaymentMethodModal
-          isOpen={showAddPaymentMethod}
-          onClose={() => setShowAddPaymentMethod(false)}
-          onSuccess={handleAddPaymentSuccess}
-        />
-      )}
+      {showAddPaymentMethod &&
+        (isLoading ? (
+          <LoadingSpinner />
+        ) : (
+          <PaymentMethodModal
+            isOpen
+            onClose={() => setShowAddPaymentMethod(false)}
+            onSuccess={handleAddPaymentSuccess}
+          />
+        ))}
     </>
   );
 }

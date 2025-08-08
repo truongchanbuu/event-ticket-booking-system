@@ -114,8 +114,8 @@ export class KafkaService {
 
     const consumer = this.kafka.consumer({
       groupId,
-      sessionTimeout: 60000, // 60 giây
-      heartbeatInterval: 10000, // 10 giây
+      sessionTimeout: 60000,
+      heartbeatInterval: 10000,
       ...consumerConfig,
     });
     await consumer.connect();

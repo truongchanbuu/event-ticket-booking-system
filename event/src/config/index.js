@@ -74,7 +74,7 @@ const config = {
         },
         consumerGroups: {
             main_events: "event-service-main-group",
-            event_type_group: "event-service-ticket-type-group",
+            ticket_type_group: "event-service-ticket-type-group",
             dlq_group: "main-service-dlq",
             global_retry_group: "event-service-global-retry-handler",
         },
