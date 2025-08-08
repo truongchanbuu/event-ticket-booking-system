@@ -158,5 +158,5 @@ npm test
 
 ## 📮 Contact
 
-Maintained by: BuuTruong & Mai Le Phu Tien  
+Maintained by: Buu Truong
 For support or contribution, open an issue or pull request.

@@ -334,7 +334,6 @@ export class EventService {
                     const updateData = this._prepareUpdateData(eventData);
 
                     tx.update(eventRef, updateData);
-
                     updatedEvent = { ...existingEvent, ...updateData };
                 });
             },
@@ -343,7 +342,7 @@ export class EventService {
         // Invalidate cache sau khi commit thành công
         const eventCacheKey = this.CACHE_KEYS.EVENT_BY_ID(eventID);
         const orgCacheKey = this.CACHE_KEYS.EVENTS_BY_ORG_ID(
-            updatedEvent.organizerID,
+            updatedEvent.organizer.organizerID,
         );
         console.info(
             `[Cache Invalidate] Deleting keys ${eventCacheKey} and ${orgCacheKey} due to update.`,
@@ -416,6 +415,14 @@ export class EventService {
         });
 
         if (eventData) {
+            const eventCacheKey = this.CACHE_KEYS.EVENT_BY_ID(eventID);
+            const orgCacheKey = this.CACHE_KEYS.EVENTS_BY_ORG_ID(
+                updatedEvent.organizer.organizerID,
+            );
+            console.info(
+                `[Cache Invalidate] Deleting keys ${eventCacheKey} and ${orgCacheKey} due to update.`,
+            );
+            await this.redisService.del(eventCacheKey, orgCacheKey);
             await this.eventLifecycleEventService.sendEventPublished({
                 eventID: eventID,
                 organizerID: organizerID,
@@ -487,7 +494,7 @@ export class EventService {
         // Invalidate cache
         const eventCacheKey = this.CACHE_KEYS.EVENT_BY_ID(eventID);
         const orgCacheKey = this.CACHE_KEYS.EVENTS_BY_ORG_ID(
-            cancelledEvent.organizerID,
+            cancelledEvent.organizer.organizerID,
         );
         await this.redisService.del(eventCacheKey, orgCacheKey);
 

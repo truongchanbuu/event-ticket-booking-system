@@ -14,6 +14,8 @@ import { Event } from "@/schema";
 import { CancelFunction, UpdateEventFn } from "@/types/event.api";
 import { Textarea } from "../ui/textarea";
 import { toast } from "@/hooks/use-toast";
+import { usePaymentMethods } from "@/hooks/use-payment-method";
+import { PaymentMethodModal } from "../payment/payment-add-method-modal";
 
 interface DetailActionButtonsProps {
   event: Event;
@@ -37,6 +39,8 @@ export default function DetailActionButtons({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [isUpdateModalOpen, setIsUploadModalOpen] = useState(false);
+  const [showAddPaymentMethod, setShowAddPaymentMethod] = useState(false);
+  const { methods, isLoading } = usePaymentMethods();
 
   const [cancelReason, setCancelReason] = useState<string | undefined>();
   const handleCancelEvent = async () => {
@@ -72,6 +76,21 @@ export default function DetailActionButtons({
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const checkPaymentMethods = async () => {
+    if (methods && methods.length > 0) {
+      await handlePublish();
+    } else {
+      console.log("No payment methods found. Opening modal...");
+      setShowAddPaymentMethod(true);
+    }
+  };
+
+  const handleAddPaymentSuccess = async () => {
+    console.log("Payment method added successfully from modal!");
+    setShowAddPaymentMethod(false);
+    await handlePublish();
   };
 
   const handleUnpublish = async () => {
@@ -110,7 +129,7 @@ export default function DetailActionButtons({
           {event.status === EVENT_STATUS.DRAFT && (
             <Button
               loading={isPublishing || isSubmitting}
-              onClick={handlePublish}
+              onClick={checkPaymentMethods}
               disabled={!canPublished}
               className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
             >
@@ -214,6 +233,14 @@ export default function DetailActionButtons({
           isOpen={isUpdateModalOpen}
           onClose={setIsUploadModalOpen}
           onUpdate={updateEvent}
+        />
+      )}
+
+      {showAddPaymentMethod && (
+        <PaymentMethodModal
+          isOpen={showAddPaymentMethod}
+          onClose={() => setShowAddPaymentMethod(false)}
+          onSuccess={handleAddPaymentSuccess}
         />
       )}
     </>

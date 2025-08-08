@@ -6,7 +6,7 @@ const meServiceRegistry = {
   events: process.env.EVENT_SERVICE_URL,
   applications: process.env.USER_SERVICE_URL,
   tickets: process.env.PAYMENT_SERVICE_URL,
-  payments: process.env.PAYMENT_SERVICE_URL,
+  payment: process.env.PAYMENT_SERVICE_URL,
 };
 
 /**

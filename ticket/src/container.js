@@ -2,8 +2,6 @@ import { createContainer, asValue, asClass, asFunction } from "awilix";
 
 import config from "./config/index.js";
 
-import { ApiRoutes } from "./routes/api.routes.js";
-
 import {
     createLoggerFactory,
     createRedisClient,
@@ -22,6 +20,7 @@ import { EventClientService } from "./services/event-client.service.js";
 import { TicketLifecycleEventService } from "./kafka/ticket-lifecycle.events.js";
 import { InternalController } from "./controllers/internal.controller.js";
 import { InternalRoutes } from "./routes/internal.routes.js";
+import { ApiRoutes } from "./routes/api.routes.js";
 import { PublishTicketTypesSnapshotUseCase } from "./kafka/use-case/PublishEventSnapshotUseCase.js";
 
 /**

@@ -37,6 +37,7 @@ const config = {
     app: {
         port: process.env.PORT || 3000,
         nodeEnv: env,
+        serviceKey: process.env.SERVICE_SECRET_KEY,
     },
     redis: redisConfig,
     service_keys: {

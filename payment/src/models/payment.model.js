@@ -3,7 +3,7 @@
 //   provider: 'momo',                 // hoặc 'stripe', 'zalopay' về sau
 //   type: 'ewallet',                  // 'card' / 'bank_account' trong tương lai
 //   displayName: 'Ví Momo của Bửu',   // Tên hiện lên UI
-//   linkedPhone: '09xxxxxxxx',        // (nếu có)
+//   account: '09xxxxxxxx',        // (nếu có)
 //   isDefault: boolean,
 //   createdAt: Timestamp,
 //   updatedAt: Timestamp,

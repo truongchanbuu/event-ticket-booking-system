@@ -2,8 +2,6 @@ import { createContainer, asValue, asClass, asFunction } from "awilix";
 
 import config from "./config/index.js";
 
-import { ApiRoutes } from "./routes/api.routes.js";
-
 import {
     createKafkaService,
     createLoggerFactory,
@@ -33,6 +31,7 @@ import { DeleteTicketTypeSnapshotUseCase } from "./kafka/consumer/DeleteTicketTy
 import { EventLifecycleEventService } from "./kafka/events.kafka.event.js";
 import { ContributorService } from "./services/contributor.service.js";
 import { InternalRoutes } from "./routes/internal.routes.js";
+import { ApiRoutes } from "./routes/api.routes.js";
 import { TicketClientService } from "./services/ticket-client.service.js";
 
 export async function configureContainer() {

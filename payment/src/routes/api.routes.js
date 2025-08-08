@@ -1,8 +1,8 @@
-import express from 'express';
+import express from "express";
 
 export class ApiRoutes {
-  constructor({ paymentRoutes }) {
-    this.router = express.Router();
-    this.router.use('/payment', paymentRoutes.router);
-  }
+    constructor({ profileRoutes }) {
+        this.router = express.Router();
+        this.router.use("/me/payment", profileRoutes.router);
+    }
 }
