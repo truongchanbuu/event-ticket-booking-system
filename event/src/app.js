@@ -2,10 +2,12 @@ import express from "express";
 import cors from "cors";
 import { scopePerRequest } from "awilix-express";
 
-import healthRouter from "./routes/health.js";
 import { checkJson, errorHandler } from "@event_ticket_booking_system/shared";
 import { ERROR_CODE } from "@event_ticket_booking_system/shared";
 import { AppError } from "@event_ticket_booking_system/shared";
+
+import healthRouter from "./routes/health.js";
+import { registry } from "./metrics/availability.metric.js";
 
 export function createApp({ container, config, logger }) {
     const app = express();
@@ -23,6 +25,11 @@ export function createApp({ container, config, logger }) {
     });
 
     app.use("/api/health", healthRouter);
+
+    app.get("/metrics", async (_req, res) => {
+        res.set("Content-Type", registry.contentType);
+        res.end(await registry.metrics());
+    });
 
     app.use(scopePerRequest(container));
 

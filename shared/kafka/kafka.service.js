@@ -1,48 +1,43 @@
-import { Kafka } from "kafkajs";
+import { Kafka, CompressionTypes, logLevel } from "kafkajs";
 import ms from "ms";
 
 export class KafkaService {
-  /** @private */
-  kafka;
-  /** @private */
-  producer;
-  /** @private */
-  admin;
-  /** @private @type {Map<string, import('kafkajs').Consumer>} */
-  consumers = new Map();
+  /** @private */ kafka;
+  /** @private */ producer;
+  /** @private */ admin;
+  /** @private @type {Map<string, import('kafkajs').Consumer>} */ consumers =
+    new Map();
 
-  /** @private @type {'DISCONNECTED' | 'CONNECTING' | 'CONNECTED'} */
-  connectionState = "DISCONNECTED";
-  /** @private @type {Promise<void> | null} */
-  connectionPromise = null;
+  /** @private @type {'DISCONNECTED'|'CONNECTING'|'CONNECTED'} */ connectionState =
+    "DISCONNECTED";
+  /** @private @type {Promise<void>|null} */ connectionPromise = null;
 
-  constructor({ config, logger }) {
-    this.kafka = new Kafka({
-      ...config,
-    });
+  constructor({ config, logger = console }) {
+    // Khuyến nghị: set logLevel qua config nếu cần
+    this.kafka = new Kafka({ ...config /*, logLevel: logLevel.INFO */ });
+    this.logger = logger;
 
     this.producer = this.kafka.producer({
-      maxInFlightRequests: 1,
+      // Idempotent producer -> acks=-1 dưới hood; giữ maxInFlightRequests=1
       idempotent: true,
-      retry: 1,
+      maxInFlightRequests: 1,
+      allowAutoTopicCreation: false,
+      retry: {
+        retries: 5,
+        initialRetryTime: 300, // ms
+        factor: 2,
+      },
     });
 
     this.admin = this.kafka.admin();
   }
 
-  /**
-   * Khởi tạo kết nối một cách an toàn, tránh race condition.
-   * @returns {Promise<void>}
-   */
+  // ---- lifecycle ----
   async initialize() {
-    if (this.connectionState === "CONNECTED") {
-      return;
-    }
-    if (this.connectionState === "CONNECTING") {
-      return this.connectionPromise;
-    }
+    if (this.connectionState === "CONNECTED") return;
+    if (this.connectionState === "CONNECTING") return this.connectionPromise;
 
-    console.log("KafkaService is connecting...");
+    this.logger.info("KafkaService is connecting...");
     this.connectionState = "CONNECTING";
 
     this.connectionPromise = (async () => {
@@ -50,10 +45,10 @@ export class KafkaService {
         await this.admin.connect();
         await this.producer.connect();
         this.connectionState = "CONNECTED";
-        console.log("✅ KafkaService connected successfully.");
+        this.logger.info("✅ KafkaService connected.");
       } catch (error) {
         this.connectionState = "DISCONNECTED";
-        console.error("❌ Failed to connect KafkaService.", {
+        this.logger.error("❌ Failed to connect KafkaService.", {
           error: error.message,
         });
         throw error;
@@ -63,50 +58,72 @@ export class KafkaService {
     return this.connectionPromise;
   }
 
+  health() {
+    return {
+      state: this.connectionState,
+      producerConnected: this.connectionState === "CONNECTED",
+    };
+  }
+
+  // ---- produce ----
   /**
-   * Gửi một hoặc nhiều tin nhắn tới một topic.
-   * @param {string} topic - Topic đích.
-   * @param {Array<{key?: string, value: any, headers?: object}>} messages - Mảng các tin nhắn.
-   * @returns {Promise<import('kafkajs').RecordMetadata[]>}
+   * @param {string} topic
+   * @param {Array<{key?: string|Buffer, value: any, headers?: Record<string, any>, partition?: number}>} messages
+   * @param {{compression?: number}} options
    */
-  async send(topic, messages) {
+  async send(topic, messages, options = {}) {
     if (this.connectionState !== "CONNECTED") {
       throw new Error("Kafka not connected. Call initialize() first.");
     }
 
-    const kafkaMessages = messages.map((msg) => ({
-      key: msg.key,
-      value: Buffer.isBuffer(msg.value)
-        ? msg.value
+    const kafkaMessages = messages.map((m) => ({
+      key: m.key,
+      // giữ partition nếu được truyền
+      partition: typeof m.partition === "number" ? m.partition : undefined,
+      value: Buffer.isBuffer(m.value)
+        ? m.value
         : Buffer.from(
-            typeof msg.value === "string"
-              ? msg.value
-              : JSON.stringify(msg.value),
+            typeof m.value === "string" ? m.value : JSON.stringify(m.value),
             "utf8"
           ),
-      headers: msg.headers,
+      headers: m.headers,
     }));
 
     try {
       return await this.producer.send({
         topic,
         messages: kafkaMessages,
+        compression: options.compression ?? CompressionTypes.GZIP,
+        timeout: 30_000,
       });
     } catch (error) {
-      console.error(`❌ Failed to send messages to topic '${topic}'`, {
+      this.logger.error(`❌ Failed to send messages to '${topic}'`, {
         error: error.message,
       });
       throw error;
     }
   }
 
+  // ---- consumer (main with retry & DLQ publish) ----
+  /**
+   * @param {{
+   *   groupId: string,
+   *   topic: string,
+   *   handler: (payload: import('kafkajs').EachMessagePayload) => Promise<void>,
+   *   retryDelays: string[], // e.g. ['5s','30s','5m']
+   *   dlqTopic: string,
+   *   consumerConfig?: import('kafkajs').ConsumerConfig,
+   *   fromBeginning?: boolean
+   * }} cfg
+   */
   async createConsumer({
     groupId,
     topic,
     handler,
-    retryDelays,
+    retryDelays = [],
     dlqTopic,
     consumerConfig = {},
+    fromBeginning = false,
   }) {
     if (this.connectionState !== "CONNECTED") {
       throw new Error("Kafka not connected. Call initialize() first.");
@@ -114,57 +131,78 @@ export class KafkaService {
 
     const consumer = this.kafka.consumer({
       groupId,
-      sessionTimeout: 60000,
-      heartbeatInterval: 10000,
+      sessionTimeout: 60_000,
+      heartbeatInterval: 10_000,
+      allowAutoTopicCreation: false,
       ...consumerConfig,
     });
+
     await consumer.connect();
-    await consumer.subscribe({ topic, fromBeginning: true });
+    await consumer.subscribe({ topic, fromBeginning });
 
     await consumer.run({
       autoCommit: false,
       eachMessage: async (payload) => {
-        const { partition, message } = payload;
+        const { topic: tp, partition, message, pause } = payload;
         try {
           await handler(payload);
-        } catch (error) {
-          console.error(
-            `Handler failed for message. Initiating retry/DLQ process.`,
-            {
-              topic: payload.topic,
-              offset: payload.message.offset,
-              error: error.message,
-            }
-          );
-
-          await this.publishToNextTopic(
-            payload,
-            error,
-            topic,
-            retryDelays,
-            dlqTopic
-          );
-        } finally {
+          // success -> commit
           await consumer.commitOffsets([
             {
-              topic,
+              topic: tp,
               partition,
               offset: (Number(message.offset) + 1).toString(),
             },
           ]);
+        } catch (error) {
+          this.logger.error(`Handler failed; will route to retry/DLQ.`, {
+            topic: tp,
+            offset: message.offset,
+            error: error.message,
+          });
+
+          // backpressure: tạm pause partition 1-2s để downstream thở
+          pause();
+          setTimeout(
+            () => consumer.resume([{ topic: tp, partitions: [partition] }]),
+            1500
+          );
+
+          // publish retry/DLQ; chỉ commit nếu publish thành công
+          try {
+            await this.publishToNextTopic(
+              payload,
+              error,
+              topic,
+              retryDelays,
+              dlqTopic
+            );
+            await consumer.commitOffsets([
+              {
+                topic: tp,
+                partition,
+                offset: (Number(message.offset) + 1).toString(),
+              },
+            ]);
+          } catch (pubErr) {
+            this.logger.error(
+              `❌ Failed to publish to retry/DLQ. Will NOT commit to avoid loss.`,
+              {
+                error: pubErr.message,
+              }
+            );
+            // không commit -> message sẽ được re-deliver
+          }
         }
       },
     });
 
     this.consumers.set(groupId, consumer);
-    console.log(
-      `✅ Retrying consumer created for topic '${topic}' with group '${groupId}'`
-    );
+    this.logger.info(`✅ Consumer created for '${topic}' (group '${groupId}')`);
   }
 
   /**
    * @private
-   * Logic để đẩy tin nhắn đến topic retry hoặc DLQ tiếp theo.
    */
   async publishToNextTopic(
     payload,
@@ -179,28 +217,20 @@ export class KafkaService {
       ? parseInt(headers["x-retry-attempt"].toString(), 10)
       : 0;
 
-    let nextTopic;
-    if (attempt < retryDelays.length) {
-      nextTopic = `${originalTopic}.retry.${retryDelays[attempt]}`;
-    } else {
-      nextTopic = dlqTopic;
-    }
+    const nextTopic =
+      attempt < retryDelays.length
+        ? `${originalTopic}.retry.${retryDelays[attempt]}`
+        : dlqTopic;
 
     if (!nextTopic) {
-      console.error(
-        "No more retry topics and no DLQ configured. Message will be dropped.",
-        {
-          offset: message.offset,
-        }
-      );
+      this.logger.error(`No retry/DLQ configured. Dropping message.`, {
+        offset: message.offset,
+      });
       return;
     }
 
-    console.log(`Moving message to topic: ${nextTopic}`, {
-      attempt: attempt + 1,
-    });
-
     const safeValue = ensureSafeValue(message.value);
+
     await this.send(nextTopic, [
       {
         key: message.key,
@@ -210,52 +240,55 @@ export class KafkaService {
           "x-original-topic": originalTopic,
           "x-retry-attempt": (attempt + 1).toString(),
           "x-failure-reason": error.message,
+          "x-failure-ts": Date.now().toString(),
         },
+        partition: message.partition, // giữ nguyên nếu có
       },
     ]);
   }
 
+  // ---- global retry handler (re-drive) ----
   /**
-   * Tạo một consumer duy nhất để xử lý tất cả các topic retry.
-   * Tự động tính toán sessionTimeout dựa trên độ trễ retry dài nhất.
-   * @param {object} config
-   * @param {string} config.groupId - Group ID cho consumer retry.
-   * @param {Array<{originalTopic: string, retryDelays: string[]}>} config.retryConfigs - Mảng cấu hình các topic retry.
-   * @param {import('kafkajs').ConsumerConfig} [config.consumerConfig] - Cấu hình KafkaJS bổ sung để ghi đè các giá trị mặc định.
+   * @param {{
+   *   groupId: string,
+   *   retryConfigs: Array<{originalTopic: string, retryDelays: string[]}>,
+   *   consumerConfig?: import('kafkajs').ConsumerConfig
+   * }} cfg
    */
   async createGlobalRetryHandlerConsumer({
     groupId,
     retryConfigs,
     consumerConfig = {},
   }) {
-    if (this.connectionState !== "CONNECTED") {
+    if (this.connectionState !== "CONNECTED")
       throw new Error("Kafka not connected");
-    }
 
     const allRetryTopics = retryConfigs.flatMap((rc) =>
       rc.retryDelays.map((delay) => `${rc.originalTopic}.retry.${delay}`)
     );
 
     if (allRetryTopics.length === 0) {
-      console.warn("No retry topics configured for the global retry handler.");
+      this.logger.warn(
+        "No retry topics configured for the global retry handler."
+      );
       return;
     }
 
-    const sleep = (duration) =>
-      new Promise((resolve) => setTimeout(resolve, duration));
+    const sleep = (duration) => new Promise((r) => setTimeout(r, duration));
 
     const consumer = this.kafka.consumer({
       groupId,
-      sessionTimeout: 10000,
-      heartbeatInterval: 3000,
+      sessionTimeout: 15_000,
+      heartbeatInterval: 5_000,
+      allowAutoTopicCreation: false,
       ...consumerConfig,
     });
 
     await consumer.connect();
     await consumer.subscribe({ topics: allRetryTopics, fromBeginning: true });
 
-    console.log(
-      `✅ Global Retry Handler consumer listening to ${
+    this.logger.info(
+      `✅ Global Retry Handler listening ${
         allRetryTopics.length
       } topics: [${allRetryTopics.join(", ")}]`
     );
@@ -266,49 +299,23 @@ export class KafkaService {
         const delayString = topic.split(".").pop() || "0s";
         const delayMs = ms(delayString);
 
-        console.log(
-          `[RETRY-HANDLER] Received message. Waiting for ${delayString}...`,
-          {
-            topic,
-            offset: message.offset,
-          }
-        );
-
+        // WARNING: sleep chặn partition; chỉ nên dùng cho lưu lượng thấp hoặc delay ngắn
+        this.logger.info(`[RETRY] Waiting ${delayString} before re-drive`, {
+          topic,
+          offset: message.offset,
+        });
         await sleep(delayMs);
 
         try {
-          const originalTargetTopic =
-            message.headers["x-original-topic"]?.toString();
-
-          if (!originalTargetTopic) {
-            throw new Error(
-              "Cannot re-drive message, 'x-original-topic' header is missing."
-            );
-          }
-
-          console.log(
-            `[RETRY-HANDLER] Woke up. Re-driving message to original topic: ${originalTargetTopic}`,
-            {
-              offset: message.offset,
-            }
-          );
+          const originalTarget =
+            message.headers?.["x-original-topic"]?.toString();
+          if (!originalTarget)
+            throw new Error("Missing 'x-original-topic' header");
 
           const safeValue = ensureSafeValue(message.value);
-
-          await this.send(originalTargetTopic, [
-            {
-              key: message.key,
-              value: safeValue,
-              headers: message.headers, // Giữ nguyên toàn bộ headers
-            },
+          await this.send(originalTarget, [
+            { key: message.key, value: safeValue, headers: message.headers },
           ]);
-
-          console.log(
-            `[RETRY-HANDLER] Re-drive successful. Committing offset.`,
-            {
-              offset: message.offset,
-            }
-          );
 
           await consumer.commitOffsets([
             {
@@ -318,14 +325,15 @@ export class KafkaService {
             },
           ]);
         } catch (error) {
-          console.error(
-            `[RETRY-HANDLER] FAILED to re-drive message. It will be re-processed automatically later.`,
+          this.logger.error(
+            `[RETRY] Re-drive failed; message will be retried.`,
             {
-              topic: topic,
+              topic,
               offset: message.offset,
               error: error.message,
             }
           );
+          // Không commit -> sẽ re-process (đúng ý)
         }
       },
     });
@@ -333,35 +341,25 @@ export class KafkaService {
     this.consumers.set(groupId, consumer);
   }
 
-  /**
-   * Tạo một consumer cho Dead Letter Queue (DLQ).
-   * Consumer này sẽ lắng nghe trên một topic DLQ cụ thể và xử lý các tin nhắn cuối cùng đã thất bại.
-   *
-   * @param {object} config
-   * @param {string} config.groupId - Group ID cho DLQ consumer.
-   * @param {string} config.dlqTopic - Tên của topic DLQ cần lắng nghe.
-   * @param {function(object): Promise<void>} [config.dlqHandler] - Một hàm tùy chọn để xử lý tin nhắn DLQ. Nếu không được cung cấp, nó sẽ mặc định ghi log tin nhắn.
-   * @param {import('kafkajs').ConsumerConfig} [config.consumerConfig] - Cấu hình bổ sung cho consumer của KafkaJS.
-   * @returns {Promise<void>}
-   */
+  // ---- DLQ consumer ----
   async createDlqConsumer({
     groupId,
     dlqTopic,
     dlqHandler,
     consumerConfig = {},
   }) {
-    if (this.connectionState !== "CONNECTED") {
-      throw new Error("Kafka is unavailable. Please initialize() first.");
-    }
+    if (this.connectionState !== "CONNECTED")
+      throw new Error("Kafka is unavailable. initialize() first.");
 
-    console.log(
-      `Creating DLQ consumer for topic '${dlqTopic}' with group '${groupId}'...`
+    this.logger.info(
+      `Creating DLQ consumer for '${dlqTopic}' (group '${groupId}')...`
     );
 
     const consumer = this.kafka.consumer({
       groupId,
-      sessionTimeout: 60000, // 60 giây
-      heartbeatInterval: 10000, // 10 giây
+      sessionTimeout: 60_000,
+      heartbeatInterval: 10_000,
+      allowAutoTopicCreation: false,
       ...consumerConfig,
     });
 
@@ -370,25 +368,19 @@ export class KafkaService {
 
     const finalDlqHandler =
       dlqHandler ||
-      (async (payload) => {
-        const { topic, partition, message } = payload;
+      (async ({ topic, partition, message }) => {
         const failureReason =
-          message.headers["x-failure-reason"]?.toString() || "No reason.";
+          message.headers?.["x-failure-reason"]?.toString() || "No reason";
         const originalTopic =
-          message.headers["x-original-topic"]?.toString() ||
-          "Cannot find root topic.";
-
-        console.error(`🚨 Messages cannot processed sent to DLQ`, {
+          message.headers?.["x-original-topic"]?.toString() || "Unknown";
+        this.logger.error(`🚨 DLQ message`, {
           dlqTopic: topic,
-          dlqPartition: partition,
-          dlqOffset: message.offset,
-          originalTopic: originalTopic,
-          failureReason: failureReason,
+          partition,
+          offset: message.offset,
+          originalTopic,
+          failureReason,
           messageKey: message.key?.toString(),
-          // messageValue: message.value?.toString(),
         });
-
-        // TODO: Impl whatever you want to monitor
       });
 
     await consumer.run({
@@ -397,8 +389,8 @@ export class KafkaService {
         try {
           await finalDlqHandler(payload);
         } catch (error) {
-          console.error(`❌ Serious! DLQ handler failed to process message.`, {
-            dlqTopic: payload.topic,
+          this.logger.error(`❌ DLQ handler failed`, {
+            topic: payload.topic,
             offset: payload.message.offset,
             error: error.message,
           });
@@ -407,26 +399,20 @@ export class KafkaService {
     });
 
     this.consumers.set(groupId, consumer);
-    console.log(`✅ DLQ consumer is ready and listend on '${dlqTopic}' topic.`);
+    this.logger.info(`✅ DLQ consumer is listening on '${dlqTopic}'.`);
   }
 
+  // ---- admin ----
   /**
-   * Đảm bảo rằng các topic cần thiết đã tồn tại. Nếu chưa, sẽ tự động tạo chúng.
-   * @param {Array<{topic: string, numPartitions?: number, replicationFactor?: number}>} topicsToEnsure - Mảng các đối tượng cấu hình topic.
-   * @returns {Promise<void>}
+   * @param {Array<{topic: string, numPartitions?: number, replicationFactor?: number, config?: Record<string,string>}>} topicsToEnsure
    */
   async ensureTopicsExist(topicsToEnsure) {
     if (this.connectionState !== "CONNECTED") {
-      throw new Error(
-        "Kafka not connected. Call initialize() or ensureTopicsExist() must be called after initialize()."
-      );
+      throw new Error("Kafka not connected. Call initialize() first.");
     }
+    if (!topicsToEnsure?.length) return;
 
-    if (!topicsToEnsure || topicsToEnsure.length === 0) {
-      return;
-    }
-
-    console.log("Ensuring required topics exist...", {
+    this.logger.info("Ensuring topics...", {
       topics: topicsToEnsure.map((t) => t.topic),
     });
 
@@ -436,130 +422,94 @@ export class KafkaService {
         waitForLeaders: true,
         topics: topicsToEnsure.map((t) => ({
           topic: t.topic,
-          numPartitions: t.numPartitions || 1,
-          replicationFactor: t.replicationFactor || 1, // 3 for production
-          configEntries: [
-            {
-              name: "retention.ms",
-              value: "604800000", // 7 days default
-            },
-          ],
+          numPartitions: t.numPartitions ?? 1,
+          replicationFactor: t.replicationFactor ?? 1, // set 3 in prod
+          configEntries: Object.entries({
+            "retention.ms": "604800000", // 7 days default
+            // "cleanup.policy": "delete",
+            ...(t.config ?? {}),
+          }).map(([name, value]) => ({ name, value })),
         })),
       });
-      console.log("✅ All topics are ready.");
+      this.logger.info("✅ Topics ready (or already existed).");
     } catch (error) {
       if (error.name === "TopicAlreadyExistsError") {
-        console.warn("Topics already exist, which is fine.");
+        this.logger.warn("Topics already exist.");
         return;
       }
-
-      console.error("❌ Failed to create topics.", {
+      this.logger.error("❌ Failed to create topics.", {
         error: error.message,
       });
       throw error;
     }
   }
 
-  /**
-   * Ngắt kết nối Kafka một cách an toàn (graceful shutdown).
-   * @returns {Promise<void>}
-   */
   async disconnect() {
     if (this.connectionState === "DISCONNECTED") return;
 
-    console.log("KafkaService is disconnecting...");
+    this.logger.info("KafkaService is disconnecting...");
     try {
       for (const [groupId, consumer] of this.consumers) {
         await consumer.disconnect();
-        console.log(`✅ Consumer '${groupId}' disconnected.`);
+        this.logger.info(`✅ Consumer '${groupId}' disconnected.`);
       }
       this.consumers.clear();
 
       await this.producer.disconnect();
-      console.log("✅ Producer disconnected.");
+      this.logger.info("✅ Producer disconnected.");
 
       await this.admin.disconnect();
-      console.log("✅ Admin client disconnected.");
+      this.logger.info("✅ Admin disconnected.");
 
       this.connectionState = "DISCONNECTED";
       this.connectionPromise = null;
-      console.log("✅ KafkaService disconnected completely.");
+      this.logger.info("✅ KafkaService disconnected.");
     } catch (error) {
-      console.error("❌ Error during Kafka disconnection.", {
+      this.logger.error("❌ Error during Kafka disconnection.", {
         error: error.message,
       });
       throw error;
     }
   }
 
-  /**
-   * Liệt kê các topic.
-   * @returns {Promise<string[]>}
-   */
   async listTopics() {
     if (this.connectionState !== "CONNECTED")
       throw new Error("Kafka not connected");
     return this.admin.listTopics();
   }
 
+  // ---- helper: sender factory ----
   createTopicSender(topic, eventSourceName) {
-    return async (payload) => {
+    return async ({ key, value, eventType, partition }) => {
       if (this.connectionState !== "CONNECTED") {
-        console.error(
+        this.logger.error(
           { eventSourceName, topic },
-          "Cannot send event, Kafka is not connected."
+          "Cannot send; Kafka is not connected."
         );
         throw new Error("Kafka is not connected.");
       }
-
-      const { key, value, eventType, partition } = payload; // Thêm partition vào payload
-
       if (!eventType) {
-        console.warn(
+        this.logger.warn(
           { eventSourceName, topic },
-          "Sending event without an 'eventType'. This is not recommended."
+          "Sending event without 'eventType'."
         );
       }
 
-      try {
-        console.log("Attempting to send event...");
+      const headers = {
+        "event-type": eventType || "unknown",
+        "source-service":
+          process.env.KAFKA_PRODUCER_SERVICE_NAME || "unknown-service",
+        "x-sent-at": Date.now().toString(),
+      };
 
-        const message = {
-          key: key,
-          value: value,
-          headers: {
-            "event-type": eventType || "unknown",
-            "source-service":
-              process.env.KAFKA_PRODUCER_SERVICE_NAME || "unknown-service",
-          },
-        };
-
-        // Chỉ thêm partition nếu được cung cấp
-        if (partition !== undefined) {
-          message.partition = partition;
-        }
-
-        await this.send(topic, [message]);
-
-        console.log("✅ Event sent successfully.");
-      } catch (error) {
-        console.error({ err: error }, "❌ Failed to send event.");
-        // Cân nhắc thêm logic xử lý lỗi cụ thể ở đây nếu cần
-        throw error;
-      }
+      await this.send(topic, [{ key, value, headers, partition }]);
     };
   }
 }
 
 const ensureSafeValue = (value) => {
-  let safeValue = value;
-
-  if (Buffer.isBuffer(safeValue)) {
-  } else if (typeof safeValue === "object") {
-    safeValue = JSON.stringify(safeValue);
-  } else if (typeof safeValue !== "string") {
-    safeValue = String(safeValue);
-  }
-
-  return safeValue;
+  if (Buffer.isBuffer(value)) return value;
+  if (typeof value === "object") return JSON.stringify(value);
+  if (typeof value !== "string") return String(value);
+  return value;
 };

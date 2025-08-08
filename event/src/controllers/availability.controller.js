@@ -1,38 +1,38 @@
+import { availabilityLatency } from "../metrics/availability.metric.js";
+
 export class AvailabilityController {
     constructor({ availabilityService, logger = console }) {
         this.availabilityService = availabilityService;
         this.logger = logger;
     }
 
-    async getAvailability(req, res, next) {
-        const { slug } = req.params;
+    getAvailability = async (req, res, next) => {
+        const endTimer = availabilityLatency.startTimer({
+            method: "GET",
+            route: "/events/:slug/availability",
+        });
+
         try {
-            const start = Date.now();
-            const result =
-                await this.availabilityService.getAvailabilityBySlug(slug);
-            console.log(
-                "[A2] latency_ms=%d cache_hit=%s",
-                Date.now() - start,
-                result._cacheHit ?? false,
+            const r = await this.availabilityService.getAvailabilityBySlug(
+                req.params.slug,
             );
 
-            if (!result) {
-                res.set("Cache-Control", "no-store");
-                return res.status(404).json({ error: "Not found" });
-            }
-            if (result.status === 404) {
-                res.set("Cache-Control", "no-store");
+            res.set("Cache-Control", "no-store");
+
+            if (!r || r.status === 404) {
+                endTimer({ status_code: 404 });
                 return res.status(404).json({ error: "Event not found" });
             }
-            if (result.status === 410) {
-                res.set("Cache-Control", "no-store");
+            if (r.status === 410) {
+                endTimer({ status_code: 410 });
                 return res.status(410).json({ error: "Event cancelled" });
             }
 
-            res.set("Cache-Control", "no-store");
-            return res.json({ success: true, data: result.data });
-        } catch (err) {
-            return next(err);
+            endTimer({ status_code: 200 });
+            return res.json({ success: true, data: r.data });
+        } catch (e) {
+            endTimer({ status_code: 500 });
+            return next(e);
         }
-    }
+    };
 }

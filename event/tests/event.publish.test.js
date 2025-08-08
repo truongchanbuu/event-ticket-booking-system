@@ -1,5 +1,11 @@
 // __tests__/event.publish.test.js
+
 const { EventService } = require("../src/services/event.service");
+const eventCollection = { doc: jest.fn(() => ({})) };
+const db = {
+    collection: jest.fn(() => eventCollection),
+    runTransaction: jest.fn(),
+};
 
 function mkDeps() {
     return {
@@ -49,7 +55,7 @@ describe("EventService.publishEvent", () => {
             ]); // init phase
 
         const svc = new EventService({
-            db: d.db,
+            db,
             redisService: d.redisService,
             contributorService: d.contributorService,
             ticketClientService: d.ticketClientService,

@@ -1,62 +1,47 @@
+// redis/createRedisClient.ts
 import { Redis as UpstashRedis } from "@upstash/redis";
 import IORedis from "ioredis";
 
-/**
- * Tạo một Redis client đã được chuẩn hóa, hoạt động giống nhau
- * ở cả môi trường production (Upstash) và development (IORedis).
- *
- * @param {object} params
- * @param {object} params.config - Đối tượng config toàn cục của ứng dụng.
- * @param {object} [params.logger=console] - Logger để ghi log.
- * @returns {object|null} Một đối tượng client với các phương thức đã được chuẩn hóa (get, set, eval, del) hoặc null nếu có lỗi.
- */
-export const createRedisClient = ({ config, logger = console }) => {
-  const redisConfig = config.redis;
-  let nativeClient;
-  try {
-    if (redisConfig.isProduction) {
-      logger.info(
-        "[Redis] Production environment. Initializing Upstash Redis client..."
-      );
-      nativeClient = new UpstashRedis({
-        url: redisConfig.production.url,
-        token: redisConfig.production.token,
-      });
-      logger.info("[Redis] Upstash Redis client initialized.");
+export function createRedisClient({ config, logger = console }) {
+  const { backend } = config.redis;
 
-      return {
-        get: (key) => nativeClient.get(key),
-        set: (key, value, options) => nativeClient.set(key, value, options),
-        eval: (script, keys, args) => nativeClient.eval(script, keys, args),
-        del: (key) => nativeClient.del(key),
-      };
-    } else {
-      logger.info(
-        "[Redis] Development environment. Initializing IORedis client..."
-      );
-      nativeClient = new IORedis(redisConfig.development.url, {
-        maxRetriesPerRequest: null,
-      });
-      logger.info("[Redis] IORedis client initialized.");
-
-      return {
-        get: (key) => nativeClient.get(key),
-        set: (key, value, options) => {
-          const args = [key, value];
-          if (options?.px) args.push("PX", options.px);
-          if (options?.nx) args.push("NX");
-          if (options?.ex) args.push("EX", options.ex);
-          return nativeClient.set(...args);
-        },
-        eval: (script, keys, args) => {
-          return nativeClient.eval(script, keys.length, ...keys, ...args);
-        },
-        del: (key) => nativeClient.del(key),
-        sadd: (key, member) => nativeClient.sadd(key, member),
-      };
-    }
-  } catch (error) {
-    logger.error("[Redis] Failed to initialize Redis client:", error);
-    return null;
+  if (backend === "upstash-rest") {
+    const { url, token } = config.redis.production.upstashRest;
+    logger.info("[Redis] Using Upstash REST");
+    const up = new UpstashRedis({ url, token });
+    return {
+      get: (k) => up.get(k),
+      setEx: (k, v, ttlSec) => up.set(k, v, { ex: ttlSec }),
+      del: (...keys) => up.del(...keys),
+      sadd: (k, ...members) => up.sadd(k, ...members),
+      smembers: (k) => up.smembers(k),
+      mget: (keys) => up.mget(...keys),
+      quit: async () => {}, // no-op
+    };
   }
-};
+
+  if (backend === "tcp") {
+    const url =
+      config.redis.production.tcp.url || config.redis.development.tcp.url;
+    const io = new IORedis(url, {
+      enableAutoPipelining: true,
+      maxRetriesPerRequest: 2,
+    });
+    logger.info("[Redis] Using TCP (ioredis)");
+    return {
+      get: (k) => io.get(k),
+      setEx: (k, v, ttlSec) => io.setex(k, ttlSec, v),
+      del: (...keys) => (keys.length ? io.del(...keys) : 0),
+      sadd: (k, ...members) => io.sadd(k, ...members),
+      smembers: (k) => io.smembers(k),
+      mget: (keys) => (keys?.length ? io.mget(...keys) : Promise.resolve([])),
+      quit: async () => {
+        try {
+          await io.quit();
+        } catch {}
+      },
+    };
+  }
+
+  throw new Error(`[Redis] Unknown backend: ${backend}`);
+}

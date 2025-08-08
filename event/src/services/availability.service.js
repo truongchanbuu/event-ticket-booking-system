@@ -1,11 +1,15 @@
 import { EVENT_STATUS } from "../enums/event-status.js";
+import {
+    availabilityCacheHit,
+    availabilityCacheMiss,
+} from "../metrics/availability.metric.js";
 
 export class AvailabilityService {
     constructor({ redisService, eventService, logger = console, config }) {
         this.redis = redisService;
         this.events = eventService;
         this.logger = logger;
-        this.shas = {};
+        this.shas = { reserve: null, release: null };
         this.serverCacheTtlMs = config?.availability?.serverCacheTtlMs ?? 0;
     }
 
@@ -15,8 +19,9 @@ export class AvailabilityService {
                 "Lua scripts missing: reserve/release are required",
             );
         }
-        this.reserveSha = await this.redis.scriptLoad(reserveLua);
-        this.releaseSha = await this.redis.scriptLoad(releaseLua);
+
+        this.shas.reserve = await this.redis.scriptLoad(reserveLua);
+        this.shas.release = await this.redis.scriptLoad(releaseLua);
         this.logger.info(
             `[AvailabilityService] Lua loaded: reserve=${this.reserveSha}, release=${this.releaseSha}`,
         );
@@ -34,7 +39,14 @@ export class AvailabilityService {
             this.serverCacheTtlMs > 0 ? `availability:slug:${slug}` : null;
         if (cacheKey) {
             const cached = await this.redis.get(cacheKey);
-            if (cached) return cached;
+
+            // Metric
+            if (cached) {
+                availabilityCacheHit.inc();
+                cached._cacheHit = true;
+                return cached;
+            }
+            availabilityCacheMiss.inc();
         }
 
         const detail = await this.events.getPublicEventDetail(slug);
@@ -46,9 +58,9 @@ export class AvailabilityService {
         );
         if (ticketTypeIDs.length === 0) return { status: 200, data: [] };
 
-        const keys = ttIds.map((tt) => `inv:${tt}:remaining`);
-        const raw = await redisService.mgetRaw(keys);
-        const data = ttIds.map((tt, i) => {
+        const keys = ticketTypeIDs.map((tt) => `inv:${tt}:remaining`);
+        const raw = await this.redis.mgetRaw(keys);
+        const data = ticketTypeIDs.map((tt, i) => {
             const n = Number(raw[i] ?? 0);
             const available = Number.isFinite(n) ? Math.max(n, 0) : 0;
             return { ticketTypeId: tt, available, isSoldOut: available === 0 };
@@ -61,6 +73,9 @@ export class AvailabilityService {
                 ttl: Math.floor(this.serverCacheTtlMs / 1000),
             });
         }
+
+        result._cacheHit = false;
+
         return result;
     }
 
@@ -74,8 +89,9 @@ export class AvailabilityService {
         const [ok, newOrCur] = await this.redis.evalsha(
             this.shas.reserve,
             [key],
-            [qty],
+            [String(qty)],
         );
+
         if (ok === 1) return { ok: true, newRemaining: Number(newOrCur) };
         return { ok: false, currentRemaining: Number(newOrCur) };
     }

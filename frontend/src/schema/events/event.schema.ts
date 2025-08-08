@@ -1,8 +1,7 @@
-import { TypeOf, z } from "zod";
+import { z } from "zod";
 import { EventStatusEnum } from "../enums/event-status";
-import { ATTENDEE_STATUS, AttendeeStatusEnum } from "../enums/attendee-status";
-import { TicketPurchaseSchema } from "../booking";
 import { TicketTypeSchema } from "../tickets";
+import { SaleStatus } from "../enums/sale-status";
 
 const START_DELAY_TIME = 1000 * 60 * 60;
 
@@ -20,6 +19,14 @@ export const GeoPointSchema = z.object({
 export const LocationSchema = z.object({
   address: z.string().min(1, "Location cannot be empty."),
   coordinates: GeoPointSchema.optional(),
+});
+
+export const AvailabilitySchema = z.object({
+  status: SaleStatus,
+  remaining: z.number().int().min(0),
+  price: z.number().nonnegative(),
+  currency: z.string().default("VND"),
+  lastUpdatedAt: z.string().datetime(),
 });
 
 export const EventStatsSchema = z.object({
@@ -100,3 +107,4 @@ export type Location = z.infer<typeof LocationSchema>;
 export type EventStats = z.infer<typeof EventStatsSchema>;
 export type EventOrganizer = z.infer<typeof OrganizerSchema>;
 export type EventContributor = z.infer<typeof EventContributorSchema>;
+export type Availability = z.infer<typeof AvailabilitySchema>;
