@@ -10,11 +10,11 @@ export class ConsumerOrchestrator {
         this.kafkaService = kafkaService;
         this.messageDispatcher = messageDispatcher;
         this.config = config;
-        this.logger = logger;
+        this.logger = logger || console;
     }
 
     async startAll() {
-        this.logger.info("Starting all Kafka consumers for this service...");
+        this.logger.info("Starting Kafka consumers...");
 
         const {
             topics,
@@ -22,87 +22,123 @@ export class ConsumerOrchestrator {
             consumerGroups,
             sessionTimeout,
             heartbeatInterval,
+            replicationFactor = 1, // set 3 in prod
+            defaultPartitions = 3, // fallback nếu không cấu hình
         } = this.config.kafka;
 
-        const consumerDefinitions = [
+        // 1) Connect trước
+        await this.kafkaService.initialize();
+
+        // 2) Định nghĩa consumer
+        const defs = [
             {
                 topic: topics.ticket_type_events,
                 groupId: consumerGroups.ticket_type_group,
                 dlqTopic: dlqTopics.main_events_dlq,
                 retryDelays: ["1m", "5m", "15m", "30m"],
                 handler: async (payload) => {
-                    this.logger.info(
-                        `Processing ticket type event: message ${payload.message.offset} from topic ${payload.topic}`,
-                    );
+                    const { topic, partition, message } = payload;
+                    const start = Date.now();
                     const scope = this.container.createScope();
-                    await this.messageDispatcher.dispatch(payload, scope);
+                    try {
+                        this.logger.info(
+                            `Processing '${topic}' p${partition} offset=${message.offset}`,
+                        );
+                        await this.messageDispatcher.dispatch(payload, scope);
+                    } finally {
+                        // đảm bảo giải phóng scope
+                        if (typeof scope.dispose === "function") {
+                            await scope.dispose();
+                        }
+                        this.logger.info(
+                            `Done '${topic}' offset=${message.offset} in ${Date.now() - start}ms`,
+                        );
+                    }
                 },
             },
         ];
 
-        for (const def of consumerDefinitions) {
-            if (!def.topic || typeof def.topic !== "string") {
-                throw new Error(
-                    `Invalid or missing topic name for consumer. Please check 'config.kafka.topics'.`,
-                );
-            }
-            if (!def.dlqTopic || typeof def.dlqTopic !== "string") {
-                throw new Error(
-                    `Invalid or missing DLQ topic name for topic '${def.topic}'. Please check 'config.kafka.dlqTopics'.`,
-                );
-            }
+        // 3) Validate cấu hình
+        for (const d of defs) {
+            if (!d.topic)
+                throw new Error(`Missing topic in consumer definition`);
+            if (!d.dlqTopic) throw new Error(`Missing dlqTopic for ${d.topic}`);
         }
 
-        this.logger.info("Ensuring all necessary Kafka topics exist...");
+        // 4) Ensure topics (gốc + retries + DLQ) với cùng số partition
+        const perTopicPartitions = new Map(); // nếu bạn muốn tùy mỗi topic
+        perTopicPartitions.set(topics.ticket_type_events, defaultPartitions);
 
-        const allTopicsToEnsure = consumerDefinitions.flatMap((def) => [
-            { topic: def.topic, numPartitions: 3 },
-            ...def.retryDelays.map((delay) => ({
-                topic: `${def.topic}.retry.${delay}`,
-            })),
-            { topic: def.dlqTopic, numPartitions: 3 },
-        ]);
+        const toEnsure = defs.flatMap((d) => {
+            const numPartitions =
+                perTopicPartitions.get(d.topic) ?? defaultPartitions;
+            const base = [{ topic: d.topic, numPartitions, replicationFactor }];
+            const retries = d.retryDelays.map((delay) => ({
+                topic: `${d.topic}.retry.${delay}`,
+                numPartitions,
+                replicationFactor,
+                config: {
+                    "retention.ms": (5 * 24 * 60 * 60 * 1000).toString(),
+                }, // 5 ngày cho retry (ví dụ)
+            }));
+            const dlq = [
+                {
+                    topic: d.dlqTopic,
+                    numPartitions,
+                    replicationFactor,
+                    config: {
+                        "retention.ms": (30 * 24 * 60 * 60 * 1000).toString(),
+                    }, // 30 ngày cho DLQ
+                },
+            ];
+            return [...base, ...retries, ...dlq];
+        });
 
-        await this.kafkaService.ensureTopicsExist(allTopicsToEnsure);
-        this.logger.info("✅ All Kafka topics are ready.");
+        const seen = new Set();
+        const uniqEnsure = toEnsure.filter((t) => {
+            const k = `${t.topic}:${t.numPartitions}:${t.replicationFactor}`;
+            if (seen.has(k)) return false;
+            seen.add(k);
+            return true;
+        });
 
-        this.logger.info("Creating and starting all consumers...");
+        await this.kafkaService.ensureTopicsExist(uniqEnsure);
+        this.logger.info("✅ All Kafka topics ensured.");
 
-        for (const def of consumerDefinitions) {
+        // 5) Start consumers (main)
+        for (const d of defs) {
             await this.kafkaService.createConsumer({
-                groupId: def.groupId,
-                topic: def.topic,
-                retryDelays: def.retryDelays,
-                dlqTopic: def.dlqTopic,
-                handler: def.handler,
+                groupId: d.groupId,
+                topic: d.topic,
+                retryDelays: d.retryDelays,
+                dlqTopic: d.dlqTopic,
+                handler: d.handler,
                 consumerConfig: {
                     sessionTimeout,
                     heartbeatInterval,
+                    // maxBytes: 5 * 1024 * 1024, // 5MB
                 },
+                fromBeginning: false,
             });
         }
 
-        const allRetryConfigs = consumerDefinitions.map((def) => ({
-            originalTopic: def.topic,
-            retryDelays: def.retryDelays,
-        }));
-
+        // 6) Global retry handler (re-drive)
         await this.kafkaService.createGlobalRetryHandlerConsumer({
             groupId: consumerGroups.global_retry_group,
-            retryConfigs: allRetryConfigs,
+            retryConfigs: defs.map((d) => ({
+                originalTopic: d.topic,
+                retryDelays: d.retryDelays,
+            })),
+            // consumerConfig: { ... } // giữ mặc định của service
         });
 
+        // 7) DLQ consumer
         await this.kafkaService.createDlqConsumer({
             groupId: consumerGroups.dlq_group,
             dlqTopic: dlqTopics.main_events_dlq,
-            consumerConfig: {
-                sessionTimeout,
-                heartbeatInterval,
-            },
+            consumerConfig: { sessionTimeout, heartbeatInterval },
         });
 
-        this.logger.info(
-            "✅ All Kafka consumers and handlers have been started successfully.",
-        );
+        this.logger.info("✅ All Kafka consumers started.");
     }
 }

@@ -11,24 +11,22 @@ import {
     MessageDispatcher,
     RedisLockService,
     RedisService,
-    TICKET_CANCELLED,
-    TICKET_CHECK_IN_REVERSED,
-    TICKET_CHECKED_IN,
-    TICKET_ISSUED,
     TICKET_TYPE_CREATED,
     TICKET_TYPE_DELETED,
     TICKET_TYPE_UPDATED,
 } from "@event_ticket_booking_system/shared";
 import { EventService } from "./services/event.service.js";
+import { AvailabilityService } from "./services/availability.service.js";
 import { EventRoutes } from "./routes/event.routes.js";
 import { EventController } from "./controllers/event.controller.js";
 import { InternalController } from "./controllers/internal.controller.js";
+import { AvailabilityController } from "./controllers/availability.controller.js";
 import { ProfileRoutes } from "./routes/profile.routes.js";
 import { TicketTypeSnapshotRepo } from "./repositories/TicketRepository.js";
 import { CreateTicketTypeSnapshotUseCase } from "./kafka/consumer/CreateTicketTypeSnapshot.js";
 import { UpdateTicketTypeSnapshotUseCase } from "./kafka/consumer/UpdateTicketTypeSnapshot.js";
 import { DeleteTicketTypeSnapshotUseCase } from "./kafka/consumer/DeleteTicketTypeSnapshot.js";
-import { EventLifecycleEventService } from "./kafka/events.kafka.event.js";
+import { EventLifecycleEventService } from "./kafka/event-lifecycle.js";
 import { ContributorService } from "./services/contributor.service.js";
 import { InternalRoutes } from "./routes/internal.routes.js";
 import { ApiRoutes } from "./routes/api.routes.js";
@@ -75,10 +73,12 @@ export async function configureContainer() {
         ticketClientService: asClass(TicketClientService).singleton(),
         contributorService: asClass(ContributorService).singleton(),
         eventService: asClass(EventService).singleton(),
+        availabilityService: asClass(AvailabilityService).singleton(),
         eventLifecycleEventService: asClass(
             EventLifecycleEventService,
         ).singleton(),
 
+        availabilityController: asClass(AvailabilityController).scoped(),
         eventController: asClass(EventController).scoped(),
         internalController: asClass(InternalController).scoped(),
 

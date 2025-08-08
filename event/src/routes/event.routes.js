@@ -7,9 +7,10 @@ import {
 import EventValidator from "../middlewares/validator.js";
 
 export class EventRoutes {
-    constructor({ eventController }) {
+    constructor({ eventController, availabilityController }) {
         this.router = express.Router();
         this.eventController = eventController;
+        this.availabilityController = availabilityController;
         this.initRoutes();
     }
 
@@ -31,6 +32,13 @@ export class EventRoutes {
             EventValidator.handleValidationErrors,
             this.eventController.removeContributor,
         );
+
+        this.router.get(
+            "/:slug/availability",
+            this.availabilityController.getAvailability,
+        );
+
+        this.router.get("/:slug", this.eventController.getPublicEventDetail);
 
         this.router.post(
             "/:eventID/publish",

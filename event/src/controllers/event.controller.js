@@ -15,6 +15,9 @@ export class EventController {
         this.updateMyEvent = catchAsync(this.updateMyEvent.bind(this));
         this.publishEvent = catchAsync(this.publishEvent.bind(this));
         this.cancelMyEvent = catchAsync(this.cancelMyEvent.bind(this));
+        this.getPublicEventDetail = catchAsync(
+            this.getPublicEventDetail.bind(this),
+        );
 
         this.getEventAttendees = catchAsync(this.getEventAttendees.bind(this));
         this.getEventTicketTypes = catchAsync(
@@ -252,4 +255,20 @@ export class EventController {
     }
 
     async getEventContributors(req, res) {}
+
+    async getPublicEventDetail(req, res, next) {
+        const { slug } = req.params;
+
+        if (!slug) {
+            return res.status(400).json({ error: "Slug is required" });
+        }
+        const eventData = await this.eventService.getPublicEventDetail(slug);
+        if (!eventData) {
+            return res.status(404).json({ error: "Event not found" });
+        }
+        return res.json({
+            success: true,
+            data: eventData,
+        });
+    }
 }

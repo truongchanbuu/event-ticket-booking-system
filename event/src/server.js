@@ -1,12 +1,35 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { createApp } from "./app.js";
 import { configureContainer } from "./container.js";
 import { ConsumerOrchestrator } from "./kafka/consumer/index.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 let server;
 
 async function bootstrap() {
     try {
         const container = await configureContainer();
+
+        const availabilityService = container.resolve("availabilityService");
+        const reservePath = path.join(__dirname, "./scripts/lua/reserve.lua");
+        const releasePath = path.join(__dirname, "./scripts/lua/release.lua");
+
+        const reserveLua = await fs.readFile(reservePath, "utf8");
+        const releaseLua = await fs.readFile(releasePath, "utf8");
+
+        console.debug(
+            "[Lua] reserve bytes:",
+            reserveLua?.length,
+            "release bytes:",
+            releaseLua?.length,
+        );
+
+        await availabilityService.initialize({ reserveLua, releaseLua });
 
         const config = container.resolve("config");
         const rootLogger = container.resolve("logger");

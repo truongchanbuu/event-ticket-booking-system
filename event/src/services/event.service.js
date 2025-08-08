@@ -15,46 +15,73 @@ import {
     EVENTS_COLLECTION,
 } from "../config/constants/collection.js";
 import { ATTENDEE_STATUS, AttendeeSchema } from "../models/attedee.schema.js";
+import { createEventSlug } from "../utils/utils.js";
 
 export class EventService {
     constructor({
         db,
         redisService,
-        redisLockService,
+        // redisLockService,  // ❌ không dùng nữa
         contributorService,
         ticketClientService,
         eventLifecycleEventService,
-        logger = null,
+        logger = console,
     }) {
         this.db = db;
         this.eventCollection = db.collection(EVENTS_COLLECTION || "events");
         this.redisService = redisService;
-        this.redisLockService = redisLockService;
         this.contributorService = contributorService;
         this.ticketClientService = ticketClientService;
         this.eventLifecycleEventService = eventLifecycleEventService;
         this.logger = logger;
 
         this.CACHE_KEYS = {
-            EVENT_BY_ID: (eventID) => `event:${eventID}`,
-            EVENTS_BY_ORG_ID: (orgID) => `events:org:${orgID}`,
+            // Tracking key gốc — dùng để invalidate tất cả cache liên quan đến 1 event
+            EVENT_TRACKING: (eventID) => `event:${eventID}`,
+
+            // Detail theo ID (byID cache)
+            EVENT_BY_ID: (eventID) => `event:${eventID}:byID`,
+
+            // Detail public theo slug
+            EVENT_DETAIL_SLUG: (slug) => `event:slug:${slug}:detail`,
+
+            // Ticket types của event
+            EVENT_TICKET_TYPES_BY_ID: (eventID) =>
+                `event:${eventID}:ticketTypes`,
+
+            // Attendees list theo trang/filter
             EVENT_ATTENDEES_BY_PAGE: (eventID, params) =>
                 `event:${eventID}:attendees:${stableStringify(params)}`,
+
             EVENT_ATTENDEE_COUNT: (eventID) =>
-                `event:${eventID}:attendees:count:${eventID}`,
-            EVENT_TICKET_TYPES_BY_ID: (eventID) =>
-                `event:${eventID}:ticketTypes:${eventID}`,
-            EVENT_CONTRIBUTORS_BY_ID: (eventID) =>
-                `event:${eventID}:contributors:${eventID}`,
+                `event:${eventID}:attendees:count`,
+
+            // Danh sách events theo tổ chức
+            EVENTS_BY_ORG_ID: (orgID) => `events:org:${orgID}`,
         };
     }
 
-    _nowISO() {
-        return new Date().toISOString();
-    }
-
-    _getFieldValue() {
+    _fv() {
         return FieldValue;
+    }
+    _cacheSet({ key, value, ttl, trackingKey }) {
+        return this.redisService.set(key, value, { ttl, trackingKey });
+    }
+    _cacheGet(key) {
+        return this.redisService.get(key);
+    }
+    _cacheGetOrSet({ key, ttl, trackingKey, fetchFn }) {
+        return this.redisService.getOrSet(key, fetchFn, ttl, { trackingKey });
+    }
+    _invalidateEvent(eventID) {
+        const tracking = this.CACHE_KEYS.EVENT_TRACKING(eventID);
+        if (this.redisService.invalidateByTrackingKey) {
+            return this.redisService.invalidateByTrackingKey(tracking);
+        }
+        return this.redisService.del(
+            this.CACHE_KEYS.EVENT_BY_ID(eventID),
+            this.CACHE_KEYS.EVENT_TICKET_TYPES_BY_ID(eventID),
+        );
     }
 
     // -----------------------
@@ -66,7 +93,7 @@ export class EventService {
             orderBy = "createdAt",
             sortOrder = "desc",
             status = null,
-            lastVisibleValue = null,
+            lastCursor = null, // { valueForOrderBy, id } (tuỳ orderBy)
             isDeleted = false,
         } = options;
 
@@ -74,40 +101,54 @@ export class EventService {
             let query = this.eventCollection;
 
             if (status) query = query.where("status", "==", status);
-            if (!isDeleted) query = query.where("isDeleted", "!=", true);
+
+            // ⚠ Tránh '!=' vì dễ vỡ index; nếu không có cờ isDeleted thì bỏ filter này
+            if (typeof isDeleted === "boolean")
+                query = query.where("isDeleted", "==", isDeleted);
 
             query = query.orderBy(orderBy, sortOrder);
 
-            if (lastVisibleValue) query = query.startAfter(lastVisibleValue);
+            if (lastCursor && lastCursor.valueForOrderBy !== undefined) {
+                // Cursor an toàn: truyền đúng thứ tự field theo orderBy (và id nếu cần)
+                query = query.startAfter(lastCursor.valueForOrderBy);
+            }
 
             query = query.limit(limit);
 
             const snapshot = await query.get();
-
             if (snapshot.empty) {
-                return { events: [], hasMore: false, lastDoc: null, total: 0 };
+                return {
+                    events: [],
+                    hasMore: false,
+                    nextCursor: null,
+                    total: 0,
+                };
             }
 
-            const events = snapshot.docs.map((doc) => {
+            const docs = snapshot.docs;
+            const events = docs.map((doc) => {
                 const data = doc.data();
                 return {
                     eventID: doc.id,
                     ...data,
-                    createdAt: data.createdAt ? new Date(data.createdAt) : null,
-                    updatedAt: data.updatedAt ? new Date(data.updatedAt) : null,
-                    startTime: data.startTime ? new Date(data.startTime) : null,
-                    endTime: data.endTime ? new Date(data.endTime) : null,
                 };
             });
 
+            const lastDoc = docs[docs.length - 1];
+            const lastValue = lastDoc?.get(orderBy);
+            const nextCursor =
+                lastDoc && lastValue !== undefined
+                    ? { valueForOrderBy: lastValue }
+                    : null;
+
             return {
                 events,
-                hasMore: snapshot.docs.length === limit,
-                lastDoc: snapshot.docs[snapshot.docs.length - 1],
-                total: snapshot.docs.length,
+                hasMore: docs.length === limit,
+                nextCursor,
+                total: docs.length,
             };
         } catch (err) {
-            console.error("[getAllEvents] error:", err);
+            this.logger.error("[getAllEvents] error:", err);
             throw err;
         }
     }
@@ -117,17 +158,12 @@ export class EventService {
         const cacheKey = this.CACHE_KEYS.EVENTS_BY_ORG_ID(orgID);
 
         const fetchFromDb = async () => {
-            console.log(
-                `[Cache Miss] Fetching events for orgID ${orgID} from Firestore.`,
-            );
-            const query = this.eventCollection.where(
-                "organizer.organizerID",
-                "==",
-                orgID,
-            );
-            const snap = await query.get();
+            this.logger.info(`[Cache Miss] Events by orgID ${orgID}`);
+            const snap = await this.eventCollection
+                .where("organizer.organizerID", "==", orgID)
+                .get();
             if (snap.empty) return [];
-            return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+            return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         };
 
         try {
@@ -136,11 +172,96 @@ export class EventService {
                 fetchFromDb,
                 REDIS_TTL.EVENT_DEFAULT,
             );
-            if (!events || events.length === 0) return [];
-            return events;
+            return events || [];
         } catch (err) {
-            console.error("[getEventsByOrgID] Redis error:", err);
+            this.logger.error("[getEventsByOrgID] Redis error:", err);
             return fetchFromDb();
+        }
+    }
+
+    async getPublicEventDetail(slug) {
+        if (!slug) return null;
+
+        const cacheKey = this.CACHE_KEYS.EVENT_DETAIL_SLUG(slug);
+
+        const fetchFn = async () => {
+            const snap = await this.eventCollection
+                .where("slug", "==", slug)
+                .limit(1)
+                .get();
+
+            if (snap.empty) {
+                // Negative caching 15s cho slug sai
+                await this._cacheSet({ key: cacheKey, value: null, ttl: 15 });
+                return null;
+            }
+
+            const doc = snap.docs[0];
+            const e = doc.data();
+
+            if (e.status === EVENT_STATUS.CANCELLED) {
+                throw new AppError({
+                    statusCode: 410,
+                    message: "Event cancelled",
+                });
+            }
+            if (e.status !== EVENT_STATUS.PUBLISHED) {
+                await this._cacheSet({ key: cacheKey, value: null, ttl: 15 }); // treat as 404 public
+                return null;
+            }
+
+            const ttSnap = await doc.ref
+                .collection(TICKET_TYPES_SUBCOLLECTION)
+                .orderBy("price", "asc")
+                .get();
+
+            const ticketTypes = ttSnap.docs.map((d) => {
+                const t = d.data();
+                const sold = Number(t.soldQuantity ?? 0);
+                const total = Number(t.totalQuantity ?? 0);
+                const available = Math.max(total - sold, 0);
+                return {
+                    ticketTypeID: t.ticketTypeID,
+                    name: t.name,
+                    price: t.price,
+                    currency: t.currency,
+                    totalQuantity: total,
+                    soldQuantity: sold,
+                    availableQuantity: available,
+                    isSoldOut: available === 0,
+                };
+            });
+
+            const result = sanitizePublicEvent({
+                ...e,
+                ticketTypes,
+                isAllSoldOut:
+                    ticketTypes.length > 0 &&
+                    ticketTypes.every((x) => x.isSoldOut),
+            });
+
+            // Gắn trackingKey theo eventID
+            await this._cacheSet({
+                key: cacheKey,
+                value: result,
+                ttl: 60,
+                trackingKey: this.CACHE_KEYS.EVENT_TRACKING(e.eventID),
+            });
+
+            return result;
+        };
+
+        try {
+            return await this._cacheGetOrSet({
+                key: cacheKey,
+                ttl: 60,
+                fetchFn,
+            });
+        } catch (err) {
+            this.logger.error(`[getPublicEventDetail] error for slug=${slug}`, {
+                err: err.message,
+            });
+            return fetchFn(); // vẫn throw 410 khi cần
         }
     }
 
@@ -150,90 +271,77 @@ export class EventService {
 
         const fetchFromDB = async () => {
             const docRef = this.eventCollection.doc(eventID);
-            const results = await Promise.allSettled([
+            const [evSnap, cSnap] = await Promise.all([
                 docRef.get(),
                 docRef.collection(EVENT_CONTRIBUTORS_SUBCOLLECTION).get(),
             ]);
+            if (!evSnap.exists) return null;
+            const eventData = evSnap.data();
+            const contributors = cSnap.empty
+                ? []
+                : cSnap.docs.map((d) => ({ contributorID: d.id, ...d.data() }));
+            const raw = { ...eventData, eventContributors: contributors };
 
-            const [eventResult, contributorResult] = results;
+            await this._cacheSet({
+                key: cacheKey,
+                value: raw,
+                ttl: REDIS_TTL.EVENT_DEFAULT,
+                trackingKey: this.CACHE_KEYS.EVENT_TRACKING(eventID),
+            });
 
-            if (
-                eventResult.status === "rejected" ||
-                !eventResult.value.exists
-            ) {
-                console.error(
-                    `Failed to fetch event ${eventID} or it does not exist.`,
-                );
-                return null;
-            }
-
-            const eventData = eventResult.value.data();
-            const eventContributors =
-                contributorResult.status === "fulfilled"
-                    ? contributorResult.value.docs.map((d) => ({
-                          id: d.id,
-                          ...d.data(),
-                      }))
-                    : [];
-
-            if (contributorResult.status === "rejected") {
-                console.error(
-                    `Failed to fetch contributors for event ${eventID}:`,
-                    contributorResult.reason,
-                );
-            }
-
-            return { ...eventData, eventContributors };
+            return raw;
         };
 
         try {
-            const eventFromCacheOrDB = await this.redisService.getOrSet(
-                cacheKey,
-                fetchFromDB,
-                REDIS_TTL.EVENT_DEFAULT,
-            );
-            if (!eventFromCacheOrDB) return null;
-            return isPublic
-                ? sanitizePublicEvent(eventFromCacheOrDB)
-                : eventFromCacheOrDB;
+            const raw = await this._cacheGetOrSet({
+                key: cacheKey,
+                ttl: REDIS_TTL.EVENT_DEFAULT,
+                fetchFn: fetchFromDB,
+            });
+            if (!raw) return null;
+            return isPublic ? sanitizePublicEvent(raw) : raw;
         } catch (err) {
-            console.error("[getEventByID] Redis error:", err);
+            this.logger.error("[getEventByID] Redis error:", err);
             const raw = await fetchFromDB();
             return isPublic ? sanitizePublicEvent(raw) : raw;
         }
     }
 
     async createEvent(user, eventData) {
-        if (!user || !user.uid)
+        if (!user?.uid)
             throw new AppError({ statusCode: 401, message: "Unauthorized" });
 
         const { ticketTypes = [], eventContributors = [], ...rest } = eventData;
-        const eventDocRef = this.eventCollection.doc();
-        const eventID = eventDocRef.id;
-        const now = this._nowISO();
+        const eventRef = this.eventCollection.doc();
+        const eventID = eventRef.id;
 
-        // Resolve contributors OUTSIDE transaction to avoid external calls in transaction
+        // Resolve contributors OUTSIDE transaction
         let resolvedContributors = [];
         if (Array.isArray(eventContributors) && eventContributors.length) {
             try {
-                const contributorPromises = eventContributors.map((c) =>
-                    this.contributorService
-                        .findOrCreate(c)
-                        .then((res) => ({ ...res, originalData: c })),
+                resolvedContributors = await Promise.all(
+                    eventContributors.map((c) =>
+                        this.contributorService
+                            .findOrCreate(c)
+                            .then((res) => ({ ...res, originalData: c })),
+                    ),
                 );
-                resolvedContributors = await Promise.all(contributorPromises);
             } catch (err) {
-                console.error(
-                    "[createEvent] failed resolving contributors:",
-                    err,
-                );
-                throw new Error("Failed to resolve contributors");
+                this.logger.error("[createEvent] resolve contributors:", err);
+                throw new AppError({
+                    statusCode: 400,
+                    message: "Failed to resolve contributors",
+                });
             }
         }
+
+        const slug = createEventSlug(eventData.title);
+        // TODO: ensure unique slug if cần (check collisions)
 
         const newEvent = {
             ...rest,
             eventID,
+            slug,
             status: EVENT_STATUS.DRAFT,
             organizer: {
                 organizerID: user.uid,
@@ -244,9 +352,7 @@ export class EventService {
                 participantCount: 0,
                 checkInCount: 0,
                 ticketSoldCount: 0,
-                totalTickets: Array.isArray(ticketTypes)
-                    ? ticketTypes.length
-                    : 0,
+                // ❌ không gán totalTickets = số loại vé (dễ hiểu sai)
             },
             startTime: eventData.startTime
                 ? new Date(eventData.startTime).toISOString()
@@ -254,71 +360,57 @@ export class EventService {
             endTime: eventData.endTime
                 ? new Date(eventData.endTime).toISOString()
                 : null,
-            createdAt: now,
-            updatedAt: now,
+            createdAt: null, // set bằng serverTimestamp
+            updatedAt: null,
         };
 
-        try {
-            await this.db.runTransaction(async (tx) => {
-                tx.set(eventDocRef, newEvent);
-
-                if (Array.isArray(ticketTypes) && ticketTypes.length > 0) {
-                    const tcol = eventDocRef.collection(
-                        TICKET_TYPES_SUBCOLLECTION,
-                    );
-                    for (const tt of ticketTypes) {
-                        const tdRef = tcol.doc();
-                        const newTicketType = { ...tt, ticketTypeID: tdRef.id };
-                        tx.set(tdRef, newTicketType);
-                    }
-                }
-
-                if (resolvedContributors.length > 0) {
-                    const ccol = eventDocRef.collection(
-                        EVENT_CONTRIBUTORS_SUBCOLLECTION,
-                    );
-                    for (const resolved of resolvedContributors) {
-                        const {
-                            id: contributorID,
-                            data: contributorData,
-                            originalData,
-                        } = resolved;
-                        const linkData = {
-                            contributorID,
-                            name:
-                                contributorData?.fullName ??
-                                originalData?.name ??
-                                "unknown",
-                            profilePicture:
-                                contributorData?.photoUrl ??
-                                originalData?.photoUrl ??
-                                null,
-                            role: originalData?.role ?? null,
-                            isHeadliner: originalData?.isHeadliner ?? false,
-                        };
-                        const linkDocRef = ccol.doc(contributorID);
-                        tx.set(linkDocRef, linkData);
-                    }
-                }
+        await this.db.runTransaction(async (tx) => {
+            tx.set(eventRef, {
+                ...newEvent,
+                createdAt: this._fv().serverTimestamp(),
+                updatedAt: this._fv().serverTimestamp(),
             });
 
-            const orgCacheKey = this.CACHE_KEYS.EVENTS_BY_ORG_ID(user.uid);
-            console.log(
-                `[Cache Invalidate] Deleting key ${orgCacheKey} due to new event creation.`,
-            );
-            await this.redisService.del(orgCacheKey);
+            if (Array.isArray(ticketTypes) && ticketTypes.length > 0) {
+                const tcol = eventRef.collection(TICKET_TYPES_SUBCOLLECTION);
+                for (const tt of ticketTypes) {
+                    const tdRef = tcol.doc();
+                    const newTicketType = { ...tt, ticketTypeID: tdRef.id };
+                    tx.set(tdRef, newTicketType);
+                }
+            }
 
-            return eventID;
-        } catch (error) {
-            console.error(
-                "Transaction failed:",
-                error?.message ?? error,
-                error?.stack ?? "",
-            );
-            throw new Error(
-                "Failed to create the event due to an internal error.",
-            );
-        }
+            if (resolvedContributors.length > 0) {
+                const ccol = eventRef.collection(
+                    EVENT_CONTRIBUTORS_SUBCOLLECTION,
+                );
+                for (const {
+                    id: contributorID,
+                    data: contributorData,
+                    originalData,
+                } of resolvedContributors) {
+                    const linkData = {
+                        contributorID,
+                        name:
+                            contributorData?.fullName ??
+                            originalData?.name ??
+                            "unknown",
+                        profilePicture:
+                            contributorData?.photoUrl ??
+                            originalData?.photoUrl ??
+                            null,
+                        role: originalData?.role ?? null,
+                        isHeadliner: originalData?.isHeadliner ?? false,
+                    };
+                    tx.set(ccol.doc(contributorID), linkData);
+                }
+            }
+        });
+
+        // Invalidate org list cache
+        await this.redisService.del(this.CACHE_KEYS.EVENTS_BY_ORG_ID(user.uid));
+
+        return eventID;
     }
 
     async updateEvent(eventID, eventData, actor = null) {
@@ -331,60 +423,56 @@ export class EventService {
         const eventRef = this.eventCollection.doc(eventID);
         let updatedEvent = null;
 
-        await this.redisLockService.executeWithLock(
-            `event:${eventID}`,
-            async () => {
-                await this.db.runTransaction(async (tx) => {
-                    const snap = await tx.get(eventRef);
-                    if (!snap.exists)
-                        throw new AppError({
-                            statusCode: 404,
-                            message: "Event not found",
-                        });
-
-                    const existingEvent = snap.data();
-
-                    if (
-                        actor &&
-                        actor.userID &&
-                        existingEvent.organizer?.organizerID !== actor.userID
-                    ) {
-                        throw new AppError({
-                            statusCode: 403,
-                            message: "Unauthorized to update this event",
-                            errorCode: ERROR_CODE.FORBIDDEN,
-                        });
-                    }
-
-                    this._validateEventUpdateRules(existingEvent, eventData);
-
-                    if (
-                        eventData.ticketTypes &&
-                        Array.isArray(eventData.ticketTypes) &&
-                        eventData.ticketTypes.length > 0
-                    ) {
-                        eventData.ticketTypes = await this._validateTicketTypes(
-                            existingEvent.ticketTypes ?? [],
-                            eventData.ticketTypes,
-                        );
-                    }
-
-                    const updateData = this._prepareUpdateData(eventData);
-
-                    tx.update(eventRef, updateData);
-                    updatedEvent = { ...existingEvent, ...updateData };
+        await this.db.runTransaction(async (tx) => {
+            const snap = await tx.get(eventRef);
+            if (!snap.exists)
+                throw new AppError({
+                    statusCode: 404,
+                    message: "Event not found",
                 });
-            },
-        );
 
-        const eventCacheKey = this.CACHE_KEYS.EVENT_BY_ID(eventID);
-        const orgCacheKey = this.CACHE_KEYS.EVENTS_BY_ORG_ID(
-            updatedEvent?.organizer?.organizerID ?? "unknown",
+            const existingEvent = snap.data();
+
+            if (
+                actor?.userID &&
+                existingEvent.organizer?.organizerID !== actor.userID
+            ) {
+                throw new AppError({
+                    statusCode: 403,
+                    message: "Unauthorized to update this event",
+                    errorCode: ERROR_CODE.FORBIDDEN,
+                });
+            }
+
+            this._validateEventUpdateRules(existingEvent, eventData);
+
+            if (
+                Array.isArray(eventData.ticketTypes) &&
+                eventData.ticketTypes.length > 0
+            ) {
+                eventData.ticketTypes = await this._validateTicketTypes(
+                    existingEvent.ticketTypes ?? [],
+                    eventData.ticketTypes,
+                );
+            }
+
+            const updateData = this._prepareUpdateData(eventData);
+            tx.update(eventRef, {
+                ...updateData,
+                updatedAt: this._fv().serverTimestamp(),
+            });
+
+            updatedEvent = { ...existingEvent, ...updateData };
+        });
+
+        await this._invalidateEvent(eventID);
+
+        await this.redisService.del(
+            this.CACHE_KEYS.EVENTS_BY_ORG_ID(
+                (updatedEvent || eventData || cancelledEvent)?.organizer
+                    ?.organizerID ?? "unknown",
+            ),
         );
-        console.info(
-            `[Cache Invalidate] Deleting keys ${eventCacheKey} and ${orgCacheKey} due to update.`,
-        );
-        await this.redisService.del(eventCacheKey, orgCacheKey);
 
         return updatedEvent;
     }
@@ -395,87 +483,96 @@ export class EventService {
                 statusCode: 400,
                 message: "eventID is required",
             });
+
         if (!organizerID)
             throw new AppError({
                 statusCode: 400,
                 message: "organizerID is required",
             });
 
+        // 1) Kiểm tra có ticket types
         const eventTicketTypes =
             await this.ticketClientService.getEventTicketTypes(eventID);
         if (!Array.isArray(eventTicketTypes) || eventTicketTypes.length === 0) {
             throw new AppError({
+                statusCode: 400,
+                errorCode: ERROR_CODE.INVALID_DATA,
                 message:
                     "An event must have at least one ticket type before it can be published.",
-                errorCode: ERROR_CODE.INVALID_DATA,
-                statusCode: 400,
             });
         }
 
         const eventRef = this.eventCollection.doc(eventID);
         let eventData = null;
 
+        // 2) Ghi trạng thái
         await this.db.runTransaction(async (tx) => {
             const eventDoc = await tx.get(eventRef);
             if (!eventDoc.exists)
                 throw new AppError({
-                    message: "Event Not Found.",
-                    errorCode: ERROR_CODE.NOT_FOUND,
                     statusCode: 404,
+                    errorCode: ERROR_CODE.NOT_FOUND,
+                    message: "Event Not Found.",
                 });
 
             const event = eventDoc.data();
-            eventData = event;
-
             if (event.organizer?.organizerID !== organizerID)
                 throw new AppError({
-                    message: "Unauthorized",
-                    errorCode: ERROR_CODE.UNAUTHORIZED,
                     statusCode: 401,
+                    errorCode: ERROR_CODE.UNAUTHORIZED,
+                    message: "Unauthorized",
                 });
-
             if (event.status === EVENT_STATUS.PUBLISHED)
                 throw new AppError({
-                    message: "This event has already been published.",
-                    errorCode: ERROR_CODE.INVALID_OPERATION,
                     statusCode: 400,
+                    errorCode: ERROR_CODE.INVALID_OPERATION,
+                    message: "Already published.",
                 });
-
             if (event.startTime && new Date(event.startTime) < new Date())
                 throw new AppError({
-                    message: "Cannot publish an event that has already passed.",
-                    errorCode: ERROR_CODE.INVALID_DATA,
                     statusCode: 400,
+                    errorCode: ERROR_CODE.INVALID_DATA,
+                    message: "Event already passed.",
                 });
 
             tx.update(eventRef, {
                 status: EVENT_STATUS.PUBLISHED,
-                publishedAt: this._nowISO(),
-                updatedAt: this._nowISO(),
+                publishedAt: this._fv().serverTimestamp(),
+                updatedAt: this._fv().serverTimestamp(),
             });
+
+            eventData = event; // lưu để dùng sau transaction
         });
 
-        if (eventData) {
-            const eventCacheKey = this.CACHE_KEYS.EVENT_BY_ID(eventID);
-            const orgCacheKey = this.CACHE_KEYS.EVENTS_BY_ORG_ID(
-                eventData.organizer?.organizerID ?? "unknown",
-            );
-            console.info(
-                `[Cache Invalidate] Deleting keys ${eventCacheKey} and ${orgCacheKey} due to publish.`,
-            );
-            await this.redisService.del(eventCacheKey, orgCacheKey);
+        // 3) Invalidate cache theo trackingKey
+        await this._invalidateEvent(eventID);
+        await this.redisService.del(
+            this.CACHE_KEYS.EVENTS_BY_ORG_ID(
+                eventData?.organizer?.organizerID ?? "unknown",
+            ),
+        );
 
-            await this.eventLifecycleEventService.sendEventPublished({
-                eventID,
-                organizerID,
-                ...eventData,
-            });
-        } else {
-            console.error(
-                "Transaction succeeded but eventData was not captured.",
-                { eventID },
-            );
-        }
+        // 4) Khởi tạo tồn kho (IMPORTANT)
+        const tt = await this.ticketClientService.getEventTicketTypes(eventID);
+
+        await Promise.all(
+            tt.map((t) =>
+                this.redisService.setRaw(
+                    `inv:${t.ticketTypeID}:remaining`,
+                    String(t.totalQuantity),
+                    { ttl: 0 },
+                ),
+            ),
+        );
+
+        // 5) Emit lifecycle event
+        await this.eventLifecycleEventService.sendEventPublished({
+            eventID,
+            organizerID,
+            ...eventData,
+        });
+
+        return { success: true };
     }
 
     async cancelEvent(eventID, actor, cancelReason = "No reason provided") {
@@ -484,7 +581,7 @@ export class EventService {
                 statusCode: 400,
                 message: "eventID is required",
             });
-        if (!actor || !actor.userID)
+        if (!actor?.userID)
             throw new AppError({
                 statusCode: 401,
                 message: "actor is required",
@@ -493,64 +590,58 @@ export class EventService {
         const { userID, username, email } = actor;
         const eventRef = this.eventCollection.doc(eventID);
         let cancelledEvent = null;
-        const now = Date.now();
 
-        await this.redisLockService.executeWithLock(
-            `event:${eventID}`,
-            async () => {
-                await this.db.runTransaction(async (tx) => {
-                    const snap = await tx.get(eventRef);
-                    if (!snap.exists)
-                        throw new AppError({
-                            statusCode: 404,
-                            message: "Event not found",
-                        });
-
-                    const event = snap.data();
-                    if (event.organizer?.organizerID !== userID)
-                        throw new AppError({
-                            statusCode: 403,
-                            message:
-                                "You are not allowed to cancel this event.",
-                            errorCode: ERROR_CODE.FORBIDDEN,
-                        });
-
-                    if (event.status === EVENT_STATUS.CANCELLED) {
-                        cancelledEvent = event;
-                        return;
-                    }
-
-                    const startTime = event.startTime
-                        ? new Date(event.startTime).getTime()
-                        : 0;
-                    if (startTime <= now)
-                        throw new AppError({
-                            statusCode: 400,
-                            message:
-                                "Event has already started and cannot be cancelled.",
-                        });
-
-                    const updateData = {
-                        status: EVENT_STATUS.CANCELLED,
-                        cancelReason,
-                        cancelledBy: userID,
-                        cancelledByUsername: username ?? "unknown",
-                        cancelledByEmail: email,
-                        cancelledAt: this._nowISO(),
-                        updatedAt: this._nowISO(),
-                    };
-
-                    tx.update(eventRef, updateData);
-                    cancelledEvent = { ...event, ...updateData };
+        await this.db.runTransaction(async (tx) => {
+            const snap = await tx.get(eventRef);
+            if (!snap.exists)
+                throw new AppError({
+                    statusCode: 404,
+                    message: "Event not found",
                 });
-            },
-        );
 
-        const eventCacheKey = this.CACHE_KEYS.EVENT_BY_ID(eventID);
-        const orgCacheKey = this.CACHE_KEYS.EVENTS_BY_ORG_ID(
-            cancelledEvent.organizer?.organizerID ?? "unknown",
+            const event = snap.data();
+            if (event.organizer?.organizerID !== userID)
+                throw new AppError({
+                    statusCode: 403,
+                    errorCode: ERROR_CODE.FORBIDDEN,
+                    message: "Forbidden",
+                });
+
+            if (event.status === EVENT_STATUS.CANCELLED) {
+                cancelledEvent = event;
+                return;
+            }
+
+            const startTime = event.startTime
+                ? new Date(event.startTime).getTime()
+                : 0;
+            if (startTime <= Date.now())
+                throw new AppError({
+                    statusCode: 400,
+                    message: "Event already started; cannot cancel.",
+                });
+
+            const updateData = {
+                status: EVENT_STATUS.CANCELLED,
+                cancelReason,
+                cancelledBy: userID,
+                cancelledByUsername: username ?? "unknown",
+                cancelledByEmail: email ?? null,
+                cancelledAt: this._fv().serverTimestamp(),
+                updatedAt: this._fv().serverTimestamp(),
+            };
+
+            tx.update(eventRef, updateData);
+            cancelledEvent = { ...event, ...updateData };
+        });
+
+        await this._invalidateEvent(eventID);
+        await this.redisService.del(
+            this.CACHE_KEYS.EVENTS_BY_ORG_ID(
+                (updatedEvent || eventData || cancelledEvent)?.organizer
+                    ?.organizerID ?? "unknown",
+            ),
         );
-        await this.redisService.del(eventCacheKey, orgCacheKey);
 
         const attendeesCount = await this.countEventAttendees(eventID);
         if (attendeesCount > 0) {
@@ -584,6 +675,7 @@ export class EventService {
             existingEvent.stats?.participantCount ??
             existingEvent.participantCount ??
             0;
+
         if (
             existingEvent.status === EVENT_STATUS.PUBLISHED &&
             eventData.status === EVENT_STATUS.DRAFT &&
@@ -593,7 +685,7 @@ export class EventService {
                 statusCode: 400,
                 errorCode: ERROR_CODE.INVALID_OPERATION,
                 message:
-                    "Cannot change published event to draft when there are participants",
+                    "Cannot downgrade published event with participants to draft",
             });
         }
 
@@ -610,16 +702,15 @@ export class EventService {
                 throw new AppError({
                     statusCode: 400,
                     errorCode: ERROR_CODE.INVALID_OPERATION,
-                    message:
-                        "Cannot update event times after event has started",
+                    message: "Cannot update times after event has started",
                 });
             }
         }
 
         if (eventData.startTime && eventData.endTime) {
-            const startTime = new Date(eventData.startTime);
-            const endTime = new Date(eventData.endTime);
-            if (endTime <= startTime) {
+            const s = new Date(eventData.startTime);
+            const e = new Date(eventData.endTime);
+            if (e <= s) {
                 throw new AppError({
                     statusCode: 400,
                     errorCode: ERROR_CODE.INVALID_DATA,
@@ -629,8 +720,8 @@ export class EventService {
         }
 
         if (eventData.startTime && !eventData.endTime && existingEnd) {
-            const newStartTime = new Date(eventData.startTime);
-            if (newStartTime >= existingEnd) {
+            const s = new Date(eventData.startTime);
+            if (s >= existingEnd) {
                 throw new AppError({
                     statusCode: 400,
                     errorCode: ERROR_CODE.INVALID_DATA,
@@ -640,8 +731,8 @@ export class EventService {
         }
 
         if (eventData.endTime && !eventData.startTime && existingStart) {
-            const newEndTime = new Date(eventData.endTime);
-            if (newEndTime <= existingStart) {
+            const e = new Date(eventData.endTime);
+            if (e <= existingStart) {
                 throw new AppError({
                     statusCode: 400,
                     errorCode: ERROR_CODE.INVALID_DATA,
@@ -661,42 +752,38 @@ export class EventService {
         }
 
         const ticketMap = new Map();
-        for (const ticket of current) {
-            if (ticket?.ticketTypeID)
-                ticketMap.set(ticket.ticketTypeID, { ...ticket });
+        for (const t of current) {
+            if (t?.ticketTypeID) ticketMap.set(t.ticketTypeID, { ...t });
         }
 
-        let hasChanged = false;
-        for (const update of updates) {
-            const { ticketTypeID } = update;
+        let changed = false;
+        for (const upd of updates) {
+            const { ticketTypeID } = upd;
             if (!ticketTypeID) {
-                hasChanged = true;
+                changed = true;
                 ticketMap.set(
                     `__new_${Math.random().toString(36).slice(2, 9)}`,
-                    { ...update },
+                    { ...upd },
                 );
                 continue;
             }
-
-            const existing = ticketMap.get(ticketTypeID);
-            if (!existing) {
-                hasChanged = true;
-                ticketMap.set(ticketTypeID, update);
+            const exist = ticketMap.get(ticketTypeID);
+            if (!exist) {
+                changed = true;
+                ticketMap.set(ticketTypeID, upd);
                 continue;
             }
-
-            const merged = { ...existing, ...update };
-            const changes = diff(existing, merged);
-            if (changes.length > 0) {
-                hasChanged = true;
+            const merged = { ...exist, ...upd };
+            if (diff(exist, merged).length > 0) {
+                changed = true;
                 ticketMap.set(ticketTypeID, merged);
             }
         }
 
         const mergedArray = Array.from(ticketMap.values());
-        if (!hasChanged && mergedArray.length === current.length)
-            return current;
-        return mergedArray;
+        return !changed && mergedArray.length === current.length
+            ? current
+            : mergedArray;
     }
 
     _prepareUpdateData(eventData) {
@@ -705,7 +792,7 @@ export class EventService {
             updateData.startTime = new Date(updateData.startTime).toISOString();
         if (updateData.endTime)
             updateData.endTime = new Date(updateData.endTime).toISOString();
-        updateData.updatedAt = this._nowISO();
+        // updatedAt set trong transaction = serverTimestamp
         Object.keys(updateData).forEach((k) => {
             if (updateData[k] === undefined || updateData[k] === null)
                 delete updateData[k];
@@ -717,20 +804,26 @@ export class EventService {
     // Attendees: list/create/count/update/remove
     // -----------------------
     async getEventAttendees(eventID, params = {}) {
-        if (!eventID) {
-            console.warn("[getEventAttendees] eventID is required.");
-            return null;
-        }
+        if (!eventID)
+            throw new AppError({
+                statusCode: 400,
+                message: "eventID is required",
+            });
 
         const {
             limit = 10,
-            startAfter,
+            startAfter, // serialize-safe cursor: { fieldValue, id? }
             sortBy = "checkInTime",
             sortOrder = "asc",
             search,
         } = params;
 
-        const allowedOrderBy = ["checkInTime", "displayName", "email"];
+        const allowedOrderBy = [
+            "checkInTime",
+            "displayName",
+            "email",
+            "joinedAt",
+        ];
         const finalSortBy = allowedOrderBy.includes(sortBy)
             ? sortBy
             : "checkInTime";
@@ -738,89 +831,73 @@ export class EventService {
             ? sortOrder
             : "asc";
 
-        const cacheParams = { ...params };
-        if (startAfter && typeof startAfter === "object")
-            cacheParams.startAfter = startAfter.id || startAfter;
+        const cacheParams = {
+            limit,
+            sortBy: finalSortBy,
+            sortOrder: finalSortOrder,
+            search: search?.toString().toLowerCase() ?? null,
+            startAfter: startAfter?.fieldValue ?? null,
+        };
         const cacheKey = this.CACHE_KEYS.EVENT_ATTENDEES_BY_PAGE(
             eventID,
             cacheParams,
         );
 
         const fetchFromDatabase = async () => {
-            console.info(
-                `[CACHE MISS] Fetching attendees for event ${eventID} from database.`,
-            );
-            try {
-                let queryRef = this.eventCollection
-                    .doc(eventID)
-                    .collection(ATTENDEES_SUBCOLLECTION);
+            this.logger.info(`[CACHE MISS] Attendees ${eventID}`);
+            let q = this.eventCollection
+                .doc(eventID)
+                .collection(ATTENDEES_SUBCOLLECTION);
 
-                if (search && typeof search === "string" && search.length > 2) {
-                    const normalizedQuery = search.toLowerCase().split(" ")[0];
-                    queryRef = queryRef.where(
-                        "searchableKeywords",
-                        "array-contains",
-                        normalizedQuery,
-                    );
-                }
+            if (search && typeof search === "string" && search.length > 2) {
+                const normalized = search.toLowerCase().split(" ")[0];
+                q = q.where("searchableKeywords", "array-contains", normalized);
+            }
 
-                queryRef = queryRef
-                    .orderBy(finalSortBy, finalSortOrder)
-                    .limit(limit + 1);
+            q = q.orderBy(finalSortBy, finalSortOrder).limit(limit + 1);
 
-                if (startAfter) queryRef = queryRef.startAfter(startAfter);
+            if (startAfter?.fieldValue !== undefined) {
+                q = q.startAfter(startAfter.fieldValue);
+            }
 
-                const snapshot = await queryRef.get();
-
-                if (snapshot.empty) {
-                    return {
-                        success: true,
-                        data: [],
-                        metadata: { hasMore: false, limit, nextCursor: null },
-                    };
-                }
-
-                const hasMore = snapshot.docs.length > limit;
-                const docs = hasMore
-                    ? snapshot.docs.slice(0, limit)
-                    : snapshot.docs;
-                const lastVisible = docs[docs.length - 1] || null;
-
-                const attendees = docs
-                    .map((doc) => {
-                        const rawData = { attendeeID: doc.id, ...doc.data() };
-                        const validation = AttendeeSchema.safeParse(rawData);
-                        if (!validation.success) {
-                            console.warn(
-                                `Invalid attendee data in DB (doc ID: ${doc.id}). Skipping.`,
-                                { errors: validation.error.flatten() },
-                            );
-                            return null;
-                        }
-                        return validation.data;
-                    })
-                    .filter(Boolean);
-
+            const snapshot = await q.get();
+            if (snapshot.empty) {
                 return {
-                    success: true,
-                    data: attendees,
-                    metadata: {
-                        limit,
-                        hasMore,
-                        nextCursor: lastVisible || null,
-                    },
-                };
-            } catch (error) {
-                console.error(
-                    `Failed to fetch attendees from DB for event ${eventID}`,
-                    { error: error.message },
-                );
-                return {
-                    success: false,
                     data: [],
-                    metadata: { limit, hasMore: false, nextCursor: null },
+                    metadata: { hasMore: false, limit, nextCursor: null },
                 };
             }
+
+            const hasMore = snapshot.docs.length > limit;
+            const docs = hasMore
+                ? snapshot.docs.slice(0, limit)
+                : snapshot.docs;
+            const lastVisible = docs[docs.length - 1] || null;
+
+            const attendees = docs
+                .map((doc) => {
+                    const raw = { attendeeID: doc.id, ...doc.data() };
+                    const v = AttendeeSchema.safeParse(raw);
+                    if (!v.success) {
+                        this.logger.warn(
+                            `Invalid attendee doc: ${doc.id}`,
+                            v.error.flatten(),
+                        );
+                        return null;
+                    }
+                    return v.data;
+                })
+                .filter(Boolean);
+
+            const nextCursor =
+                lastVisible?.get(finalSortBy) !== undefined
+                    ? { fieldValue: lastVisible.get(finalSortBy) }
+                    : null;
+
+            return {
+                data: attendees,
+                metadata: { limit, hasMore, nextCursor },
+            };
         };
 
         try {
@@ -830,41 +907,34 @@ export class EventService {
                 REDIS_TTL.EVENT_DEFAULT,
             );
         } catch (err) {
-            console.error("[getEventAttendees] Redis error:", err);
+            this.logger.error("[getEventAttendees] Redis error:", err);
             return fetchFromDatabase();
         }
     }
 
     async countEventAttendees(eventID) {
-        if (!eventID) {
-            console.warn("[countEventAttendees] eventID is required.");
-            return 0;
-        }
+        if (!eventID)
+            throw new AppError({
+                statusCode: 400,
+                message: "eventID is required",
+            });
 
         const cacheKey = this.CACHE_KEYS.EVENT_ATTENDEE_COUNT(eventID);
 
         const fetchFromDatabase = async () => {
-            console.info(
-                `[CACHE MISS] Counting attendees for event ${eventID}...`,
-            );
+            this.logger.info(`[CACHE MISS] Count attendees ${eventID}`);
             try {
                 const colRef = this.eventCollection
                     .doc(eventID)
                     .collection(ATTENDEES_SUBCOLLECTION);
-                if (colRef.count) {
+                if (typeof colRef.count === "function") {
                     const snap = await colRef.count().get();
-                    const count =
-                        snap?.data?.()?.count ?? snap?.data?.count ?? 0;
-                    return count;
-                } else {
-                    const snap = await colRef.get();
-                    return snap.size ?? 0;
+                    return snap.data().count ?? 0;
                 }
-            } catch (error) {
-                console.error(
-                    `Failed to count attendees for event ${eventID}`,
-                    { error: error.message },
-                );
+                const snap = await colRef.get();
+                return snap.size ?? 0;
+            } catch (e) {
+                this.logger.error(`[countEventAttendees] error:`, e);
                 return 0;
             }
         };
@@ -876,97 +946,71 @@ export class EventService {
                 REDIS_TTL.EVENT_DEFAULT,
             );
         } catch (err) {
-            console.error("[countEventAttendees] Redis error:", err);
+            this.logger.error("[countEventAttendees] Redis error:", err);
             return fetchFromDatabase();
         }
     }
 
     async createEventAttendee(eventID, inputData) {
-        if (!eventID) {
-            console.warn("[createEventAttendee] eventID is required.");
-            return { success: false, message: "Event ID is required." };
-        }
+        if (!eventID)
+            throw new AppError({
+                statusCode: 400,
+                message: "eventID is required",
+            });
 
-        const validation = AttendeeSchema.safeParse(inputData);
-        if (!validation.success) {
-            console.warn(
-                "[createEventAttendee] Invalid input data.",
-                validation.error.flatten(),
-            );
-            return new AppError({
+        const v = AttendeeSchema.safeParse(inputData);
+        if (!v.success) {
+            throw new AppError({
+                statusCode: 400,
                 errorCode: ERROR_CODE.INVALID_DATA,
-                errors: validation.error,
-                message: "Invalid Data",
+                message: "Invalid attendee data",
+                errors: v.error.flatten(),
             });
         }
 
-        const { displayName, email, manually, attendeeStatus } =
-            validation.data;
+        const { displayName, email, manually, attendeeStatus } = v.data;
 
-        try {
-            const initialSearchableKeywords = [
-                ...new Set([
-                    ...(displayName
-                        ? displayName.toLowerCase().split(" ")
-                        : []),
-                    email.toLowerCase(),
-                ]),
-            ];
+        const initialSearchableKeywords = [
+            ...new Set([
+                ...(displayName ? displayName.toLowerCase().split(" ") : []),
+                email.toLowerCase(),
+            ]),
+        ];
 
-            const now = this._nowISO();
-            const status =
-                manually && attendeeStatus
-                    ? attendeeStatus
-                    : ATTENDEE_STATUS.REGISTERED;
-            const checkInTime =
-                status === ATTENDEE_STATUS.CHECKED_IN ? now : null;
+        const status =
+            manually && attendeeStatus
+                ? attendeeStatus
+                : ATTENDEE_STATUS.REGISTERED;
 
-            const newAttendeeDoc = {
-                eventID,
-                displayName,
-                email,
-                attendeeStatus: status,
-                checkInTime,
-                searchableKeywords: initialSearchableKeywords,
-                joinedAt: now,
-            };
+        const newAttendeeDoc = {
+            eventID,
+            displayName,
+            email: email.toLowerCase(),
+            attendeeStatus: status,
+            checkInTime:
+                status === ATTENDEE_STATUS.CHECKED_IN
+                    ? this._fv().serverTimestamp()
+                    : null,
+            searchableKeywords: initialSearchableKeywords,
+            joinedAt: this._fv().serverTimestamp(),
+            updatedAt: this._fv().serverTimestamp(),
+        };
 
-            const newDocRef = await this.eventCollection
-                .doc(eventID)
-                .collection(ATTENDEES_SUBCOLLECTION)
-                .add(newAttendeeDoc);
-            const newAttendeeID = newDocRef.id;
+        const docRef = await this.eventCollection
+            .doc(eventID)
+            .collection(ATTENDEES_SUBCOLLECTION)
+            .add(newAttendeeDoc);
 
-            const FieldValue = this._getFieldValue();
-            if (FieldValue) {
-                await newDocRef.update({
-                    searchableKeywords: FieldValue.arrayUnion(
-                        String(newAttendeeID).toLowerCase(),
-                    ),
-                });
-            }
+        await docRef.update({
+            searchableKeywords: this._fv().arrayUnion(
+                String(docRef.id).toLowerCase(),
+            ),
+        });
 
-            console.info(
-                `Invalidating cache for event ${eventID} due to new attendee.`,
-            );
-            await this.invalidateEventAttendeesCache(eventID);
+        await this.invalidateEventAttendeesCache(eventID);
 
-            const finalDoc = await newDocRef.get();
-            const createdAttendee = {
-                attendeeID: finalDoc.id,
-                ...finalDoc.data(),
-            };
-
-            console.info(
-                `Successfully created attendee ${newAttendeeID} for event ${eventID}.`,
-            );
-            return { success: true, data: createdAttendee };
-        } catch (error) {
-            console.error(`Failed to create attendee for event ${eventID}`, {
-                message: error.message,
-            });
-            return { success: false, message: "Failed to create attendee." };
-        }
+        const finalDoc = await docRef.get();
+        return { attendeeID: finalDoc.id, ...finalDoc.data() };
     }
 
     async updateEventAttendee(eventID, attendeeID, updateData, actor = null) {
@@ -981,56 +1025,35 @@ export class EventService {
             .collection(ATTENDEES_SUBCOLLECTION)
             .doc(attendeeID);
 
-        try {
-            await this.redisLockService.executeWithLock(
-                `event:${eventID}:attendee:${attendeeID}`,
-                async () => {
-                    await this.db.runTransaction(async (tx) => {
-                        const attDoc = await tx.get(attendeeRef);
-                        if (!attDoc.exists)
-                            throw new AppError({
-                                statusCode: 404,
-                                message: "Attendee not found",
-                            });
+        await this.db.runTransaction(async (tx) => {
+            const attDoc = await tx.get(attendeeRef);
+            if (!attDoc.exists)
+                throw new AppError({
+                    statusCode: 404,
+                    message: "Attendee not found",
+                });
 
-                        const current = attDoc.data();
+            const current = attDoc.data();
+            const merged = { ...current, ...updateData };
+            const v = AttendeeSchema.safeParse({ attendeeID, ...merged });
+            if (!v.success) {
+                throw new AppError({
+                    statusCode: 400,
+                    message: "Invalid attendee update",
+                    errorCode: ERROR_CODE.INVALID_DATA,
+                });
+            }
 
-                        // Optional: validate status transitions, permissions here
-                        const merged = { ...current, ...updateData };
-                        const validation = AttendeeSchema.safeParse({
-                            attendeeID,
-                            ...merged,
-                        });
-                        if (!validation.success) {
-                            throw new AppError({
-                                statusCode: 400,
-                                message: "Invalid attendee update",
-                                errorCode: ERROR_CODE.INVALID_DATA,
-                            });
-                        }
+            tx.update(attendeeRef, {
+                ...updateData,
+                updatedAt: this._fv().serverTimestamp(),
+            });
+        });
 
-                        tx.update(attendeeRef, {
-                            ...updateData,
-                            updatedAt: this._nowISO(),
-                        });
-                    });
-                },
-            );
+        await this.invalidateEventAttendeesCache(eventID);
 
-            console.info(
-                `Invalidating attendee list cache for event ${eventID} due to attendee update.`,
-            );
-            await this.invalidateEventAttendeesCache(eventID);
-
-            const final = await attendeeRef.get();
-            return {
-                success: true,
-                data: { attendeeID: final.id, ...final.data() },
-            };
-        } catch (err) {
-            console.error(`[updateEventAttendee] error:`, err);
-            throw err;
-        }
+        const final = await attendeeRef.get();
+        return { attendeeID: final.id, ...final.data() };
     }
 
     async removeEventAttendee(eventID, attendeeID, actor = null) {
@@ -1045,66 +1068,41 @@ export class EventService {
             .collection(ATTENDEES_SUBCOLLECTION)
             .doc(attendeeID);
 
-        try {
-            await this.redisLockService.executeWithLock(
-                `event:${eventID}:attendee:${attendeeID}`,
-                async () => {
-                    await this.db.runTransaction(async (tx) => {
-                        const attDoc = await tx.get(attendeeRef);
-                        if (!attDoc.exists)
-                            throw new AppError({
-                                statusCode: 404,
-                                message: "Attendee not found",
-                            });
-                        const attendeeData = attDoc.data();
+        await this.db.runTransaction(async (tx) => {
+            const attDoc = await tx.get(attendeeRef);
+            if (!attDoc.exists)
+                throw new AppError({
+                    statusCode: 404,
+                    message: "Attendee not found",
+                });
 
-                        // Optionally check if actor is allowed to remove attendee
-                        tx.delete(attendeeRef);
-                    });
-                },
-            );
+            tx.delete(attendeeRef);
+        });
 
-            console.info(
-                `Invalidating attendee list cache for event ${eventID} due to attendee removal.`,
-            );
-            await this.invalidateEventAttendeesCache(eventID);
-
-            return { success: true };
-        } catch (err) {
-            console.error("[removeEventAttendee] error:", err);
-            throw err;
-        }
+        await this.invalidateEventAttendeesCache(eventID);
+        return { success: true };
     }
 
     // -----------------------
     // Tickets
     // -----------------------
     async getEventTicketTypes(eventID) {
-        if (!eventID) {
-            console.warn("[getEventTicketTypes] eventID is required.");
-            return [];
-        }
+        if (!eventID)
+            throw new AppError({
+                statusCode: 400,
+                message: "eventID is required",
+            });
 
         const cacheKey = this.CACHE_KEYS.EVENT_TICKET_TYPES_BY_ID(eventID);
 
         const fetchFromDatabase = async () => {
-            console.info(
-                `[CACHE MISS] Fetching ticket types for event ${eventID} from Firestore.`,
-            );
-            try {
-                const ticketTypesCollectionRef = this.eventCollection
-                    .doc(eventID)
-                    .collection(TICKET_TYPES_SUBCOLLECTION);
-                const snapshot = await ticketTypesCollectionRef.get();
-                if (snapshot.empty) return [];
-                return snapshot.docs.map((doc) => ({
-                    id: doc.id,
-                    ...doc.data(),
-                }));
-            } catch (err) {
-                console.error(`[getEventTicketTypes] error:`, err);
-                return [];
-            }
+            this.logger.info(`[CACHE MISS] Ticket types ${eventID}`);
+            const snap = await this.eventCollection
+                .doc(eventID)
+                .collection(TICKET_TYPES_SUBCOLLECTION)
+                .get();
+            if (snap.empty) return [];
+            return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         };
 
         try {
@@ -1114,7 +1112,7 @@ export class EventService {
                 REDIS_TTL.TICKET_TYPES_DEFAULT,
             );
         } catch (err) {
-            console.error("[getEventTicketTypes] Redis error:", err);
+            this.logger.error("[getEventTicketTypes] Redis error:", err);
             return fetchFromDatabase();
         }
     }
@@ -1126,15 +1124,13 @@ export class EventService {
         if (!eventID) return [];
         const cacheKey = this.CACHE_KEYS.EVENT_CONTRIBUTORS_BY_ID(eventID);
         const fetchFromDb = async () => {
-            console.info(
-                `[CACHE MISS] Fetching contributors for event ${eventID} from Firestore.`,
-            );
+            this.logger.info(`[CACHE MISS] Contributors ${eventID}`);
             const snap = await this.eventCollection
                 .doc(eventID)
                 .collection(EVENT_CONTRIBUTORS_SUBCOLLECTION)
                 .get();
             if (snap.empty) return [];
-            return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+            return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         };
 
         try {
@@ -1144,144 +1140,107 @@ export class EventService {
                 REDIS_TTL.EVENT_DEFAULT,
             );
         } catch (err) {
-            console.error("[getEventContributors] Redis error:", err);
+            this.logger.error("[getEventContributors] Redis error:", err);
             return fetchFromDb();
         }
     }
 
     async createContributor(eventID, contributorData) {
-        if (!eventID) throw new Error("Event ID là bắt buộc.");
+        if (!eventID)
+            throw new AppError({
+                statusCode: 400,
+                message: "eventID is required",
+            });
 
-        try {
-            const contributorsSubCollectionRef = this.eventCollection
-                .doc(eventID)
-                .collection(EVENT_CONTRIBUTORS_SUBCOLLECTION);
-            const newContributorDocRef = contributorsSubCollectionRef.doc();
-            const newContributorID = newContributorDocRef.id;
+        const ccol = this.eventCollection
+            .doc(eventID)
+            .collection(EVENT_CONTRIBUTORS_SUBCOLLECTION);
+        const ref = ccol.doc();
+        const contributorID = ref.id;
 
-            const finalContributorData = {
-                ...contributorData,
-                contributorID: newContributorID,
-            };
+        await ref.set({ ...contributorData, contributorID });
 
-            await newContributorDocRef.set(finalContributorData);
+        await this.redisService.del(
+            this.CACHE_KEYS.EVENT_BY_ID(eventID),
+            this.CACHE_KEYS.EVENT_CONTRIBUTORS_BY_ID(eventID),
+        );
 
-            const eventCacheKey = this.CACHE_KEYS.EVENT_BY_ID(eventID);
-            const contributorCacheKey =
-                this.CACHE_KEYS.EVENT_CONTRIBUTORS_BY_ID(eventID);
-
-            await this.redisService.del(eventCacheKey, contributorCacheKey);
-
-            return finalContributorData;
-        } catch (error) {
-            console.error("Lỗi khi tạo contributor bằng Admin SDK:", error);
-            throw new Error("Cannot create contributor.");
-        }
+        return { ...contributorData, contributorID };
     }
 
-    async updateContributor(eventID, contributorID, data) {
+    async updateContributor(eventID, contributorID, data, actor = null) {
         if (!eventID || !contributorID)
-            throw new Error("eventID and contributorID are required");
+            throw new AppError({
+                statusCode: 400,
+                message: "eventID and contributorID are required",
+            });
 
         const contributorRef = this.eventCollection
             .doc(eventID)
             .collection(EVENT_CONTRIBUTORS_SUBCOLLECTION)
             .doc(contributorID);
 
-        try {
-            await this.db.runTransaction(async (tx) => {
-                const contributorDoc = await tx.get(contributorRef);
-                if (!contributorDoc.exists) {
-                    tx.set(contributorRef, data);
-                } else {
-                    tx.update(contributorRef, data);
-                }
-            });
+        await this.db.runTransaction(async (tx) => {
+            const doc = await tx.get(contributorRef);
+            if (!doc.exists) tx.set(contributorRef, data);
+            else tx.update(contributorRef, data);
+        });
 
-            console.log(`Invalidating caches for event ${eventID}...`);
-            const keysToInvalidate = [
-                this.CACHE_KEYS.EVENT_BY_ID(eventID),
-                this.CACHE_KEYS.EVENT_CONTRIBUTORS_BY_ID(eventID),
-            ];
-            await this.redisService.del(...keysToInvalidate);
-            console.log(`Caches invalidated successfully.`);
-        } catch (e) {
-            console.error("[updateContributor] error:", e);
-            throw e;
-        }
+        await this.redisService.del(
+            this.CACHE_KEYS.EVENT_BY_ID(eventID),
+            this.CACHE_KEYS.EVENT_CONTRIBUTORS_BY_ID(eventID),
+        );
+
+        return { success: true };
     }
 
     async removeContributor(eventID, contributorID, userID) {
         if (!eventID || !contributorID)
-            throw new Error("eventID and contributorID are required");
+            throw new AppError({
+                statusCode: 400,
+                message: "eventID and contributorID are required",
+            });
 
-        const lockResourceKey = `event:${eventID}:contributors`;
+        const eventRef = this.eventCollection.doc(eventID);
+        const contributorRef = eventRef
+            .collection(EVENT_CONTRIBUTORS_SUBCOLLECTION)
+            .doc(contributorID);
 
-        try {
-            await this.redisLockService.executeWithLock(
-                lockResourceKey,
-                async () => {
-                    console.log(
-                        `[Lock Acquired] Processing removal for contributor ${contributorID} from event ${eventID}.`,
-                    );
-                    const eventRef = this.eventCollection.doc(eventID);
-                    const contributorRef = eventRef
-                        .collection(EVENT_CONTRIBUTORS_SUBCOLLECTION)
-                        .doc(contributorID);
+        await this.db.runTransaction(async (tx) => {
+            const eventDoc = await tx.get(eventRef);
+            const cDoc = await tx.get(contributorRef);
 
-                    await this.db.runTransaction(async (transaction) => {
-                        const eventDoc = await transaction.get(eventRef);
-                        const contributorDoc =
-                            await transaction.get(contributorRef);
+            if (!eventDoc.exists)
+                throw new AppError({
+                    statusCode: 404,
+                    errorCode: ERROR_CODE.NOT_FOUND,
+                    message: "Event not found",
+                });
 
-                        if (!eventDoc.exists)
-                            throw new AppError({
-                                message: `Event with ID ${eventID} not found.`,
-                                statusCode: 404,
-                                errorCode: ERROR_CODE.NOT_FOUND,
-                            });
+            const eventData = eventDoc.data();
+            if (eventData.organizer?.organizerID !== userID)
+                throw new AppError({
+                    statusCode: 403,
+                    errorCode: ERROR_CODE.FORBIDDEN,
+                    message: "Forbidden",
+                });
 
-                        const eventData = eventDoc.data();
-                        if (eventData.organizer?.organizerID !== userID)
-                            throw new AppError({
-                                message:
-                                    "You do not have permission to modify this event.",
-                                statusCode: 403,
-                                errorCode: ERROR_CODE.FORBIDDEN,
-                            });
+            if (!cDoc.exists)
+                throw new AppError({
+                    statusCode: 404,
+                    errorCode: ERROR_CODE.NOT_FOUND,
+                    message: "Contributor not found",
+                });
 
-                        if (!contributorDoc.exists)
-                            throw new AppError({
-                                message: `Contributor with ID ${contributorID} not found in event ${eventID}.`,
-                                statusCode: 404,
-                                errorCode: ERROR_CODE.NOT_FOUND,
-                            });
+            tx.delete(contributorRef);
+        });
 
-                        transaction.delete(contributorRef);
-                    });
+        await this.redisService.del(
+            this.CACHE_KEYS.EVENT_BY_ID(eventID),
+            this.CACHE_KEYS.EVENT_CONTRIBUTORS_BY_ID(eventID),
+        );
 
-                    console.log(
-                        `[Firestore Transaction Success] Contributor ${contributorID} removed.`,
-                    );
-                },
-            );
-
-            console.log(`Invalidating caches for event ${eventID}...`);
-            const keysToInvalidate = [
-                this.CACHE_KEYS.EVENT_BY_ID(eventID),
-                this.CACHE_KEYS.EVENT_CONTRIBUTORS_BY_ID(eventID),
-            ];
-            await this.redisService.del(...keysToInvalidate);
-            console.log(`Caches invalidated successfully.`);
-
-            return { success: true };
-        } catch (error) {
-            console.error(
-                `Failed to remove contributor ${contributorID} from event ${eventID}:`,
-                error,
-            );
-            throw error;
-        }
+        return { success: true };
     }
 
     // -----------------------
@@ -1293,7 +1252,10 @@ export class EventService {
         try {
             await this.redisService.invalidateByTrackingKey(prefix);
         } catch (err) {
-            console.error("[invalidateEventAttendeesCache] Redis error:", err);
+            this.logger.error(
+                "[invalidateEventAttendeesCache] Redis error:",
+                err,
+            );
         }
     }
 }
