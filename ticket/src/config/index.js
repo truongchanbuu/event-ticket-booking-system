@@ -1,4 +1,4 @@
-import { TICKET_TYPES_EVENTS } from "@event_ticket_booking_system/shared";
+import { EVENT_LIFECYCLE_EVENTS } from "@event_ticket_booking_system/shared";
 import path from "path";
 import dotenv from "dotenv";
 
@@ -70,18 +70,16 @@ export default {
         heartbeatInterval: 10000,
         producer_name: process.env.KAFKA_PRODUCER_SERVICE_NAME || "app",
         topics: {
-            main_events: "",
-            ticket_type_events: TICKET_TYPES_EVENTS,
+            event_lifecycle: EVENT_LIFECYCLE_EVENTS,
         },
         consumerGroups: {
-            main_events: "event-service-main-group",
-            ticket_type_group: "event-service-ticket-type-group",
-            dlq_group: "event-service-dlq",
-            global_retry_group: "event-service-global-retry-handler",
+            main_events: "ticket-service-main-group",
+            event_ticket_type_group: "event-ticket-type-group",
+            dlq_group: "ticket-service-dlq",
+            global_retry_group: "ticket-service-global-retry-handler",
         },
         dlqTopics: {
-            main_events_dlq: "event-service.main.dlq",
-            ticket_type_dlq: "event-service.ticket-type.dlq",
+            main_tickets_dlq: "ticket-service.main.dlq",
         },
     },
 };

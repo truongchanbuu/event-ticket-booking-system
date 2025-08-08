@@ -74,6 +74,17 @@ export default function DetailActionButtons({
     }
   };
 
+  const handleUnpublish = async () => {
+    setIsSubmitting(true);
+    try {
+      await updateEvent({ status: EVENT_STATUS.DRAFT });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const canUpdate = [EVENT_STATUS.DRAFT, EVENT_STATUS.CANCELLED].includes(
     event.status
   );
@@ -109,7 +120,11 @@ export default function DetailActionButtons({
           )}
 
           {event.status === EVENT_STATUS.PUBLISHED && (
-            <Button className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors">
+            <Button
+              onClick={handleUnpublish}
+              disabled={event.stats.participantCount > 0}
+              className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
+            >
               <EyeOff className="h-4 w-4" />
               <span>Unpublish Event</span>
             </Button>

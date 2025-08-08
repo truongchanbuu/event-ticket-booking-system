@@ -37,7 +37,6 @@ export class TicketLifecycleEventService {
     }
 
     async sendTicketTypeUpdated(payload) {
-        console.log(`PAYLOAD: ${payload}`);
         const enrichedPayload = {
             ...payload,
             action: "updated",

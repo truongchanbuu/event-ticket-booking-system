@@ -24,6 +24,7 @@ export const TicketTypeSchema = z
       .int()
       .min(0, "The number of checked in people must be positive")
       .default(0),
+    publishedAt: z.string().datetime().optional(),
   })
   .refine((data) => data.totalQuantity >= data.remainingQuantity, {
     message: "Remaining cannot be greater than total quantity",

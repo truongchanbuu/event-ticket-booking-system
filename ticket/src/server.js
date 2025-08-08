@@ -1,6 +1,6 @@
 import { createApp } from "./app.js";
 import { configureContainer } from "./container.js";
-// import { ConsumerOrchestrator } from "./kafka/consumer/index.js";
+import { ConsumerOrchestrator } from "./kafka/consumer/index.js";
 
 let server;
 
@@ -12,15 +12,15 @@ async function bootstrap() {
         const rootLogger = container.resolve("logger");
 
         // Initialize Kafka
-        // const kafkaService = container.resolve("kafkaService");
-        // const consumerOrchestrator = new ConsumerOrchestrator({
-        //     container: container,
-        //     kafkaService: kafkaService,
-        //     messageDispatcher: container.resolve("messageDispatcher"),
-        //     config: config,
-        //     logger: rootLogger,
-        // });
-        // await consumerOrchestrator.startAll();
+        const kafkaService = container.resolve("kafkaService");
+        const consumerOrchestrator = new ConsumerOrchestrator({
+            container: container,
+            kafkaService: kafkaService,
+            messageDispatcher: container.resolve("messageDispatcher"),
+            config: config,
+            logger: rootLogger,
+        });
+        await consumerOrchestrator.startAll();
 
         // Create and start the app
         const app = createApp({ container, config, rootLogger });
@@ -30,9 +30,6 @@ async function bootstrap() {
             rootLogger.debug(`🚀 Ticket service running on port ${PORT}`);
             rootLogger.debug(`📊 Environment: ${config.app.nodeEnv}`);
         });
-
-        // Graceful shutdown handling
-        // Trong file bootstrap.js của bạn
 
         const gracefulShutdown = async (signal) => {
             rootLogger.debug(
@@ -58,7 +55,7 @@ async function bootstrap() {
             }
 
             try {
-                // await kafkaService.disconnect();
+                await kafkaService.disconnect();
                 rootLogger.debug("✅ Kafka connections closed gracefully.");
             } catch (error) {
                 rootLogger.error("❌ Error closing Kafka connections:", error);

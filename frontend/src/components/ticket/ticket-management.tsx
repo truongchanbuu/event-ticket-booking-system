@@ -12,83 +12,102 @@ import { Input } from "../ui/input";
 import LoadingSpinner from "../ui/loading";
 import { formatCurrency } from "@/lib/utils";
 import { ConfirmDeleteModal } from "../ui/confirm-dialog";
-import EmptyStateUI from "../reload";
 import { ErrorMessage } from "../ui/error-ui-with-reload";
 
-const TicketRow = ({ ticket, onEdit, onDelete }) => (
-  <tr className="hover:bg-gray-50">
-    <td className="px-6 py-4 whitespace-nowrap">
-      <div
-        className="text-sm font-medium text-gray-900 truncate"
-        title={ticket.name}
-      >
-        {ticket.name}
-      </div>
-    </td>
-    <td className="px-6 py-4 whitespace-nowrap">
-      <div className="text-sm text-gray-900">
-        {typeof ticket.price === "number" ? ticket.price.toFixed(2) : "0.00"}{" "}
-        {ticket.currency || ""}
-      </div>
-    </td>
-    <td className="px-6 py-4 whitespace-nowrap">
-      <div className="text-sm text-gray-900">{ticket.totalQuantity}</div>
-    </td>
-    <td className="px-6 py-4 whitespace-nowrap">
-      <div className="text-sm text-gray-900">
-        {(ticket.totalQuantity ?? 0) - (ticket.remainingQuantity ?? 0)}
-      </div>
-    </td>
-    <td className="px-6 py-4 whitespace-nowrap">
-      <div className="text-sm text-gray-900">{ticket.checkInQuantity}</div>
-    </td>
-    <td className="px-6 py-4 whitespace-nowrap">
-      <div className="w-24">
-        <ProgressBar
-          current={ticket.remainingQuantity}
-          total={ticket.totalQuantity}
-        />
-        <div className="text-xs text-gray-500 mt-1">
-          {ticket.totalQuantity > 0
-            ? `${Math.round(
-                (((ticket.totalQuantity ?? 0) -
-                  (ticket.remainingQuantity ?? 0)) /
-                  (ticket.totalQuantity ?? 1)) *
-                  100
-              )}%`
-            : "0%"}
+const TicketRow = ({ ticket, onEdit, onDelete }) => {
+  const canUpdateTicket =
+    ticket.publishedAt && ticket.totalQuantity !== ticket.remainingQuantity;
+  return (
+    <tr className="hover:bg-gray-50">
+      <td className="px-6 py-4 whitespace-nowrap">
+        <div
+          className="text-sm font-medium text-gray-900 truncate"
+          title={ticket.name}
+        >
+          {ticket.name}
         </div>
-      </div>
-    </td>
-    <td className="px-6 py-4 whitespace-nowrap">
-      <div className="text-sm font-medium text-green-600">
-        {formatCurrency(
-          (ticket.price ?? 0) *
-            ((ticket.totalQuantity ?? 0) - (ticket.remainingQuantity ?? 0))
-        )}
-      </div>
-    </td>
-    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-      <div className="flex space-x-2">
-        <Button
-          variant="ghost"
-          onClick={() => onEdit(ticket)}
-          className="text-blue-600 hover:text-blue-900 transition-colors hover:bg-gray-50"
-        >
-          <Edit2 className="w-4 h-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          onClick={() => onDelete(ticket.ticketTypeID)}
-          className="text-red-600 hover:text-red-900 transition-colors hover:bg-gray-50"
-        >
-          <Trash2 className="w-4 h-4" />
-        </Button>
-      </div>
-    </td>
-  </tr>
-);
-
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap">
+        <div className="text-sm text-gray-900">
+          {typeof ticket.price === "number" ? ticket.price.toFixed(2) : "0.00"}{" "}
+          {ticket.currency || ""}
+        </div>
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap">
+        <div className="text-sm text-gray-900">{ticket.totalQuantity}</div>
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap">
+        <div className="text-sm text-gray-900">
+          {(ticket.totalQuantity ?? 0) - (ticket.remainingQuantity ?? 0)}
+        </div>
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap">
+        <div className="text-sm text-gray-900">{ticket.checkInQuantity}</div>
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap">
+        <div className="w-24">
+          <ProgressBar
+            current={ticket.remainingQuantity}
+            total={ticket.totalQuantity}
+          />
+          <div className="text-xs text-gray-500 mt-1">
+            {ticket.totalQuantity > 0
+              ? `${Math.round(
+                  (((ticket.totalQuantity ?? 0) -
+                    (ticket.remainingQuantity ?? 0)) /
+                    (ticket.totalQuantity ?? 1)) *
+                    100
+                )}%`
+              : "0%"}
+          </div>
+        </div>
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap">
+        <div className="text-sm font-medium text-green-600">
+          {formatCurrency(
+            (ticket.price ?? 0) *
+              ((ticket.totalQuantity ?? 0) - (ticket.remainingQuantity ?? 0))
+          )}
+        </div>
+      </td>
+      <td
+        title={
+          canUpdateTicket ? "You cannot update ticket when it has sold." : ""
+        }
+        className="px-6 py-4 whitespace-nowrap text-sm font-medium"
+      >
+        <div className="flex space-x-2">
+          <Button
+            variant="ghost"
+            title={
+              canUpdateTicket
+                ? "You cannot update a published ticket type"
+                : "Edit"
+            }
+            disabled={canUpdateTicket}
+            onClick={() => onEdit(ticket)}
+            className="text-blue-600 hover:text-blue-900 transition-colors hover:bg-gray-50"
+          >
+            <Edit2 className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            title={
+              canUpdateTicket
+                ? "You cannot update a published ticket type"
+                : "Edit"
+            }
+            disabled={canUpdateTicket}
+            onClick={() => onDelete(ticket.ticketTypeID)}
+            className="text-red-600 hover:text-red-900 transition-colors hover:bg-gray-50"
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
+      </td>
+    </tr>
+  );
+};
 const TicketModal = ({
   isOpen,
   onClose,

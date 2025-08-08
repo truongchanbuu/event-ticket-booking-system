@@ -8,13 +8,11 @@ import {
     createLoggerFactory,
     createRedisClient,
     db,
+    EVENT_PUBLISHED,
     internalHttpClient,
     MessageDispatcher,
     RedisLockService,
     RedisService,
-    TICKET_TYPE_CREATED,
-    TICKET_TYPE_DELETED,
-    TICKET_TYPE_UPDATED,
 } from "@event_ticket_booking_system/shared";
 import { createKafkaService } from "./services/kafka.service.js";
 import { TicketService } from "./services/ticket.service.js";
@@ -24,6 +22,7 @@ import { EventClientService } from "./services/event-client.service.js";
 import { TicketLifecycleEventService } from "./kafka/ticket-lifecycle.events.js";
 import { InternalController } from "./controllers/internal.controller.js";
 import { InternalRoutes } from "./routes/internal.routes.js";
+import { PublishTicketTypesSnapshotUseCase } from "./kafka/use-case/PublishEventSnapshotUseCase.js";
 
 /**
  * Hàm factory để tạo, đăng ký, và khởi động DI container.
@@ -40,17 +39,7 @@ export async function configureContainer() {
 
     const handlerMap = {
         // Mapping cho Ticket Type
-        [TICKET_TYPE_CREATED]: "createTicketTypeSnapshotUseCase",
-        [TICKET_TYPE_UPDATED]: "updateTicketTypeSnapshotUseCase",
-        [TICKET_TYPE_DELETED]: "deleteTicketTypeSnapshotUseCase",
-
-        // Mapping cho vé lẻ (có thể gom vào một use case để xử lý logic tăng/giảm)
-        // [TICKET_ISSUED]: "updateTicketSaleStatsUseCase",
-        // [TICKET_CANCELLED]: "updateTicketSaleStatsUseCase",
-
-        // Mapping cho check-in
-        // [TICKET_CHECKED_IN]: "updateTicketCheckInStatsUseCase",
-        // [TICKET_CHECK_IN_REVERSED]: "updateTicketCheckInStatsUseCase",
+        [EVENT_PUBLISHED]: "publishTicketTypesSnapshotUseCase",
     };
 
     container.register({
@@ -86,6 +75,9 @@ export async function configureContainer() {
         // deleteTicketTypeSnapshotUseCase: asClass(
         //     DeleteTicketTypeSnapshotUseCase,
         // ).scoped(),
+        publishTicketTypesSnapshotUseCase: asClass(
+            PublishTicketTypesSnapshotUseCase,
+        ).scoped(),
 
         messageDispatcher: asClass(MessageDispatcher).singleton(),
     });

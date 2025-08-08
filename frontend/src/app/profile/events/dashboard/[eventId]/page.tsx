@@ -311,37 +311,38 @@ const EventManagementDashboard = () => {
                 )}
               </div>
             ) : (
-              /* Empty State - Modern design */
-              <div className="text-center py-16">
-                <div className="relative">
-                  {/* Background decoration */}
-                  <div className="absolute inset-0 flex items-center justify-center opacity-5">
-                    <div className="w-32 h-32 bg-orange-600 rounded-full"></div>
-                  </div>
-
-                  {/* Content */}
+              eventDetail.status !== EVENT_STATUS.PUBLISHED && (
+                <div className="text-center py-16">
                   <div className="relative">
-                    <div className="inline-flex p-4 bg-orange-50 rounded-2xl mb-6">
-                      <UserPlus className="w-8 h-8 text-orange-600" />
+                    {/* Background decoration */}
+                    <div className="absolute inset-0 flex items-center justify-center opacity-5">
+                      <div className="w-32 h-32 bg-orange-600 rounded-full"></div>
                     </div>
-                    <h3 className="text-xl font-semibold text-gray-900 mb-3">
-                      No Contributors Yet
-                    </h3>
-                    <p className="text-gray-500 mb-8 max-w-md mx-auto leading-relaxed">
-                      Start building your event team by adding speakers, hosts,
-                      artists, and other contributors who will make your event
-                      amazing.
-                    </p>
-                    <Button
-                      onClick={() => setShowAddContributor(true)}
-                      className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md transform hover:scale-105"
-                    >
-                      <Plus className="w-5 h-5" />
-                      Add First Contributor
-                    </Button>
+
+                    {/* Content */}
+                    <div className="relative">
+                      <div className="inline-flex p-4 bg-orange-50 rounded-2xl mb-6">
+                        <UserPlus className="w-8 h-8 text-orange-600" />
+                      </div>
+                      <h3 className="text-xl font-semibold text-gray-900 mb-3">
+                        No Contributors Yet
+                      </h3>
+                      <p className="text-gray-500 mb-8 max-w-md mx-auto leading-relaxed">
+                        Start building your event team by adding speakers,
+                        hosts, artists, and other contributors who will make
+                        your event amazing.
+                      </p>
+                      <Button
+                        onClick={() => setShowAddContributor(true)}
+                        className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md transform hover:scale-105"
+                      >
+                        <Plus className="w-5 h-5" />
+                        Add First Contributor
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )
             )}
           </div>
         </div>

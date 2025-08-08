@@ -82,6 +82,7 @@ export class TicketController {
 
         const updatedTicketTypeID = await this.ticketService.updateTicketType(
             ticketTypeID,
+            ticketToAuth.eventID,
             req.body,
         );
 
@@ -116,7 +117,10 @@ export class TicketController {
             });
         }
 
-        await this.ticketService.deleteTicketType(ticketTypeID);
+        await this.ticketService.deleteTicketType(
+            ticketTypeID,
+            ticketToAuth.eventID,
+        );
 
         return res.status(200).json({
             success: true,

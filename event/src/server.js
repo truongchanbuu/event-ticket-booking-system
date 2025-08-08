@@ -31,9 +31,6 @@ async function bootstrap() {
             rootLogger.debug(`📊 Environment: ${config.app.nodeEnv}`);
         });
 
-        // Graceful shutdown handling
-        // Trong file bootstrap.js của bạn
-
         const gracefulShutdown = async (signal) => {
             rootLogger.debug(
                 `\n🛑 Received ${signal}. Starting graceful shutdown. Draining connections...`,

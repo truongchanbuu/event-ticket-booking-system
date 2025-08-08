@@ -21,6 +21,10 @@ export class TicketService {
             TICKET_TYPES_BY_EVENTID: (eventID) =>
                 `event:${eventID}:ticketTypes`,
         };
+
+        this.LOCK_KEYS = {
+            EVENT_TICKETS: (eventID) => `event:${eventID}:ticketTypes`,
+        };
     }
 
     async findOrCreateTicketType(ticketData) {
@@ -94,7 +98,7 @@ export class TicketService {
         );
     }
 
-    async updateTicketType(ticketTypeID, updateData) {
+    async updateTicketType(ticketTypeID, eventID, updateData) {
         const allowedUpdates = ["name", "price", "totalQuantity", "currency"];
         const validUpdateData = {};
         for (const key of allowedUpdates) {
@@ -111,7 +115,7 @@ export class TicketService {
             });
         }
 
-        const resourceKey = `ticket_type:${ticketTypeID}`;
+        const resourceKey = this.LOCK_KEYS.EVENT_TICKETS(eventID);
         return this.redisLockService.executeWithLock(resourceKey, async () => {
             console.log(
                 `Lock acquired for resource: ${resourceKey}. Starting update transaction.`,
@@ -124,14 +128,23 @@ export class TicketService {
                 const ticketDoc = await transaction.get(ticketRef);
 
                 if (!ticketDoc.exists) {
-                    const err = new Error(
-                        `Cannot update: Ticket type with ID ${ticketTypeID} not found.`,
-                    );
-                    err.code = "TICKET_NOT_FOUND";
+                    const err = new AppError({
+                        message: `Cannot update: Ticket type with ID ${ticketTypeID} not found.`,
+                        statusCode: 404,
+                        errorCode: ERROR_CODE.NOT_FOUND,
+                    });
                     throw err;
                 }
 
                 const currentData = ticketDoc.data();
+                if (currentData.publishedAt) {
+                    throw new AppError({
+                        message: "You cannot update a published ticket types",
+                        statusCode: 403,
+                        errorCode: ERROR_CODE.FORBIDDEN,
+                    });
+                }
+
                 eventID = currentData.eventID;
                 const payloadToUpdate = { ...validUpdateData };
 
@@ -176,7 +189,91 @@ export class TicketService {
         });
     }
 
-    async deleteTicketType(ticketTypeID) {
+    async publishTicketTypes({ eventID, publishedAt }) {
+        if (!eventID || !publishedAt) {
+            throw new AppError({
+                message: "Event ID and Published At timestamp are required.",
+                statusCode: 400,
+                errorCode: ERROR_CODE.INVALID_DATA,
+            });
+        }
+
+        const resourceKey = this.LOCK_KEYS.EVENT_TICKETS(eventID);
+        return this.redisLockService.executeWithLock(resourceKey, async () => {
+            console.log(
+                `Lock acquired for resource: ${resourceKey}. Starting publish transaction for event ${eventID}.`,
+            );
+
+            let updatedTicketTypeIDs = [];
+
+            await this.db.runTransaction(async (transaction) => {
+                const ticketTypesQuery = this.ticketTypeCollection.where(
+                    "eventID",
+                    "==",
+                    eventID,
+                );
+
+                const querySnapshot = await transaction.get(ticketTypesQuery);
+
+                if (querySnapshot.empty) {
+                    console.warn(
+                        `No ticket types found for event ${eventID}. Nothing to publish.`,
+                    );
+                    return;
+                }
+
+                const docsToUpdate = [];
+                querySnapshot.forEach((doc) => {
+                    const ticketData = doc.data();
+
+                    if (!ticketData.publishedAt) {
+                        docsToUpdate.push({ ref: doc.ref, id: doc.id });
+                    }
+                });
+
+                if (docsToUpdate.length === 0) {
+                    console.log(
+                        `All ticket types for event ${eventID} have already been published.`,
+                    );
+                    return;
+                }
+
+                docsToUpdate.forEach((item) => {
+                    transaction.update(item.ref, { publishedAt: publishedAt });
+                    updatedTicketTypeIDs.push(item.id);
+                });
+
+                console.log(
+                    `${updatedTicketTypeIDs.length} ticket types for event ${eventID} marked for publishing within transaction.`,
+                );
+            });
+
+            if (updatedTicketTypeIDs.length > 0) {
+                const cacheKey =
+                    this.CACHE_KEYS.TICKET_TYPES_BY_EVENTID(eventID);
+                await this.redisService.del(cacheKey);
+                console.log(
+                    `Transaction successful. Cache invalidated for event ${eventID}.`,
+                );
+
+                // await this.ticketLifecycleEventService.sendTicketTypesPublished(
+                //     {
+                //         eventID,
+                //         publishedAt: aPublishedAt,
+                //         ticketTypeIDs: updatedTicketTypeIDs,
+                //     },
+                // );
+            }
+
+            return {
+                success: true,
+                eventID: eventID,
+                publishedCount: updatedTicketTypeIDs.length,
+            };
+        });
+    }
+
+    async deleteTicketType(ticketTypeID, eventID) {
         if (!ticketTypeID) {
             throw new AppError({
                 message: "Ticket Type ID is required.",
@@ -185,7 +282,7 @@ export class TicketService {
             });
         }
 
-        const resourceKey = `ticket_type:${ticketTypeID}`;
+        const resourceKey = this.LOCK_KEYS.EVENT_TICKETS(eventID);
         return this.redisLockService.executeWithLock(resourceKey, async () => {
             console.log(
                 `Lock acquired for resource: ${resourceKey}. Starting delete transaction.`,
@@ -250,70 +347,5 @@ export class TicketService {
         }
 
         return { eventID: doc.data().eventID };
-    }
-
-    async bookTicket(userID, eventID, ticketTypeID, quantity = 1) {
-        if (quantity <= 0) {
-            throw new Error("Quantity must be a positive number.");
-        }
-
-        const resourceKey = `ticket_type:${ticketTypeID}`;
-
-        return this.redisLockService.executeWithLock(resourceKey, async () => {
-            console.log(
-                `Lock acquired for resource: ${resourceKey}. Starting transaction.`,
-            );
-
-            const bookingResult = await this.db.runTransaction(
-                async (transaction) => {
-                    const ticketRef =
-                        this.ticketTypeCollection.doc(ticketTypeID);
-                    const ticketDoc = await transaction.get(ticketRef);
-
-                    if (!ticketDoc.exists) {
-                        const err = new Error(
-                            `Ticket type with ID ${ticketTypeID} not found.`,
-                        );
-                        err.code = "TICKET_NOT_FOUND";
-                        throw err;
-                    }
-
-                    const ticketData = ticketDoc.data();
-                    if (ticketData.remainingQuantity < quantity) {
-                        const err = new Error(
-                            `Not enough tickets available for ${ticketTypeID}. Only ${ticketData.remainingQuantity} left.`,
-                        );
-                        err.code = "INSUFFICIENT_TICKETS";
-                        throw err;
-                    }
-
-                    const newRemainingQuantity =
-                        ticketData.remainingQuantity - quantity;
-                    transaction.update(ticketRef, {
-                        remainingQuantity: newRemainingQuantity,
-                    });
-
-                    const bookingRef = this.bookingCollection.doc();
-                    transaction.set(bookingRef, {
-                        userID,
-                        eventID,
-                        ticketTypeID,
-                        quantity,
-                        status: "confirmed",
-                        createdAt: new Date().toISOString(),
-                    });
-
-                    return { bookingId: bookingRef.id };
-                },
-            );
-
-            const cacheKey = this.CACHE_KEYS.TICKET_TYPES_BY_EVENTID(eventID);
-            await this.redisService.del(cacheKey);
-            console.log(
-                `Transaction successful for ${resourceKey}. Cache invalidated for event ${eventID}.`,
-            );
-
-            return bookingResult;
-        });
     }
 }

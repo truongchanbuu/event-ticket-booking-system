@@ -409,7 +409,6 @@ export class EventService {
                 });
             }
 
-            // Tất cả kiểm tra đã qua, tiến hành cập nhật.
             tx.update(eventRef, {
                 status: EVENT_STATUS.PUBLISHED,
                 publishedAt: new Date().toISOString(),
@@ -420,7 +419,7 @@ export class EventService {
             await this.eventLifecycleEventService.sendEventPublished({
                 eventID: eventID,
                 organizerID: organizerID,
-                eventData: eventData, // Gửi "Fat Event"
+                ...eventData,
             });
         } else {
             this.logger?.error(

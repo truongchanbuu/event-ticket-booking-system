@@ -72,10 +72,10 @@ const config = {
             ticket_type_events: TICKET_TYPES_EVENTS,
         },
         consumerGroups: {
-            main_events: "ticket-service-main-group",
-            ticket_type_group: "ticket-service-ticket-type-group",
+            main_events: "event-service-main-group",
+            event_type_group: "event-service-ticket-type-group",
             dlq_group: "main-service-dlq",
-            global_retry_group: "ticket-service-global-retry-handler",
+            global_retry_group: "event-service-global-retry-handler",
         },
         dlqTopics: {
             main_events_dlq: "main_events_dlq_topic_name",
