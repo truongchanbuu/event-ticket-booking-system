@@ -35,10 +35,11 @@ export class PaymentController {
         const userID = req.user.uid;
         const paymentData = req.body;
 
-        const newPaymentMethod = await this.paymentService.createPaymentMethod(
-            userID,
-            paymentData,
-        );
+        const newPaymentMethod =
+            await this.paymentService.findOrCreatePaymentMethod(
+                userID,
+                paymentData,
+            );
 
         res.status(201).json({
             success: true,

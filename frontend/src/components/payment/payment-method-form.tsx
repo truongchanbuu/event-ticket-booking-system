@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useForm, SubmitHandler, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -6,6 +6,9 @@ import {
   CreatePaymentMethodInput,
   ALLOWED_PROVIDERS,
   PaymentProvider,
+  PaymentMethod,
+  UpdatePaymentMethodSchema,
+  UpdatePaymentMethodInput,
 } from "@/schema";
 import { usePaymentMethods } from "@/hooks/use-payment-method";
 import { Label } from "../ui/label";
@@ -13,35 +16,59 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { ChevronDown, CreditCard, Smartphone } from "lucide-react";
 
+type FormValues = CreatePaymentMethodInput | UpdatePaymentMethodInput;
+
 interface PaymentMethodFormProps {
   onSuccess: () => void;
   onCancel: () => void;
+  initialData?: PaymentMethod;
 }
 
 export const PaymentMethodForm = ({
   onSuccess,
   onCancel,
+  initialData,
 }: PaymentMethodFormProps) => {
+  const isUpdateMode = !!initialData;
+
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const { createMethod, isCreating } = usePaymentMethods();
+  const { createMethod, isCreating, updateMethod, isUpdating } =
+    usePaymentMethods();
+  const isProcessing = isCreating || isUpdating;
 
   const {
     register,
     handleSubmit,
     control,
     watch,
+    reset,
     formState: { errors, isDirty },
-  } = useForm<CreatePaymentMethodInput>({
-    resolver: zodResolver(CreatePaymentMethodSchema),
-    defaultValues: {
-      provider: "momo",
-      displayName: "",
-      account: "",
-      isDefault: true,
-    },
+  } = useForm<FormValues>({
+    resolver: zodResolver(
+      isUpdateMode ? UpdatePaymentMethodSchema : CreatePaymentMethodSchema
+    ),
+    defaultValues: isUpdateMode
+      ? {
+          provider: initialData.provider,
+          displayName: initialData.displayName,
+          account: initialData.account,
+          isDefault: initialData.isDefault,
+        }
+      : {
+          provider: "momo",
+          displayName: "",
+          account: "",
+          isDefault: true,
+        },
   });
 
-  const watchedProvider = watch("provider");
+  useEffect(() => {
+    if (initialData) {
+      reset(initialData);
+    }
+  }, [initialData, reset]);
+
+  const watchedProvider = watch("provider") as PaymentProvider;
 
   const providerConfig: Record<
     PaymentProvider,
@@ -52,37 +79,23 @@ export const PaymentMethodForm = ({
       type: "ewallet",
       icon: <Smartphone className="w-4 h-4" />,
     },
-    // zalopay: {
-    //   label: "ZaloPay",
-    //   type: "ewallet",
-    //   icon: <Smartphone className="w-4 h-4" />,
-    // },
-    // vnpay: {
-    //   label: "VNPay",
-    //   type: "gateway",
-    //   icon: <CreditCard className="w-4 h-4" />,
-    // },
-    // vietcombank: {
-    //   label: "Vietcombank",
-    //   type: "bank",
-    //   icon: <Building className="w-4 h-4" />,
-    // },
-    // techcombank: {
-    //   label: "Techcombank",
-    //   type: "bank",
-    //   icon: <Building className="w-4 h-4" />,
-    // },
   };
 
   const selectedProvider = providerConfig[watchedProvider];
   const isEWallet = selectedProvider?.type === "ewallet";
 
-  const onSubmit: SubmitHandler<CreatePaymentMethodInput> = (data) => {
-    createMethod(data, {
-      onSuccess: () => {
-        onSuccess();
-      },
-    });
+  const onSubmit: SubmitHandler<FormValues> = async (data) => {
+    if (isUpdateMode && initialData) {
+      await updateMethod(
+        {
+          paymentMethodID: initialData.paymentMethodID,
+          paymentMethodData: data as UpdatePaymentMethodInput,
+        },
+        { onSuccess }
+      );
+    } else {
+      await createMethod(data as CreatePaymentMethodInput, { onSuccess });
+    }
   };
 
   return (
@@ -180,7 +193,7 @@ export const PaymentMethodForm = ({
 
         <div className="space-y-2">
           <Label className="text-sm font-medium text-gray-700">
-            {isEWallet ? "Linked Phone" : "Account"} (Optional)
+            {isEWallet ? "Linked Phone" : "Account"}
           </Label>
           <Input
             {...register("account")}
@@ -214,23 +227,19 @@ export const PaymentMethodForm = ({
         </div>
 
         <div className="flex space-x-3 pt-4">
-          <Button
-            variant="ghost"
-            type="button"
-            onClick={onCancel}
-            disabled={isCreating}
-            className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:text-black transition-colors duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+          <Button type="button" onClick={onCancel} disabled={isProcessing}>
             Cancel
           </Button>
           <Button
             onClick={handleSubmit(onSubmit)}
-            disabled={
-              isCreating || Object.values(errors).length > 0 || !isDirty
-            }
-            className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all duration-200 font-medium hover:shadow-lg transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+            // Nút Save sẽ được bật nếu form "dirty" (có thay đổi)
+            disabled={isProcessing || !isDirty}
           >
-            {isCreating ? "Saving..." : "Save Payment Method"}
+            {isProcessing
+              ? "Saving..."
+              : isUpdateMode
+                ? "Update Method"
+                : "Add Method"}
           </Button>
         </div>
       </div>

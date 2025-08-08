@@ -42,7 +42,7 @@ export const usePaymentMethods = () => {
     select: (response) => response.data,
   });
 
-  const { mutate: createMethod, isPending: isCreating } = useMutation<
+  const { mutateAsync: createMethod, isPending: isCreating } = useMutation<
     PaymentMethodResponse,
     Error,
     CreatePaymentMethodInput
@@ -61,7 +61,7 @@ export const usePaymentMethods = () => {
     },
   });
 
-  const { mutate: updateMethod, isPending: isUpdating } = useMutation<
+  const { mutateAsync: updateMethod, isPending: isUpdating } = useMutation<
     PaymentMethodResponse,
     Error,
     UpdatePaymentArgs
@@ -74,13 +74,15 @@ export const usePaymentMethods = () => {
       const previousMethods =
         queryClient.getQueryData<PaymentMethod[]>(queryKey);
 
-      queryClient.setQueryData(queryKey, (oldData: PaymentMethod[] = []) =>
-        oldData.map((method) =>
+      queryClient.setQueryData(queryKey, (oldData: PaymentMethodsResponse) => {
+        const data = oldData.data ?? [];
+        return data.map((method) =>
           method.paymentMethodID === newData.paymentMethodID
             ? { ...method, ...newData.paymentMethodData }
             : method
-        )
-      );
+        );
+      });
+
       return { previousMethods };
     },
 
@@ -106,7 +108,7 @@ export const usePaymentMethods = () => {
     },
   });
 
-  const { mutate: deleteMethod, isPending: isDeleting } = useMutation<
+  const { mutateAsync: deleteMethod, isPending: isDeleting } = useMutation<
     APIResponse<null>,
     Error,
     string
@@ -117,17 +119,21 @@ export const usePaymentMethods = () => {
       const previousMethods =
         queryClient.getQueryData<PaymentMethod[]>(queryKey);
 
-      queryClient.setQueryData(queryKey, (oldData: PaymentMethod[] = []) =>
-        oldData.filter((method) => method.paymentMethodID !== paymentMethodID)
-      );
+      queryClient.setQueryData(queryKey, (oldData: PaymentMethodsResponse) => {
+        const data = oldData.data ?? [];
+        return data.filter(
+          (method) => method.paymentMethodID !== paymentMethodID
+        );
+      });
+
       return { previousMethods };
     },
 
-    onSuccess: (data, paymentMethodID) => {
+    onSuccess: (data) => {
       toast({
         variant: "success",
         title: "Delete successfully.",
-        description: `Payment method ${paymentMethodID} has been removed.`,
+        description: `Payment method has been removed.`,
       });
     },
 
@@ -139,6 +145,7 @@ export const usePaymentMethods = () => {
         description: err.message || "The item has been restored.",
       });
     },
+
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey });
     },

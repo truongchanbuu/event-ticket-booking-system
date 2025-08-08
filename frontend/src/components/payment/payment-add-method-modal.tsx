@@ -2,14 +2,17 @@ import React, { useState } from "react";
 import { PaymentMethodForm } from "./payment-method-form";
 import { X } from "lucide-react";
 import { Button } from "../ui/button";
+import { PaymentMethod } from "@/schema";
 
 interface PaymentMethodFormProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  initialData?: PaymentMethod;
 }
 
 export const PaymentMethodModal = ({
+  initialData,
   isOpen,
   onClose,
   onSuccess,
@@ -55,6 +58,7 @@ export const PaymentMethodModal = ({
             <PaymentMethodForm
               onSuccess={handleSuccess}
               onCancel={handleCancel}
+              initialData={initialData}
             />
           </div>
         </div>

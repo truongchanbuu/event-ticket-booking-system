@@ -13,6 +13,7 @@ import PreferencesSection from "@/components/user/preference-section";
 import ActivitySecuritySection from "@/components/user/activity-security-section";
 import TimelineSection from "@/components/user/timeline-section";
 import { useProfileManagement } from "@/hooks/user-store-hooks";
+import { PaymentMethodsSection } from "@/components/payment/payment-methods-management";
 
 const _UserProfilePage: React.FC = () => {
   const { userProfile, updateProfile } = useProfileManagement();
@@ -58,6 +59,8 @@ const _UserProfilePage: React.FC = () => {
               onPreferencesChange={manager.handlePreferencesChange}
               user={currentData}
             />
+
+            <PaymentMethodsSection isEditing={manager.isEditing} />
 
             {/* Activity & Security Section */}
             <ActivitySecuritySection user={currentData} />

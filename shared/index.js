@@ -26,7 +26,7 @@ export * from "./validator/verify-token.verification.js";
 export { default as ROLE } from "./enums/role.enum.js";
 export { default as NOTIFICATION_REF } from "./enums/notification_ref.enum.js";
 export { default as NOTIFICATION_STATUS } from "./enums/notification_status.enum.js";
-export { default as PAYMENT_METHODS } from "./enums/payment-method.enum.js";
+export * from "./enums/payment-method.enum.js";
 export { default as PAYMENT_STATUS } from "./enums/payment-status.enum.js";
 export { EVENT_TYPES } from "./enums/event_types.enum.js";
 export { default as APPLY_STATUS } from "./enums/apply_status.enum.js";

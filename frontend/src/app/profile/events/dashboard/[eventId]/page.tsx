@@ -349,6 +349,7 @@ const EventManagementDashboard = () => {
 
         {/* Ticket Management */}
         <TicketManagement
+          isPublished={eventDetail.status === EVENT_STATUS.PUBLISHED}
           isLoading={ticketQuery.isLoading}
           tickets={ticketTypes}
           error={ticketQuery.error?.message}

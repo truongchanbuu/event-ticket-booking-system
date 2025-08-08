@@ -235,6 +235,7 @@ const EmptyState = () => (
 );
 
 interface TicketManagementProps {
+  isPublished?: boolean;
   tickets: TicketType[];
   isLoading: boolean;
   error: string | null | undefined;
@@ -246,6 +247,7 @@ interface TicketManagementProps {
 
 const TicketManagement = ({
   tickets,
+  isPublished = false,
   isLoading = false,
   error,
   onCreate,
@@ -360,13 +362,15 @@ const TicketManagement = ({
         <div className="mx-auto">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold text-gray-900">Ticket Types</h1>
-            <Button
-              onClick={openCreateModal}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-              Create New Ticket Type
-            </Button>
+            {!isPublished && (
+              <Button
+                onClick={openCreateModal}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+              >
+                <Plus className="w-5 h-5" />
+                Create New Ticket Type
+              </Button>
+            )}
           </div>
 
           {tickets.length > 0 ? (
