@@ -12,11 +12,6 @@ import { registry } from "./metrics/availability.metric.js";
 export function createApp({ container, config, logger }) {
     const app = express();
 
-    if (config.app.nodeEnv == "development") app.use(cors());
-
-    app.use(express.json());
-    app.use(checkJson);
-
     app.use((req, res, next) => {
         console.log(
             `📨 ${req.method} ${req.url} - ${new Date().toISOString()}`,
@@ -24,8 +19,11 @@ export function createApp({ container, config, logger }) {
         next();
     });
 
-    app.use("/api/health", healthRouter);
+    if (config.app.nodeEnv === "development") app.use(cors());
+    app.use(express.json());
+    app.use(checkJson);
 
+    app.use("/api/health", healthRouter);
     app.get("/metrics", async (_req, res) => {
         res.set("Content-Type", registry.contentType);
         res.end(await registry.metrics());
@@ -36,10 +34,9 @@ export function createApp({ container, config, logger }) {
     const apiRoutes = container.resolve("apiRoutes");
     app.use("/api", apiRoutes.router);
 
-    app.use((req, res, next) => {
-        next(new AppError("Not Found", 404, ERROR_CODE.NOT_FOUND));
-    });
+    app.use((req, res, next) =>
+        next(new AppError("Not Found", 404, ERROR_CODE.NOT_FOUND)),
+    );
     app.use(errorHandler);
-
     return app;
 }

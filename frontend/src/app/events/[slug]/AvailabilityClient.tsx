@@ -48,11 +48,9 @@ export function AvailabilityClient({
   };
 
   useEffect(() => {
-    // Initial fetch
     abortControllerRef.current = new AbortController();
     fetchAvailability(abortControllerRef.current.signal);
 
-    // Set up polling
     intervalRef.current = setInterval(() => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -104,7 +102,7 @@ export function AvailabilityClient({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Thông tin vé</CardTitle>
+          <CardTitle>Ticket Information</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <Skeleton className="h-4 w-full" />

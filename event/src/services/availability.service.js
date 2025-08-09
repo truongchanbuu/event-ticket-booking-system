@@ -1,112 +1,96 @@
-import { EVENT_STATUS } from "../enums/event-status.js";
-import {
-    availabilityCacheHit,
-    availabilityCacheMiss,
-} from "../metrics/availability.metric.js";
-
 export class AvailabilityService {
-    constructor({ redisService, eventService, logger = console, config }) {
-        this.redis = redisService;
+    constructor({
+        redisService,
+        eventService,
+        inventoryService,
+        logger = console,
+        config,
+    }) {
+        this.cache = redisService;
         this.events = eventService;
+        this.inv = inventoryService;
         this.logger = logger;
-        this.shas = { reserve: null, release: null };
-        this.serverCacheTtlMs = config?.availability?.serverCacheTtlMs ?? 0;
+        this.ttlMs = config?.availability?.serverCacheTtlMs ?? 0;
+        this.inflight = new Map();
+        this.coalesceMs = config?.availability?.coalesceMs ?? 150;
     }
 
-    async initialize({ reserveLua, releaseLua }) {
-        if (!reserveLua || !releaseLua) {
-            throw new Error(
-                "Lua scripts missing: reserve/release are required",
-            );
+    cacheKey(slug) {
+        return `availability:slug:${slug}`;
+    }
+
+    etagOf(total, status, ts) {
+        return `W/"${total}:${status}:${ts}"`;
+    }
+
+    async getBySlug(slug) {
+        if (!slug) return { status: 400, data: { message: "Missing slug" } };
+
+        if (this.ttlMs > 0) {
+            const cached = await this.cache.get(this.cacheKey(slug));
+            if (cached) return { ...cached, _cacheHit: true };
         }
 
-        this.shas.reserve = await this.redis.scriptLoad(reserveLua);
-        this.shas.release = await this.redis.scriptLoad(releaseLua);
-        this.logger.info(
-            `[AvailabilityService] Lua loaded: reserve=${this.reserveSha}, release=${this.releaseSha}`,
-        );
-    }
+        if (!this.inflight.has(slug)) {
+            const p = (async () => {
+                await new Promise((r) => setTimeout(r, this.coalesceMs));
+                const detail = await this.events.getPublicEventDetail(slug);
+                if (!detail)
+                    return { status: 404, data: { message: "Not found" } };
+                if (detail.status === "CANCELLED")
+                    return {
+                        status: 410,
+                        data: { message: "Event cancelled" },
+                    };
 
-    // Key builder
-    invKey(ttId) {
-        return `inv:${ttId}:remaining`;
-    }
+                const ttIds = (detail.ticketTypes || [])
+                    .map((t) => t.ticketTypeID)
+                    .filter(Boolean);
+                if (!ttIds.length) {
+                    const ts = new Date().toISOString();
+                    const payload = {
+                        status: 200,
+                        data: [],
+                        lastUpdatedAt: ts,
+                        etag: this.etagOf(0, "EMPTY", ts),
+                    };
+                    if (this.ttlMs)
+                        await this.cache.set(
+                            this.cacheKey(slug),
+                            payload,
+                            this.ttlMs,
+                        );
+                    return payload;
+                }
 
-    async getAvailabilityBySlug(slug) {
-        if (!slug) return null;
+                const remains = await this.inv.readCounters(ttIds);
+                const data = ttIds.map((id, i) => ({
+                    ticketTypeId: id,
+                    remaining: remains[i],
+                    isSoldOut: remains[i] <= 0,
+                }));
+                const total = remains.reduce((s, n) => s + n, 0);
+                const status = total <= 0 ? "SOLD_OUT" : "ON_SALE";
+                const ts = new Date().toISOString();
+                const payload = {
+                    status: 200,
+                    data,
+                    lastUpdatedAt: ts,
+                    etag: this.etagOf(total, status, ts),
+                };
 
-        const cacheKey =
-            this.serverCacheTtlMs > 0 ? `availability:slug:${slug}` : null;
-        if (cacheKey) {
-            const cached = await this.redis.get(cacheKey);
-
-            // Metric
-            if (cached) {
-                availabilityCacheHit.inc();
-                cached._cacheHit = true;
-                return cached;
-            }
-            availabilityCacheMiss.inc();
+                if (this.ttlMs)
+                    await this.cache.set(
+                        this.cacheKey(slug),
+                        payload,
+                        this.ttlMs,
+                    );
+                return payload;
+            })();
+            this.inflight.set(slug, p);
+            p.finally(() => this.inflight.delete(slug));
         }
 
-        const detail = await this.events.getPublicEventDetail(slug);
-        if (!detail) return { status: 404 };
-        if (detail.status === EVENT_STATUS.CANCELLED) return { status: 410 };
-
-        const ticketTypeIDs = (detail.ticketTypes || []).map(
-            (t) => t.ticketTypeID,
-        );
-        if (ticketTypeIDs.length === 0) return { status: 200, data: [] };
-
-        const keys = ticketTypeIDs.map((tt) => `inv:${tt}:remaining`);
-        const raw = await this.redis.mgetRaw(keys);
-        const data = ticketTypeIDs.map((tt, i) => {
-            const n = Number(raw[i] ?? 0);
-            const available = Number.isFinite(n) ? Math.max(n, 0) : 0;
-            return { ticketTypeId: tt, available, isSoldOut: available === 0 };
-        });
-
-        const result = { status: 200, data };
-
-        if (cacheKey) {
-            await this.redis.set(cacheKey, result, {
-                ttl: Math.floor(this.serverCacheTtlMs / 1000),
-            });
-        }
-
-        result._cacheHit = false;
-
-        return result;
-    }
-
-    /**
-     * Reserve inventory (write path) — dùng trong flow đặt vé
-     * Trả: { ok: boolean, newRemaining?, currentRemaining? }
-     */
-    async reserve(ttId, qty) {
-        if (!this.shas.reserve) throw new Error("Lua reserve not loaded");
-        const key = this.invKey(ttId);
-        const [ok, newOrCur] = await this.redis.evalsha(
-            this.shas.reserve,
-            [key],
-            [String(qty)],
-        );
-
-        if (ok === 1) return { ok: true, newRemaining: Number(newOrCur) };
-        return { ok: false, currentRemaining: Number(newOrCur) };
-    }
-
-    /**
-     * Release inventory (write path) — khi huỷ giữ chỗ/thanh toán fail
-     */
-    async release(ttId, qty) {
-        if (!this.shas.release) throw new Error("Lua release not loaded");
-        const key = this.invKey(ttId);
-        const [ok, newRemaining] = await this.redis.evalsha(
-            this.shas.release,
-            [key],
-            [qty],
-        );
-        return { ok: ok === 1, newRemaining: Number(newRemaining) };
+        return this.inflight.get(slug);
     }
 }

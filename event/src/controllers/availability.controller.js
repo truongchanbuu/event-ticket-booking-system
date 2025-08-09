@@ -1,38 +1,46 @@
+import { catchAsync } from "@event_ticket_booking_system/shared";
 import { availabilityLatency } from "../metrics/availability.metric.js";
 
 export class AvailabilityController {
     constructor({ availabilityService, logger = console }) {
         this.availabilityService = availabilityService;
         this.logger = logger;
+
+        this.getAvailabilityBySlug = catchAsync(
+            this.getAvailabilityBySlug.bind(this),
+        );
     }
 
-    getAvailability = async (req, res, next) => {
-        const endTimer = availabilityLatency.startTimer({
-            method: "GET",
-            route: "/events/:slug/availability",
-        });
+    async getAvailabilityBySlug(req, res, next) {
+        const { slug } = req.query;
+        if (!slug) return res.status(400).json({ message: "Missing slug" });
 
-        try {
-            const r = await this.availabilityService.getAvailabilityBySlug(
-                req.params.slug,
+        const result = await availabilityService.getBySlug(String(slug));
+        // result: { status, data, etag?, lastUpdatedAt? }
+
+        const ifNoneMatch = req.get("if-none-match");
+        if (
+            result.status === 200 &&
+            result.etag &&
+            ifNoneMatch === result.etag
+        ) {
+            res.set(
+                "Cache-Control",
+                process.env.AVAIL_EDGE_TTL_SEC
+                    ? `public, s-maxage=${process.env.AVAIL_EDGE_TTL_SEC}, stale-while-revalidate=5`
+                    : "no-store",
             );
-
-            res.set("Cache-Control", "no-store");
-
-            if (!r || r.status === 404) {
-                endTimer({ status_code: 404 });
-                return res.status(404).json({ error: "Event not found" });
-            }
-            if (r.status === 410) {
-                endTimer({ status_code: 410 });
-                return res.status(410).json({ error: "Event cancelled" });
-            }
-
-            endTimer({ status_code: 200 });
-            return res.json({ success: true, data: r.data });
-        } catch (e) {
-            endTimer({ status_code: 500 });
-            return next(e);
+            return res.status(304).end();
         }
-    };
+
+        if (result.etag) res.set("ETag", result.etag);
+        res.set(
+            "Cache-Control",
+            process.env.AVAIL_EDGE_TTL_SEC
+                ? `public, s-maxage=${process.env.AVAIL_EDGE_TTL_SEC}, stale-while-revalidate=5`
+                : "no-store",
+        );
+
+        return res.status(result.status).json(result.data ?? []);
+    }
 }

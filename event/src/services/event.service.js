@@ -504,11 +504,9 @@ export class EventService {
         });
 
         await this._invalidateEvent(eventID);
-
         await this.redisService.del(
             this.CACHE_KEYS.EVENTS_BY_ORG_ID(
-                (updatedEvent || eventData || cancelledEvent)?.organizer
-                    ?.organizerID ?? "unknown",
+                updatedEvent?.organizer?.organizerID ?? "unknown",
             ),
         );
 
@@ -676,8 +674,7 @@ export class EventService {
         await this._invalidateEvent(eventID);
         await this.redisService.del(
             this.CACHE_KEYS.EVENTS_BY_ORG_ID(
-                (updatedEvent || eventData || cancelledEvent)?.organizer
-                    ?.organizerID ?? "unknown",
+                cancelledEvent?.organizer?.organizerID ?? "unknown",
             ),
         );
 

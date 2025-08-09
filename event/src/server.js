@@ -15,7 +15,10 @@ async function bootstrap() {
     try {
         const container = await configureContainer();
 
-        const availabilityService = container.resolve("availabilityService");
+        const broadcaster = container.resolve("broadcaster");
+        await broadcaster.start();
+
+        const inventoryService = container.resolve("inventoryService");
         const reservePath = path.join(__dirname, "./scripts/lua/reserve.lua");
         const releasePath = path.join(__dirname, "./scripts/lua/release.lua");
 
@@ -29,7 +32,7 @@ async function bootstrap() {
             releaseLua?.length,
         );
 
-        await availabilityService.initialize({ reserveLua, releaseLua });
+        await inventoryService.initialize({ reserveLua, releaseLua });
 
         const config = container.resolve("config");
         const rootLogger = container.resolve("logger");
@@ -46,7 +49,7 @@ async function bootstrap() {
         await consumerOrchestrator.startAll();
 
         // Create and start the app
-        const app = createApp({ container, config, rootLogger });
+        const app = createApp({ container, config, logger: rootLogger });
         const PORT = config.app.port;
 
         server = app.listen(PORT, () => {

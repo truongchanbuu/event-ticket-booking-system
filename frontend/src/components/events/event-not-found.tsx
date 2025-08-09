@@ -1,24 +1,29 @@
+"use client";
+
 import React from "react";
-import {
-  Search,
-  Calendar,
-  ArrowLeft,
-  Home,
-  RefreshCcw,
-  Ticket,
-} from "lucide-react";
+import { Search, Calendar, ArrowLeft, Home, RefreshCcw } from "lucide-react";
+import { useRouter } from "next/navigation";
+
+interface EventNotFoundProps {
+  onGoBack?: () => void;
+  onGoHome?: () => void;
+  onRetry?: () => void;
+  showSuggestions?: boolean;
+}
 
 const EventNotFound = ({
   onGoBack,
   onGoHome,
   onRetry,
   showSuggestions = true,
-}) => {
+}: EventNotFoundProps) => {
+  const router = useRouter();
+
   const handleGoBack = () => {
     if (onGoBack) {
       onGoBack();
     } else {
-      window.history.back();
+      router.back();
     }
   };
 
@@ -26,7 +31,7 @@ const EventNotFound = ({
     if (onGoHome) {
       onGoHome();
     } else {
-      window.location.href = "/";
+      router.replace("/");
     }
   };
 
@@ -34,7 +39,7 @@ const EventNotFound = ({
     if (onRetry) {
       onRetry();
     } else {
-      window.location.reload();
+      router.refresh();
     }
   };
 

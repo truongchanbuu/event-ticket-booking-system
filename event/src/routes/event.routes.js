@@ -33,11 +33,6 @@ export class EventRoutes {
             this.eventController.removeContributor,
         );
 
-        this.router.get(
-            "/:slug/availability",
-            this.availabilityController.getAvailability,
-        );
-
         this.router.get("/:slug", this.eventController.getPublicEventDetail);
 
         this.router.post(
@@ -77,6 +72,11 @@ export class EventRoutes {
         this.router.get(
             "/:eventID/contributors",
             this.eventController.getEventContributors,
+        );
+
+        this.router.get(
+            "/availability",
+            this.availabilityController.getAvailabilityBySlug,
         );
     }
 }

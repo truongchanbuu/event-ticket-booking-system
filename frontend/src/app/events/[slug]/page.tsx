@@ -6,6 +6,7 @@ import { fetchEventBySlug } from "@/lib/api/events/api";
 import { EventCancelledUI } from "@/components/events/event-cancelled";
 import { ErrorMessage } from "@/components/ui/error-ui-with-reload";
 import { EventContainer } from "./EventContainer";
+import EventNotFound from "@/components/events/event-not-found";
 
 export const dynamic = "force-static";
 export const revalidate = 60;
@@ -146,16 +147,8 @@ export default async function EventPage({
   const { slug } = await params;
   const result = await fetchEventBySlug(slug);
 
-  if (result.kind === "not_found") {
-    notFound();
-  }
-
-  if (result.kind === "cancelled") {
-    return <EventCancelledUI result={result} />;
-  }
-
-  if (result.kind === "error") {
-    return <ErrorMessage error={result.message} onReload={() => {}} />;
+  if (result.kind !== "ok") {
+    return <EventNotFound />;
   }
 
   const event = result.data!;

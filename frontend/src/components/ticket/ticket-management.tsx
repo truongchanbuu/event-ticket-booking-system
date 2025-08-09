@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Edit2, Trash2, X, Loader2, TrendingUp } from "lucide-react";
+import { Plus, Edit2, Trash2, X } from "lucide-react";
 import { TicketFormData, TicketFormSchema, TicketType } from "@/schema";
 import { ProgressBar } from "../ui/progress-bar";
 import { Button } from "../ui/button";
@@ -354,7 +354,7 @@ const TicketManagement = ({
   };
 
   if (isLoading) return <LoadingSpinner />;
-  if (error) return <ErrorMessage error={error} onReload={refetch} />;
+  if (error) return <ErrorMessage error="internal server" onReload={refetch} />;
 
   return (
     <FormProvider {...methods}>
