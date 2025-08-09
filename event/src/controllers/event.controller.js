@@ -257,18 +257,29 @@ export class EventController {
     async getEventContributors(req, res) {}
 
     async getPublicEventDetail(req, res, next) {
-        const { slug } = req.params;
+        const raw = req.params.slug;
+        const slug = decodeURIComponent(String(raw).trim());
 
-        if (!slug) {
-            return res.status(400).json({ error: "Slug is required" });
-        }
         const eventData = await this.eventService.getPublicEventDetail(slug);
+
+        console.log("SLUG:", slug);
+        console.log(
+            "EVENT DATA:",
+            eventData ? JSON.stringify(eventData) : null,
+        );
+
         if (!eventData) {
             return res.status(404).json({ error: "Event not found" });
         }
-        return res.json({
-            success: true,
-            data: eventData,
-        });
+
+        if (eventData.__httpStatus === 410) {
+            return res.status(410).json({
+                success: true,
+                data: eventData,
+                message: "Event cancelled",
+            });
+        }
+
+        return res.json({ success: true, data: eventData });
     }
 }

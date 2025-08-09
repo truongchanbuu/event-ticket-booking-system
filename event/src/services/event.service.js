@@ -182,20 +182,29 @@ export class EventService {
     async getPublicEventDetail(slug) {
         if (!slug) return null;
 
-        const cacheKey = this.CACHE_KEYS.EVENT_DETAIL_SLUG(slug);
+        const norm = String(slug).trim();
+        const cacheKey = this.CACHE_KEYS.EVENT_DETAIL_SLUG(norm);
 
         const fetchFn = async () => {
-            const snap = await this.eventCollection
-                .where("slug", "==", slug)
-                .limit(1)
-                .get();
-
-            if (snap.empty) {
+            const slugSnap = await this.db.collection("slugs").doc(norm).get();
+            if (!slugSnap.exists) {
                 await this._cacheSet({ key: cacheKey, value: null, ttl: 15 });
                 return null;
             }
 
-            const doc = snap.docs[0];
+            const { eventID } = slugSnap.data();
+
+            const doc = await this.eventCollection.doc(eventID).get();
+            if (!doc.exists) {
+                await this.db
+                    .collection("slugs")
+                    .doc(norm)
+                    .delete()
+                    .catch(() => {});
+                await this._cacheSet({ key: cacheKey, value: null, ttl: 15 });
+                return null;
+            }
+
             const e = doc.data();
 
             if (e.status === EVENT_STATUS.CANCELLED) {
@@ -204,27 +213,23 @@ export class EventService {
                     ticketTypes: [],
                     isAllSoldOut: true,
                 });
-
+                result.__httpStatus = 410;
                 await this._cacheSet({
                     key: cacheKey,
                     value: result,
                     ttl: 600,
-                    trackingKey: this.CACHE_KEYS.EVENT_TRACKING(e.eventID),
+                    trackingKey: this.CACHE_KEYS.EVENT_TRACKING(eventID),
                 });
-
-                throw new AppError({
-                    statusCode: 410,
-                    message: "Event cancelled",
-                    data: {
-                        title: e.title,
-                        cancelledReason: e.cancelledReason,
-                        slug: e.slug,
-                    },
-                });
+                return result;
             }
 
             if (e.status !== EVENT_STATUS.PUBLISHED) {
-                await this._cacheSet({ key: cacheKey, value: null, ttl: 15 });
+                await this._cacheSet({
+                    key: cacheKey,
+                    value: null,
+                    ttl: 15,
+                    trackingKey: this.CACHE_KEYS.EVENT_TRACKING(eventID),
+                });
                 return null;
             }
 
@@ -241,8 +246,8 @@ export class EventService {
                 return {
                     ticketTypeID: t.ticketTypeID,
                     name: t.name,
-                    price: t.price,
-                    currency: t.currency,
+                    price: Number(t.price ?? 0),
+                    currency: t.currency ?? "VND",
                     totalQuantity: total,
                     soldQuantity: sold,
                     availableQuantity: available,
@@ -258,27 +263,29 @@ export class EventService {
                     ticketTypes.every((x) => x.isSoldOut),
             });
 
-            // Gắn trackingKey theo eventID
             await this._cacheSet({
                 key: cacheKey,
                 value: result,
                 ttl: 60,
-                trackingKey: this.CACHE_KEYS.EVENT_TRACKING(e.eventID),
+                trackingKey: this.CACHE_KEYS.EVENT_TRACKING(eventID),
             });
 
             return result;
         };
 
         try {
-            return await this._cacheGetOrSet({
+            const data = await this._cacheGetOrSet({
                 key: cacheKey,
                 ttl: 60,
                 fetchFn,
             });
+            // controller có thể check cờ này để set 410
+            return data;
         } catch (err) {
-            this.logger.error(`[getPublicEventDetail] error for slug=${slug}`, {
-                err: err.message,
+            this.logger.error(`[getPublicEventDetail] error for slug=${norm}`, {
+                err: err?.message,
             });
+            // fallback một lần, không throw trong fetchFn để tránh vòng lặp
             return fetchFn();
         }
     }
@@ -385,13 +392,24 @@ export class EventService {
                     ? new Date(eventData.endTime).toISOString()
                     : null,
                 createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
             });
 
             if (Array.isArray(ticketTypes) && ticketTypes.length > 0) {
                 const tcol = eventRef.collection(TICKET_TYPES_SUBCOLLECTION);
                 for (const tt of ticketTypes) {
                     const tdRef = tcol.doc();
-                    const newTicketType = { ...tt, ticketTypeID: tdRef.id };
+                    const newTicketType = {
+                        ...tt,
+                        ticketTypeID: tdRef.id,
+                        totalQuantity: Math.max(
+                            0,
+                            Number(tt.totalQuantity ?? 0),
+                        ),
+                        soldQuantity: Math.max(0, Number(tt.soldQuantity ?? 0)),
+                        price: Number(tt.price ?? 0),
+                        currency: tt.currency ?? "VND",
+                    };
                     tx.set(tdRef, newTicketType);
                 }
             }
@@ -400,11 +418,15 @@ export class EventService {
                 const ccol = eventRef.collection(
                     EVENT_CONTRIBUTORS_SUBCOLLECTION,
                 );
+
+                const map = new Map();
+                for (const x of resolvedContributors) map.set(x.id, x);
+
                 for (const {
                     id: contributorID,
                     data: contributorData,
                     originalData,
-                } of resolvedContributors) {
+                } of map.values()) {
                     const linkData = {
                         contributorID,
                         name:
@@ -416,7 +438,7 @@ export class EventService {
                             originalData?.photoUrl ??
                             null,
                         role: originalData?.role ?? null,
-                        isHeadliner: originalData?.isHeadliner ?? false,
+                        isHeadliner: !!originalData?.isHeadliner,
                     };
                     tx.set(ccol.doc(contributorID), linkData);
                 }
@@ -475,7 +497,7 @@ export class EventService {
             const updateData = this._prepareUpdateData(eventData);
             tx.update(eventRef, {
                 ...updateData,
-                updatedAt: this._fv().serverTimestamp(),
+                updatedAt: new Date().toISOString(),
             });
 
             updatedEvent = { ...existingEvent, ...updateData };
@@ -553,8 +575,8 @@ export class EventService {
 
             tx.update(eventRef, {
                 status: EVENT_STATUS.PUBLISHED,
-                publishedAt: this._fv().serverTimestamp(),
-                updatedAt: this._fv().serverTimestamp(),
+                publishedAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
             });
 
             eventData = event; // lưu để dùng sau transaction
@@ -643,8 +665,8 @@ export class EventService {
                 cancelledBy: userID,
                 cancelledByUsername: username ?? "unknown",
                 cancelledByEmail: email ?? null,
-                cancelledAt: this._fv().serverTimestamp(),
-                updatedAt: this._fv().serverTimestamp(),
+                cancelledAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
             };
 
             tx.update(eventRef, updateData);
@@ -808,7 +830,6 @@ export class EventService {
             updateData.startTime = new Date(updateData.startTime).toISOString();
         if (updateData.endTime)
             updateData.endTime = new Date(updateData.endTime).toISOString();
-        // updatedAt set trong transaction = serverTimestamp
         Object.keys(updateData).forEach((k) => {
             if (updateData[k] === undefined || updateData[k] === null)
                 delete updateData[k];
@@ -1005,11 +1026,11 @@ export class EventService {
             attendeeStatus: status,
             checkInTime:
                 status === ATTENDEE_STATUS.CHECKED_IN
-                    ? this._fv().serverTimestamp()
+                    ? new Date().toISOString()
                     : null,
             searchableKeywords: initialSearchableKeywords,
-            joinedAt: this._fv().serverTimestamp(),
-            updatedAt: this._fv().serverTimestamp(),
+            joinedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
         };
 
         const docRef = await this.eventCollection
@@ -1062,7 +1083,7 @@ export class EventService {
 
             tx.update(attendeeRef, {
                 ...updateData,
-                updatedAt: this._fv().serverTimestamp(),
+                updatedAt: new Date().toISOString(),
             });
         });
 
