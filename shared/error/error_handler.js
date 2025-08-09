@@ -14,6 +14,7 @@ export const errorHandler = (err, req, res, next) => {
       errorCode: err.errorCode,
       statusCode: err.statusCode,
       errors: err.errors,
+      data: err.data || null,
     });
   }
 

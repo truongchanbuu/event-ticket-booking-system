@@ -6,11 +6,13 @@ export default class AppError extends Error {
     statusCode = 500,
     errorCode = ERROR_CODE.INTERNAL_ERROR,
     errors = [],
+    data = null,
   }) {
     super(message);
     this.statusCode = statusCode;
     this.errorCode = errorCode;
     this.errors = errors;
+    this.data = data;
 
     Error.captureStackTrace(this, this.constructor);
   }

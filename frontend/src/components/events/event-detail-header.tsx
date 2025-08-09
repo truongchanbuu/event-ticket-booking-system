@@ -21,6 +21,7 @@ import CategoryDialog from "../ui/category-modal";
 import { EventManagementService } from "@/services/event-management.service";
 import { useUserProfile } from "@/hooks/user-store-hooks";
 import { toast } from "@/hooks/use-toast";
+import { EventDescription } from "./description";
 
 interface EventDetailHeaderProps {
   eventDetail: Event;
@@ -144,7 +145,9 @@ export default function EventDetailHeader({
           </div>
         </div>
 
-        <p className="text-gray-700 mb-4">{eventDetail.description}</p>
+        <div className="py-5">
+          <EventDescription description={eventDetail.description} />
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
           <div className="flex items-center space-x-2">

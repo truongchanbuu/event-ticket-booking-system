@@ -12,7 +12,8 @@ import {
   Star,
 } from "lucide-react";
 import { getCategoryColor } from "@/lib/utils";
-import type { Category } from "@/schema";
+import { categories as allCategories } from "@/constants/categories";
+import { Category } from "@/schema";
 
 const categoryIcons = {
   music: Music,
@@ -38,7 +39,7 @@ const categoryIcons = {
 };
 
 interface EventCategoriesProps {
-  categories: Category[];
+  categories: string[];
   variant?: "badge" | "inline" | "compact";
   maxDisplay?: number;
   showAll?: boolean;
@@ -54,10 +55,14 @@ export default function EventCategories({
 }: EventCategoriesProps) {
   if (!categories || categories.length === 0) return null;
 
+  const mainCategories = categories
+    .map((id) => allCategories.find((cat) => cat.id === id))
+    .filter(Boolean) as Category[];
+
   const displayCategories = showAll
-    ? categories
-    : categories.slice(0, maxDisplay);
-  const hasMore = !showAll && categories.length > maxDisplay;
+    ? mainCategories
+    : mainCategories.slice(0, maxDisplay);
+  const hasMore = !showAll && mainCategories.length > maxDisplay;
 
   const getCategoryIcon = (categoryId: string) => {
     const Icon = categoryIcons[categoryId as keyof typeof categoryIcons];
@@ -85,7 +90,7 @@ export default function EventCategories({
         })}
         {hasMore && (
           <span className="text-sm text-gray-500">
-            +{categories.length - maxDisplay} more
+            +{mainCategories.length - maxDisplay} more
           </span>
         )}
       </div>
@@ -112,7 +117,7 @@ export default function EventCategories({
         })}
         {hasMore && (
           <Badge variant="outline" className="text-xs px-2 py-1">
-            +{categories.length - maxDisplay}
+            +{mainCategories.length - maxDisplay}
           </Badge>
         )}
       </div>

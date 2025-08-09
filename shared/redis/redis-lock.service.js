@@ -8,11 +8,13 @@ export class LockAcquireFailedError extends Error {
 }
 
 export class RedisLockService {
-  constructor({ redisClient, logger = console }) {
-    if (!redisClient) {
-      throw new Error("RedisLock Service requires a standardized redisClient.");
+  constructor({ redisService, logger = console }) {
+    if (!redisService) {
+      throw new Error(
+        "RedisLock Service requires a standardized redisService."
+      );
     }
-    this.redis = redisClient;
+    this.redis = redisService;
     this.logger = logger;
   }
 

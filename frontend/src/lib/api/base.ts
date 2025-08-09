@@ -18,12 +18,9 @@ export async function fetchAPI<T>(
     finalHeaders.set("Content-Type", "application/json");
   }
 
-  // 2. LẤY "PASSPORT" (ID TOKEN) CỦA USER
-  // Nhiệm vụ của client là chứng minh nó là ai.
   if (!skipAuth) {
     const user = auth.currentUser;
     if (!user) {
-      // Xử lý trường hợp người dùng chưa đăng nhập
       throw {
         statusCode: 401,
         message: "User is not authenticated",

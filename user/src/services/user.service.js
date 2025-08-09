@@ -5,8 +5,11 @@ import {
     NOTIFICATION_STATUS,
     REDIS_TTL,
     ROLE,
+    db,
+    auth,
+    ORGANIZER_STATUS,
+    FieldValue,
 } from "@event_ticket_booking_system/shared";
-import { db, auth } from "@event_ticket_booking_system/shared";
 import { USER_STATUS } from "../enums/user-status.enum.js";
 import { sanitizeUserData } from "../utils/sanitize.js";
 import {
@@ -14,27 +17,40 @@ import {
     normalizeBirthday,
 } from "../utils/formatter.js";
 
-const NOTIFICATIONS_COLLECTION = "notifcations";
+// Collections
+const NOTIFICATIONS_COLLECTION = "notifications"; // fixed typo
 const ORGANIZERS_COLLECTION = "followedOrganizers";
 
+/**
+ * Redis-aware, Firestore-backed user service with:
+ * - Read-through + write-through caching
+ * - Optional Redis lock for write hot-spots (create/update)
+ * - Consistent cache keying + invalidation
+ */
 export class UserService {
+    /**
+     * @param {object} deps
+     * @param {Console|any} deps.logger
+     * @param {import("../infra/redis.service").RedisService} deps.redisService
+     * @param {import("../infra/redis-lock.service").RedisLockService} [deps.redisLockService]
+     */
     constructor({ logger, redisService, redisLockService }) {
-        this.logger = logger;
+        this.logger = logger ?? console;
         this.userCollection = db.collection("users");
         this.cache = redisService;
-        this.redisLockService = redisLockService;
+        this.redisLockService = redisLockService; // optional but recommended for hot writes
     }
 
-    // --- Helpers ---
-    _getUserCacheKey(userID) {
-        return `user:${userID}`;
+    // ---------------- Key builders ----------------
+    _keyUser(id) {
+        return `user:${id}`;
     }
 
-    _getUserByEmailCacheKey(email) {
+    _keyUserByEmail(email) {
         return `user:email:${email.toLowerCase()}`;
     }
 
-    _getUsersListCacheKey(params) {
+    _keyUserList(params) {
         const keyString = JSON.stringify(params);
         const hash = crypto
             .createHash("sha256")
@@ -43,73 +59,34 @@ export class UserService {
         return `users:list:${hash}`;
     }
 
-    async _createUserDoc(userID, userData) {
-        try {
-            const userRef = this.userCollection.doc(userID);
-            await userRef.set(userData);
-            this.logger.info(
-                `[UserService] New user document created with ID: ${userID}`,
-            );
-            return userData;
-        } catch (error) {
-            this.logger.error(
-                `[UserService] _createUserDoc error for userID ${userID}: ${error.message}`,
-            );
-            throw new AppError({
-                message: "Failed to create user document in database.",
-                errorCode: ERROR_CODE.DATABASE_ERROR,
-                statusCode: 500,
-                cause: error,
-            });
-        }
-    }
-
+    // ---------------- Low-level helpers ----------------
     async _getUserDoc(userID) {
-        try {
-            const doc = await this.userCollection.doc(userID).get();
-            return doc.exists ? { id: doc.id, ...doc.data() } : null;
-        } catch (error) {
-            this.logger.error(
-                `[UserService] _getUserDoc error: ${error.message}`,
-            );
-            throw error;
-        }
+        const snap = await this.userCollection.doc(userID).get();
+        return snap.exists ? { id: snap.id, ...snap.data() } : null;
     }
 
     async _getUsersByIDsFromDB(userIDs) {
-        if (!userIDs || userIDs.length === 0) {
-            return [];
-        }
+        if (!userIDs?.length) return [];
 
-        // Firestore 'in' query có giới hạn (thường là 30), chia nhỏ để đảm bảo an toàn
-        const chunkSize = 30;
+        const chunkSize = 30; // Firestore `in` query limit safety
         const chunks = [];
-        for (let i = 0; i < userIDs.length; i += chunkSize) {
+        for (let i = 0; i < userIDs.length; i += chunkSize)
             chunks.push(userIDs.slice(i, i + chunkSize));
+
+        const snapshots = await Promise.all(
+            chunks.map((ids) =>
+                this.userCollection.where("userID", "in", ids).get(),
+            ),
+        );
+
+        const users = [];
+        for (const s of snapshots) {
+            s.docs.forEach((d) => users.push({ id: d.id, ...d.data() }));
         }
-
-        try {
-            const queryPromises = chunks.map((chunk) =>
-                this.userCollection.where("userID", "in", chunk).get(),
-            );
-
-            const chunkSnapshots = await Promise.all(queryPromises);
-
-            const users = [];
-            for (const snapshot of chunkSnapshots) {
-                snapshot.docs.forEach((doc) => {
-                    users.push({ id: doc.id, ...doc.data() });
-                });
-            }
-            return users;
-        } catch (error) {
-            this.logger.error(
-                `[UserService] _getUsersByIDsFromDB error: ${error.message}`,
-            );
-            return []; // Trả về mảng rỗng nếu có lỗi
-        }
+        return users;
     }
 
+    // ---------------- Queries ----------------
     async getUsers(params) {
         const {
             limit = 20,
@@ -120,137 +97,95 @@ export class UserService {
             lastVisibleValue,
             sortBy = "createdAt",
             sortOrder = "desc",
-        } = params;
+        } = params ?? {};
 
         const canCache = !search && !lastVisibleValue;
-        const listCacheKey = this._getUsersListCacheKey(params);
-
-        let cachedListData;
-        if (canCache) {
-            cachedListData = await this.cache.get(listCacheKey);
-        }
+        const listKey = this._keyUserList({
+            limit,
+            role,
+            status,
+            isDeleted,
+            sortBy,
+            sortOrder,
+        });
 
         let userIDs, nextCursor, hasMore;
 
-        if (cachedListData) {
-            // CACHE HIT cho danh sách
-            this.logger.debug(
-                `[Cache HIT] getUsers list with key: ${listCacheKey}`,
-            );
-            userIDs = cachedListData.ids;
-            nextCursor = cachedListData.nextCursor;
-            hasMore = cachedListData.hasMore;
-        } else {
-            // CACHE MISS cho danh sách: Truy vấn Firestore
-            this.logger.debug(
-                `[Cache MISS] getUsers list with key: ${listCacheKey}, fetching from DB...`,
-            );
-            let firebaseQuery = this.userCollection;
+        if (canCache) {
+            const cached = await this.cache.get(listKey);
+            if (cached) {
+                this.logger.debug(`[Cache HIT] user list: ${listKey}`);
+                ({ ids: userIDs, nextCursor, hasMore } = cached);
+            }
+        }
 
-            // Xây dựng query như cũ
-            if (role) firebaseQuery = firebaseQuery.where("role", "==", role);
-            if (status)
-                firebaseQuery = firebaseQuery.where("status", "==", status);
-            if (isDeleted !== undefined) {
-                firebaseQuery = firebaseQuery.where(
+        if (!userIDs) {
+            this.logger.debug(`[Cache MISS] user list: ${listKey}`);
+            let q = this.userCollection;
+            if (role) q = q.where("role", "==", role);
+            if (status) q = q.where("status", "==", status);
+            if (isDeleted !== undefined)
+                q = q.where(
                     "isDeleted",
                     "==",
-                    isDeleted === "true" || isDeleted === true,
+                    isDeleted === true || isDeleted === "true",
                 );
-            }
-            firebaseQuery = firebaseQuery.orderBy(
-                sortBy,
-                sortOrder === "asc" ? "asc" : "desc",
-            );
-            if (lastVisibleValue) {
-                firebaseQuery = firebaseQuery.startAfter(lastVisibleValue);
-            }
-            firebaseQuery = firebaseQuery.limit(Number(limit));
+            q = q.orderBy(sortBy, sortOrder === "asc" ? "asc" : "desc");
+            if (lastVisibleValue) q = q.startAfter(lastVisibleValue);
+            q = q.limit(Number(limit));
 
-            const snapshot = await firebaseQuery.get();
-            const docs = snapshot.docs;
-
-            // Chỉ trích xuất ID từ kết quả
-            userIDs = docs.map((doc) => doc.id);
-
+            const snap = await q.get();
+            const docs = snap.docs;
+            userIDs = docs.map((d) => d.id);
             hasMore = docs.length === Number(limit);
             nextCursor = hasMore ? docs[docs.length - 1].get(sortBy) : null;
 
-            // Lưu danh sách ID và thông tin phân trang vào cache
             if (canCache) {
-                const listDataToCache = { ids: userIDs, nextCursor, hasMore };
-                this.logger.debug(
-                    `[Cache SET] getUsers list with key: ${listCacheKey}`,
-                );
                 await this.cache.set(
-                    listCacheKey,
-                    listDataToCache,
+                    listKey,
+                    { ids: userIDs, nextCursor, hasMore },
                     REDIS_TTL.USER_LIST,
                 );
             }
         }
 
-        if (!userIDs || userIDs.length === 0) {
+        if (!userIDs.length)
             return { users: [], nextCursor: null, hasMore: false };
-        }
 
-        // --- Bước Hydrate: Lấy dữ liệu chi tiết bằng MGET ---
-        const userCacheKeys = userIDs.map((id) => this._getUserCacheKey(id));
-        let users = await this.cache.mget(userCacheKeys);
+        // Hydrate from cache first
+        const keys = userIDs.map((id) => this._keyUser(id));
+        let users = await this.cache.mget(keys);
 
-        // --- Bước Backfill: Tìm và lấy các user bị miss trong cache ---
-        const missingUserIndices = [];
-        users.forEach((user, index) => {
-            if (user === null) {
-                missingUserIndices.push(index);
-            }
-        });
+        // Backfill misses
+        const missingIdx = [];
+        users.forEach((u, i) => u == null && missingIdx.push(i));
 
-        if (missingUserIndices.length > 0) {
-            const missingUserIDs = missingUserIndices.map(
-                (index) => userIDs[index],
-            );
+        if (missingIdx.length) {
+            const missingIDs = missingIdx.map((i) => userIDs[i]);
             this.logger.debug(
-                `[Hydrate] ${missingUserIndices.length} users not in cache. Fetching IDs: ${missingUserIDs.join(", ")}`,
+                `[Hydrate] ${missingIDs.length} user cache misses. Fetching from DB.`,
             );
+            const fromDB = await this._getUsersByIDsFromDB(missingIDs);
 
-            const missingUsersFromDB =
-                await this._getUsersByIDsFromDB(missingUserIDs);
-
-            const usersToCache = [];
-            missingUsersFromDB.forEach((userFromDB) => {
-                const originalIndex = userIDs.indexOf(userFromDB.id);
-                if (originalIndex !== -1) {
-                    users[originalIndex] = userFromDB; // Điền vào mảng kết quả
-                    usersToCache.push([
-                        this._getUserCacheKey(userFromDB.id),
-                        userFromDB,
-                    ]);
+            const toCache = [];
+            fromDB.forEach((u) => {
+                const i = userIDs.indexOf(u.id);
+                if (i !== -1) {
+                    users[i] = u;
+                    toCache.push([this._keyUser(u.id), u]);
                 }
             });
-
-            // Cập nhật lại cache cho những user vừa lấy từ DB
-            if (usersToCache.length > 0) {
-                this.logger.debug(
-                    `[Hydrate] Backfilling cache for ${usersToCache.length} users.`,
-                );
-                await this.cache.mset(
-                    usersToCache,
-                    REDIS_TTL.USER_PROFILE_DEFAULT,
-                );
-            }
+            if (toCache.length)
+                await this.cache.mset(toCache, REDIS_TTL.USER_PROFILE_DEFAULT);
         }
 
-        // Lọc bỏ những user không thể lấy được (có thể đã bị xóa)
-        users = users.filter((user) => user !== null);
+        users = users.filter(Boolean);
 
-        // Lưu ý: Filtering bằng `search` sau khi lấy dữ liệu không phải là cách tối ưu nhất.
-        // Cách tốt nhất là dùng một dịch vụ search chuyên dụng như Algolia, MeiliSearch, or Elasticsearch.
         if (search) {
-            const s = search.toLowerCase();
-            users = users.filter((user) =>
-                [user.usernameLowerCase, user.email].some((field) =>
-                    field?.toLowerCase().includes(s),
+            const s = String(search).toLowerCase();
+            users = users.filter((u) =>
+                [u.usernameLowerCase, u.email].some((f) =>
+                    f?.toLowerCase().includes(s),
                 ),
             );
         }
@@ -258,123 +193,248 @@ export class UserService {
         return { users, nextCursor, hasMore };
     }
 
+    async getUserByID(userID) {
+        const key = this._keyUser(userID);
+        const ttl = REDIS_TTL.USER_PROFILE_DEFAULT;
+        // Adjust the signature to your RedisService implementation
+        return await this.cache.getOrSet(
+            key,
+            async () => await this._getUserDoc(userID),
+            ttl,
+        );
+    }
+
+    async getUserByEmail(email) {
+        const key = this._keyUserByEmail(email);
+        const ttl = REDIS_TTL.USER_PROFILE_DEFAULT;
+        return await this.cache.getOrSet(
+            key,
+            async () => {
+                const snap = await this.userCollection
+                    .where("email", "==", email)
+                    .limit(1)
+                    .get();
+                if (snap.empty) return null;
+                const doc = snap.docs[0];
+                const data = { id: doc.id, ...doc.data() };
+                await this.cache.set(this._keyUser(data.id), data, ttl);
+                return data;
+            },
+            ttl,
+        );
+    }
+
+    // ---------------- Commands ----------------
     async findOrCreateUser(userID, userData) {
-        const resourceKey = `user-find-create:${userID}`;
+        const tryFind = async () => {
+            const c = await this.cache.get(this._keyUser(userID));
+            if (c) return { user: c, isNew: false };
+
+            const byId = await this._getUserDoc(userID);
+            if (byId) return { user: byId, isNew: false };
+
+            if (userData.email) {
+                const byEmail = await this.getUserByEmail(userData.email);
+                if (byEmail) return { user: byEmail, isNew: false };
+            }
+
+            return null;
+        };
+
+        const found = await tryFind();
+        if (found) return found;
+
+        const lockKey = userData.email
+            ? `user-create-email:${userData.email.toLowerCase()}`
+            : `user-create-id:${userID}`;
+
+        const createFlow = async () => {
+            const again = await tryFind();
+            if (again) return again;
+
+            let isNew = false;
+            const finalUser = await db.runTransaction(async (tx) => {
+                const ref = this.userCollection.doc(userID);
+                const doc = await tx.get(ref);
+                if (doc.exists) return { id: doc.id, ...doc.data() };
+
+                // (tuỳ chọn) unique email bằng collection emails/
+                if (userData.email) {
+                    const emailDoc = db
+                        .collection("emails")
+                        .doc(userData.email.toLowerCase());
+                    const emailSnap = await tx.get(emailDoc);
+                    if (emailSnap.exists) {
+                        const mappedId = emailSnap.get("userID");
+                        const mapped = await tx.get(
+                            this.userCollection.doc(mappedId),
+                        );
+                        if (mapped.exists)
+                            return { id: mapped.id, ...mapped.data() };
+                    } else {
+                        // Nếu dùng Admin SDK hỗ trợ create: tx.create(emailDoc, { userID });
+                        tx.set(emailDoc, { userID, createdAt: Date.now() });
+                    }
+                }
+
+                isNew = true;
+                const payload = {
+                    userID,
+                    email: userData.email ?? null,
+                    role: ROLE.CUSTOMER,
+                    status:
+                        userData.emailVerified || userData.phoneVerified
+                            ? USER_STATUS.ACTIVE
+                            : USER_STATUS.UNVERIFIED,
+                    isDeleted: false,
+                    emailVerified: !!userData.emailVerified,
+                    phoneVerified: !!userData.phoneVerified,
+                    organizerStatus: ORGANIZER_STATUS.NONE,
+                    reportCount: 0,
+                    riskScore: 0,
+                    preferenceCategories: [],
+                    usernameLowerCase: userData.username?.toLowerCase(),
+                    createdAt: new Date().toISOString(),
+                    ...userData,
+                };
+                tx.set(ref, payload);
+                return payload;
+            });
+
+            await auth().setCustomUserClaims(finalUser.userID, {
+                role: finalUser.role,
+            });
+
+            await this.cache.set(
+                this._keyUser(finalUser.userID),
+                finalUser,
+                REDIS_TTL.USER_PROFILE_DEFAULT,
+            );
+            if (finalUser.email) {
+                await this.cache.set(
+                    this._keyUserByEmail(finalUser.email),
+                    finalUser,
+                    REDIS_TTL.USER_PROFILE_DEFAULT,
+                );
+            }
+            return { user: finalUser, isNew };
+        };
+
+        if (!this.redisLockService) return await createFlow();
+        return await this.redisLockService.executeWithLock(lockKey, createFlow);
+    }
+
+    async createUser(user) {
+        return await db.runTransaction(async (tx) => {
+            const exists = await tx.get(
+                this.userCollection.where("email", "==", user.email).limit(1),
+            );
+            if (!exists.empty) {
+                throw new AppError({
+                    message: "Email already exists",
+                    statusCode: 400,
+                    errorCode: "EMAIL_EXISTS",
+                });
+            }
+
+            const userID = user.userID || this.userCollection.doc().id;
+            const ref = this.userCollection.doc(userID);
+            const payload = {
+                ...user,
+                userID,
+                usernameLowerCase: user.username?.toLowerCase(),
+                birthday: user.birthday ? new Date(user.birthday) : undefined,
+                followedOrganizersCount: 0,
+                unreadNotificationCount: 0,
+                createdAt: new Date().toISOString(),
+            };
+            tx.set(ref, payload);
+
+            await auth().setCustomUserClaims(userID, { role: payload.role });
+            await this.cache.set(
+                this._keyUser(userID),
+                payload,
+                REDIS_TTL.USER_PROFILE_DEFAULT,
+            );
+            if (payload.email)
+                await this.cache.set(
+                    this._keyUserByEmail(payload.email),
+                    payload,
+                    REDIS_TTL.USER_PROFILE_DEFAULT,
+                );
+
+            return { success: true, data: payload };
+        });
+    }
+
+    async updateUser(userID, updateData) {
+        const resourceKey = `user-update:${userID}`;
+        const doWork = async () => {
+            const current = await this._getUserDoc(userID);
+            if (!current)
+                throw new AppError({
+                    message: "User not found",
+                    statusCode: 404,
+                });
+
+            const patch = { ...updateData };
+            if (patch.birthday)
+                patch.birthday = normalizeBirthday(patch.birthday);
+            patch.updatedAt = new Date().toISOString();
+
+            const ref = this.userCollection.doc(userID);
+            await ref.update(patch);
+
+            const authPatch = {};
+            if (patch.username) authPatch.displayName = patch.username;
+            if (patch.photoUrl) authPatch.photoURL = patch.photoUrl;
+            if (patch.email) authPatch.email = patch.email;
+            if (patch.phoneNumber)
+                authPatch.phoneNumber = formatE164PhoneNumber(
+                    patch.phoneNumber,
+                );
+            if (Object.keys(authPatch).length)
+                await auth().updateUser(userID, authPatch);
+
+            // Cache invalidate -> then set fresh snapshot
+            const fresh = await this._getUserDoc(userID);
+            await this.cache.mdel([
+                this._keyUser(userID),
+                ...(fresh?.email ? [this._keyUserByEmail(fresh.email)] : []),
+            ]);
+            await this.cache.set(
+                this._keyUser(userID),
+                fresh,
+                REDIS_TTL.USER_PROFILE_DEFAULT,
+            );
+            if (fresh?.email)
+                await this.cache.set(
+                    this._keyUserByEmail(fresh.email),
+                    fresh,
+                    REDIS_TTL.USER_PROFILE_DEFAULT,
+                );
+
+            return { success: true, data: fresh };
+        };
+
+        if (!this.redisLockService) return await doWork();
 
         try {
             return await this.redisLockService.executeWithLock(
                 resourceKey,
-                async () => {
-                    const userCacheKey = this._getUserCacheKey(userID);
-                    let user = await this.cache.get(userCacheKey);
-                    if (user) {
-                        this.logger.debug(
-                            `[Cache HIT inside Lock] User found: ${userID}`,
-                        );
-                        return { user, isNew: false };
-                    }
-
-                    this.logger.debug(
-                        `[DB Operation] Finding or creating user in DB: ${userID}`,
-                    );
-
-                    let isNew = false;
-                    const finalUser = await db.runTransaction(
-                        async (transaction) => {
-                            const userRef = this.userCollection.doc(userID);
-                            const userDoc = await transaction.get(userRef);
-                            if (userDoc.exists) {
-                                return { id: userDoc.id, ...userDoc.data() };
-                            }
-                            if (userData.email) {
-                                const emailQuery = this.userCollection
-                                    .where("email", "==", userData.email)
-                                    .limit(1);
-                                const querySnapshot =
-                                    await transaction.get(emailQuery);
-                                if (!querySnapshot.empty) {
-                                    return {
-                                        id: querySnapshot.docs[0].id,
-                                        ...querySnapshot.docs[0].data(),
-                                    };
-                                }
-                            }
-                            isNew = true;
-                            const newUser = {
-                                userID,
-                                status:
-                                    userData.emailVerified ||
-                                    userData.phoneVerified
-                                        ? USER_STATUS.ACTIVE
-                                        : USER_STATUS.UNVERIFIED,
-                                email: userData.email,
-                                role: ROLE.CUSTOMER,
-                                isDeleted: false,
-                                emailVerified: !!userData.emailVerified,
-                                phoneVerified: !!userData.phoneVerified,
-                                organizerStatus: ORGANIZER_STATUS.NONE,
-                                reportCount: 0,
-                                riskScore: 0,
-                                preferenceCategories: [],
-                                createdAt: new Date().toISOString(),
-                                ...userData,
-                            };
-                            transaction.set(userRef, newUser);
-                            return newUser;
-                        },
-                    );
-
-                    await auth().setCustomUserClaims(finalUser.userID, {
-                        role: finalUser.role,
-                    });
-
-                    this.logger.debug(
-                        `[Cache SET] Caching user ${finalUser.userID}`,
-                    );
-
-                    const cachePromises = [];
-                    cachePromises.push(
-                        this.cache.set(
-                            this._getUserCacheKey(finalUser.userID),
-                            finalUser,
-                        ),
-                    );
-                    if (finalUser.email) {
-                        cachePromises.push(
-                            this.cache.set(
-                                this._getUserByEmailCacheKey(finalUser.email),
-                                finalUser,
-                            ),
-                        );
-                    }
-                    await Promise.all(cachePromises);
-
-                    return { user: finalUser, isNew };
-                },
+                doWork,
             );
-        } catch (error) {
-            // Xử lý lỗi đặc biệt khi không thể chiếm được khóa
-            if (error.name === "LockAcquireFailedError") {
-                this.logger.warn(
-                    `[Lock] Could not acquire lock for user ${userID}, retrying operation...`,
-                );
-                // Nếu không có khóa, có nghĩa là một tiến trình khác đang xử lý.
-                // Chiến lược tốt nhất là chờ một chút và thử lại toàn bộ hàm.
-                await new Promise((resolve) => setTimeout(resolve, 200)); // Chờ 200ms
-                return this.findOrCreateUser(userID, userData);
+        } catch (err) {
+            if (err?.name === "LockAcquireFailedError") {
+                throw new AppError({
+                    message:
+                        "User data is currently being updated. Please try again in a moment.",
+                    statusCode: 409,
+                    cause: err,
+                });
             }
-
-            // Xử lý các lỗi khác
-            this.logger.error(
-                `[UserService] findOrCreateUser failed for userID ${userID}`,
-                error,
-            );
-            throw new AppError({
-                message: "Failed to find or create user.",
-                errorCode: ERROR_CODE.INTERNAL_ERROR,
-                statusCode: 500,
-                cause: error,
-            });
+            this.logger.error(`[updateUser] ERROR for user ${userID}:`, err);
+            throw err;
         }
     }
 
@@ -383,207 +443,33 @@ export class UserService {
         return doc.exists && !doc.data()?.isDeleted;
     }
 
-    async getUserByID(userID) {
-        const key = this._getUserCacheKey(userID);
-        const ttl = REDIS_TTL.USER_PROFILE_DEFAULT;
-
-        return await this.cache.getOrSet(
-            key,
-            async () => {
-                const doc = await this.userCollection.doc(userID).get();
-
-                if (!doc.exists) {
-                    return null;
-                }
-
-                return { id: doc.id, ...doc.data() };
-            },
-            ttl,
-        );
-    }
-
-    async getUserByEmail(email) {
-        return await this.cache.getOrSet(
-            this._getUserByEmailCacheKey(email),
-            REDIS_TTL.USER_PROFILE_DEFAULT,
-            async () => {
-                const querySnapshot = await this.userCollection
-                    .where("email", "==", email)
-                    .limit(1)
-                    .get();
-
-                if (querySnapshot.empty) return null;
-
-                const userDoc = querySnapshot.docs[0];
-                const userData = { id: userDoc.id, ...userDoc.data() };
-
-                await this.cache.set(
-                    this._getUserCacheKey(userData.id),
-                    userData,
-                    REDIS_TTL.USER_PROFILE,
-                );
-
-                return userData;
-            },
-        );
-    }
-
-    async createUser(user) {
-        return db.runTransaction(async (transaction) => {
-            const emailQuery = this.userCollection
-                .where("email", "==", user.email)
-                .limit(1);
-            const existingUsers = await transaction.get(emailQuery);
-
-            if (!existingUsers.empty) {
-                throw new AppError({
-                    message: "Email already exists",
-                    statusCode: 400,
-                    errorCode: "EMAIL_EXISTS",
-                });
-            }
-
-            user.usernameLowerCase = user.username.toLowerCase();
-            if (user.birthday) {
-                user.birthday = new Date(user.birthday);
-            }
-            user.createdAt = new Date().toISOString();
-            user.followedOrganizersCount = 0;
-            user.unreadNotificationCount = 0;
-
-            const userID = user.userID || this.userCollection.doc().id;
-            const userRef = this.userCollection.doc(userID);
-
-            const newUser = { ...user, userID };
-            transaction.set(userRef, newUser);
-            await auth().setCustomUserClaims(userID, {
-                role: newUser.role,
-            });
-
-            await this.cache.set(
-                this._getUserCacheKey(userID),
-                newUser,
-                REDIS_TTL.USER_PROFILE_DEFAULT,
-            );
-
-            await this.cache.set(
-                this._getUserByEmailCacheKey(user.email),
-                newUser,
-                REDIS_TTL.USER_PROFILE_DEFAULT,
-            );
-
-            return { success: true, data: newUser };
-        });
-    }
-
-    async updateUser(userID, updateData) {
-        const resourceKey = `user-update:${userID}`;
-
-        try {
-            const updatedUser = await this.lockService.executeWithLock(
-                resourceKey,
-                async () => {
-                    const currentUser = await this._getUserDoc(userID);
-                    if (!currentUser) {
-                        throw new AppError({
-                            message: "User not found",
-                            statusCode: 404,
-                        });
-                    }
-
-                    if (updateData.birthday) {
-                        updateData.birthday = normalizeBirthday(
-                            updateData.birthday,
-                        );
-                    }
-
-                    const updatePayload = {
-                        ...updateData,
-                        updatedAt: new Date().toISOString(),
-                    };
-
-                    const userRef = this.userCollection.doc(userID);
-                    await userRef.update(updatePayload);
-
-                    const updateAuthPayload = {};
-                    if (updateData.username)
-                        updateAuthPayload.displayName = updateData.username;
-                    if (updateData.photoUrl)
-                        updateAuthPayload.photoURL = updateData.photoUrl;
-                    if (updateData.email)
-                        updateAuthPayload.email = updateData.email;
-                    if (updateData.phoneNumber) {
-                        updateAuthPayload.phoneNumber = formatE164PhoneNumber(
-                            updateData.phoneNumber,
-                        );
-                    }
-
-                    if (Object.keys(updateAuthPayload).length > 0) {
-                        await auth().updateUser(userID, updateAuthPayload);
-                    }
-
-                    this.logger.debug(
-                        `[Cache Invalidate] Invalidating cache for user ${userID}`,
-                    );
-
-                    await this.cache.invalidateByTrackingKey(
-                        `user:${userID}:cache_keys`,
-                    );
-
-                    const finalUserData = await this._getUserDoc(userID);
-                    return finalUserData;
-                },
-            );
-
-            return { success: true, data: updatedUser };
-        } catch (error) {
-            if (error.name === "LockAcquireFailedError") {
-                this.logger.warn(
-                    `[Lock] Could not acquire lock for user update ${userID}.`,
-                );
-                throw new AppError({
-                    message:
-                        "User data is currently being updated. Please try again in a moment.",
-                    statusCode: 409, // 409 Conflict là một mã trạng thái tốt
-                    cause: error,
-                });
-            }
-
-            this.logger.error(`[updateUser] ERROR for user ${userID}:`, error);
-            throw error;
-        }
-    }
-
     async updateFollowedOrganizers(userID, organizers, action = "follow") {
         const userRef = this.userCollection.doc(userID);
         const batch = db.batch();
 
-        organizers.forEach((org) => {
+        for (const org of organizers) {
             const orgRef = userRef
                 .collection(ORGANIZERS_COLLECTION)
                 .doc(org.orgID);
-
             if (action === "follow") {
                 batch.set(
                     orgRef,
-                    {
-                        ...org,
-                        followedAt: new Date().toISOString(),
-                    },
+                    { ...org, followedAt: new Date().toISOString() },
                     { merge: true },
                 );
             } else if (action === "unfollow") {
                 batch.delete(orgRef);
             }
-        });
+        }
 
-        const countDelta =
+        const delta =
             action === "follow" ? organizers.length : -organizers.length;
-
-        batch.update(userRef, {
-            followedOrganizersCount: increment(countDelta),
-            updatedAt: new Date().toISOString(),
-        });
+        if (delta !== 0) {
+            batch.update(userRef, {
+                followedOrganizersCount: FieldValue.increment(delta),
+                updatedAt: new Date().toISOString(),
+            });
+        }
 
         await batch.commit();
         return organizers.length;
@@ -592,55 +478,42 @@ export class UserService {
     async updateNotifications(userID, notifications, action = "create") {
         const batch = db.batch();
         const userRef = this.userCollection.doc(userID);
-        const notifCollection = userRef.collection(NOTIFICATIONS_COLLECTION);
+        const notifCol = userRef.collection(NOTIFICATIONS_COLLECTION);
 
-        let unreadCount = 0;
+        let unreadDelta = 0;
 
-        notifications.forEach((notif) => {
-            const notifID = notif.notificationID;
-            if (!notifID && action !== "create") return;
-
-            const notifRef = notifCollection.doc(
-                notifID || notifCollection.doc().id,
-            );
+        for (const notif of notifications) {
+            const id = notif.notificationID || notifCol.doc().id;
+            const ref = notifCol.doc(id);
             const status = notif.status || NOTIFICATION_STATUS.UNREAD;
 
             if (action === "delete") {
-                batch.delete(notifRef);
-                if (status === NOTIFICATION_STATUS.UNREAD) unreadCount--;
-                return;
+                batch.delete(ref);
+                if (status === NOTIFICATION_STATUS.UNREAD) unreadDelta--;
+                continue;
             }
 
-            const notifData = {
-                ...notif,
-                notificationID: notifID || notifRef.id,
-                status,
-            };
-
+            const data = { ...notif, notificationID: id, status };
             if (action === "create") {
-                notifData.createdAt = new Date().toISOString();
-                if (status === NOTIFICATION_STATUS.UNREAD) unreadCount++;
-                batch.set(notifRef, notifData);
+                data.createdAt = new Date().toISOString();
+                if (status === NOTIFICATION_STATUS.UNREAD) unreadDelta++;
+                batch.set(ref, data);
             } else if (action === "update") {
-                if (status === NOTIFICATION_STATUS.UNREAD) unreadCount++;
-                if (status === NOTIFICATION_STATUS.READ) unreadCount--;
-                batch.set(notifRef, notifData, { merge: true });
+                if (status === NOTIFICATION_STATUS.UNREAD) unreadDelta++;
+                if (status === NOTIFICATION_STATUS.READ) unreadDelta--;
+                batch.set(ref, data, { merge: true });
             }
-        });
+        }
 
-        if (unreadCount !== 0) {
+        if (unreadDelta !== 0) {
             batch.update(userRef, {
-                unreadNotificationCount: increment(unreadCount),
+                unreadNotificationCount: FieldValue.increment(unreadDelta),
                 updatedAt: new Date().toISOString(),
             });
         }
 
         await batch.commit();
-        return {
-            success: true,
-            action,
-            unreadDelta: unreadCount,
-        };
+        return { success: true, action, unreadDelta };
     }
 
     async updateNotificationStatus(userID, notificationID, status) {
@@ -648,12 +521,11 @@ export class UserService {
             .doc(userID)
             .collection(NOTIFICATIONS_COLLECTION)
             .doc(notificationID);
-
         await notifRef.set({ status }, { merge: true });
 
         if (status === NOTIFICATION_STATUS.READ) {
             await this.userCollection.doc(userID).update({
-                unreadNotificationCount: increment(-1),
+                unreadNotificationCount: FieldValue.increment(-1),
                 updatedAt: new Date().toISOString(),
             });
         }
@@ -662,79 +534,57 @@ export class UserService {
     }
 
     async softDeleteUser(userID) {
-        await this.userCollection.doc(userID).update({
-            isDeleted: true,
-            deletedAt: new Date().toISOString(),
-        });
+        await this.userCollection
+            .doc(userID)
+            .update({ isDeleted: true, deletedAt: new Date().toISOString() });
 
         const user = await this._getUserDoc(userID);
-        if (user && user.email) {
-            await this.cache.del([
-                this._getUserCacheKey(userID),
-                this._getUserByEmailCacheKey(user.email),
+        if (user?.email)
+            await this.cache.mdel([
+                this._keyUser(userID),
+                this._keyUserByEmail(user.email),
             ]);
-        }
+        else await this.cache.del(this._keyUser(userID));
 
-        await auth.updateUser(userID, { disabled: true });
-        // sendUserDeleted({ userID, deleteType: "soft" }).catch((e) =>
-        //     console.log("Kafka sends failed: ", e),
-        // );
+        await auth().updateUser(userID, { disabled: true });
     }
 
     async hardDeleteUser(userID) {
         const userRef = this.userCollection.doc(userID);
 
-        const subcollections = [
-            ORGANIZERS_COLLECTION,
-            NOTIFICATIONS_COLLECTION,
-        ];
-
-        for (const sub of subcollections) {
-            const subColRef = userRef.collection(sub);
-            const snapshot = await subColRef.get();
-
+        // delete subcollections (best-effort; for big data you may want a Cloud Function / export + delete)
+        for (const sub of [ORGANIZERS_COLLECTION, NOTIFICATIONS_COLLECTION]) {
+            const snap = await userRef.collection(sub).get();
             const batch = db.batch();
-            snapshot.docs.forEach((doc) => {
-                batch.delete(doc.ref);
-            });
+            snap.docs.forEach((d) => batch.delete(d.ref));
             await batch.commit();
         }
 
         const user = await this._getUserDoc(userID);
-        if (user && user.email) {
-            await this.cache.del([
-                this._getUserCacheKey(userID),
-                this._getUserByEmailCacheKey(user.email),
+        if (user?.email)
+            await this.cache.mdel([
+                this._keyUser(userID),
+                this._keyUserByEmail(user.email),
             ]);
-        }
+        else await this.cache.del(this._keyUser(userID));
 
         await userRef.delete();
-        await auth.deleteUser(userID);
-        // sendUserDeleted({ userID, deleteType: "hard" }).catch((e) =>
-        //     console.log("Kafka sends failed: ", e),
-        // );
-
+        await auth().deleteUser(userID);
         return { success: true, deletedUserID: userID };
     }
 
+    // -------- Public read models for organizers --------
     async getPublicOrganizers(query) {
-        const enrichedQuery = {
+        const enriched = {
             ...query,
             role: ROLE.EVENT_ORGANIZER,
             isDeleted: false,
         };
-
-        const result = await this.getUsers(enrichedQuery);
-
-        const organizers = result.users
+        const { users, nextCursor, hasMore } = await this.getUsers(enriched);
+        const organizers = users
             .filter((u) => [USER_STATUS.ACTIVE].includes(u.status))
             .map((u) => sanitizeUserData(u, false));
-
-        return {
-            organizers,
-            nextCursor: result.nextCursor,
-            hasMore: result.hasMore,
-        };
+        return { organizers, nextCursor, hasMore };
     }
 
     async getOrganizerProfile(orgID) {

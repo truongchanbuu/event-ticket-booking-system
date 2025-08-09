@@ -15,7 +15,7 @@ import {
     EVENTS_COLLECTION,
 } from "../config/constants/collection.js";
 import { ATTENDEE_STATUS, AttendeeSchema } from "../models/attedee.schema.js";
-import { createEventSlug } from "../utils/utils.js";
+import { createEventSlug, reserveUniqueSlugTx } from "../utils/utils.js";
 
 export class EventService {
     constructor({
@@ -191,7 +191,6 @@ export class EventService {
                 .get();
 
             if (snap.empty) {
-                // Negative caching 15s cho slug sai
                 await this._cacheSet({ key: cacheKey, value: null, ttl: 15 });
                 return null;
             }
@@ -200,13 +199,32 @@ export class EventService {
             const e = doc.data();
 
             if (e.status === EVENT_STATUS.CANCELLED) {
+                const result = sanitizePublicEvent({
+                    ...e,
+                    ticketTypes: [],
+                    isAllSoldOut: true,
+                });
+
+                await this._cacheSet({
+                    key: cacheKey,
+                    value: result,
+                    ttl: 600,
+                    trackingKey: this.CACHE_KEYS.EVENT_TRACKING(e.eventID),
+                });
+
                 throw new AppError({
                     statusCode: 410,
                     message: "Event cancelled",
+                    data: {
+                        title: e.title,
+                        cancelledReason: e.cancelledReason,
+                        slug: e.slug,
+                    },
                 });
             }
+
             if (e.status !== EVENT_STATUS.PUBLISHED) {
-                await this._cacheSet({ key: cacheKey, value: null, ttl: 15 }); // treat as 404 public
+                await this._cacheSet({ key: cacheKey, value: null, ttl: 15 });
                 return null;
             }
 
@@ -261,7 +279,7 @@ export class EventService {
             this.logger.error(`[getPublicEventDetail] error for slug=${slug}`, {
                 err: err.message,
             });
-            return fetchFn(); // vẫn throw 410 khi cần
+            return fetchFn();
         }
     }
 
@@ -335,40 +353,38 @@ export class EventService {
             }
         }
 
-        const slug = createEventSlug(eventData.title);
-        // TODO: ensure unique slug if cần (check collisions)
-
-        const newEvent = {
-            ...rest,
-            eventID,
-            slug,
-            status: EVENT_STATUS.DRAFT,
-            organizer: {
-                organizerID: user.uid,
-                name: user.name,
-                photoUrl: user.picture,
-            },
-            stats: {
-                participantCount: 0,
-                checkInCount: 0,
-                ticketSoldCount: 0,
-                // ❌ không gán totalTickets = số loại vé (dễ hiểu sai)
-            },
-            startTime: eventData.startTime
-                ? new Date(eventData.startTime).toISOString()
-                : null,
-            endTime: eventData.endTime
-                ? new Date(eventData.endTime).toISOString()
-                : null,
-            createdAt: null, // set bằng serverTimestamp
-            updatedAt: null,
-        };
+        const baseSlug = createEventSlug(eventData.title ?? "su-kien");
 
         await this.db.runTransaction(async (tx) => {
+            const slug = await reserveUniqueSlugTx(
+                this.db,
+                tx,
+                baseSlug,
+                eventID,
+            );
+
             tx.set(eventRef, {
-                ...newEvent,
-                createdAt: this._fv().serverTimestamp(),
-                updatedAt: this._fv().serverTimestamp(),
+                ...rest,
+                eventID,
+                slug,
+                status: EVENT_STATUS.DRAFT,
+                organizer: {
+                    organizerID: user.uid,
+                    name: user.name,
+                    photoUrl: user.picture,
+                },
+                stats: {
+                    participantCount: 0,
+                    checkInCount: 0,
+                    ticketSoldCount: 0,
+                },
+                startTime: eventData.startTime
+                    ? new Date(eventData.startTime).toISOString()
+                    : null,
+                endTime: eventData.endTime
+                    ? new Date(eventData.endTime).toISOString()
+                    : null,
+                createdAt: new Date().toISOString(),
             });
 
             if (Array.isArray(ticketTypes) && ticketTypes.length > 0) {
@@ -575,7 +591,7 @@ export class EventService {
         return { success: true };
     }
 
-    async cancelEvent(eventID, actor, cancelReason = "No reason provided") {
+    async cancelEvent(eventID, actor, cancelledReason = "No reason provided") {
         if (!eventID)
             throw new AppError({
                 statusCode: 400,
@@ -623,7 +639,7 @@ export class EventService {
 
             const updateData = {
                 status: EVENT_STATUS.CANCELLED,
-                cancelReason,
+                cancelledReason,
                 cancelledBy: userID,
                 cancelledByUsername: username ?? "unknown",
                 cancelledByEmail: email ?? null,
@@ -646,7 +662,7 @@ export class EventService {
         const attendeesCount = await this.countEventAttendees(eventID);
         if (attendeesCount > 0) {
             await this.eventLifecycleEventService.sendEventCancelled({
-                cancelReason,
+                cancelledReason,
                 cancelledBy: userID,
                 cancelledByUsername: username,
                 cancelledByEmail: email,

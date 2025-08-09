@@ -2,6 +2,7 @@ import { z } from "zod";
 import { EventStatusEnum } from "../enums/event-status";
 import { TicketTypeSchema } from "../tickets";
 import { SaleStatus } from "../enums/sale-status";
+import { OpenGraphSchema, SeoSchema } from "./seo.schema";
 
 const START_DELAY_TIME = 1000 * 60 * 60;
 
@@ -56,6 +57,7 @@ export const EventSchema = z
       .min(3, "Title must be at least 3 charaters")
       .max(100, "Title cannot more than 100 charaters"),
     description: z.string().min(1, "Description cannot be empty."),
+    slug: z.string().optional(),
     images: z
       .array(z.string().url("Image must be a valid url."))
       .min(1, "You must have at least."),
@@ -102,6 +104,15 @@ export const EventSchema = z
     path: ["endTime"],
   });
 
+const EventDetailPatchSchema = z.object({
+  slug: z.string().min(1),
+  seo: SeoSchema.optional(),
+  openGraph: OpenGraphSchema.optional(),
+});
+
+export const EventDetailSchema = EventSchema.and(EventDetailPatchSchema);
+
+export type EventDetail = z.infer<typeof EventDetailSchema>;
 export type Event = z.infer<typeof EventSchema>;
 export type Location = z.infer<typeof LocationSchema>;
 export type EventStats = z.infer<typeof EventStatsSchema>;

@@ -31,7 +31,7 @@ import {
 } from "@/schema/events/update-event.schema";
 import { toDatetimeLocalString, toISOStringFromLocal } from "@/lib/utils";
 import { UpdateEventFn } from "@/types/event.api";
-import { toUpperCaseFirstLetter } from "@/lib/helpers/string.helper";
+import dynamic from "next/dynamic";
 
 interface UpdateEventModalProps {
   isOpen: boolean;
@@ -146,10 +146,11 @@ const UpdateEventModal: React.FC<UpdateEventModalProps> = ({
                     <FormItem>
                       <FormLabel>Description *</FormLabel>
                       <FormControl>
-                        <Textarea
+                        <DynamicTiptapEditor
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
                           placeholder="Describe your event..."
-                          className="min-h-[100px]"
-                          {...field}
                         />
                       </FormControl>
                       <FormMessage />
@@ -314,3 +315,13 @@ const UpdateEventModal: React.FC<UpdateEventModalProps> = ({
 };
 
 export default UpdateEventModal;
+
+const DynamicTiptapEditor = dynamic(
+  () => import("@/components/events/text-editor").then((mod) => mod.TextEditor),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-[230px] bg-gray-100 rounded-md animate-pulse"></div>
+    ),
+  }
+);

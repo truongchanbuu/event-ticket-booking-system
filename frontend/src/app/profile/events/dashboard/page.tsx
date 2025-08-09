@@ -58,8 +58,8 @@ const EventManagementDashboard = () => {
 
   const handleCreateEvent = async (data) => {
     try {
-      const eventID = await createEvent(data);
-
+      const result = await createEvent(data);
+      const eventID = result.data;
       if (eventID) {
         router.push(`/profile/events/dashboard/${eventID}`);
       }
@@ -68,10 +68,6 @@ const EventManagementDashboard = () => {
       console.error(`Failed to create event: ${e}`);
     }
   };
-
-  console.log(JSON.stringify(events));
-
-  // TODO: Kiểm tra payment methods cho lần đầu tiên tạo => FETCH API gọi lấy payment methods
 
   const filteredEvents = events.filter((event) => {
     const matchesSearch =

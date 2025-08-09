@@ -31,11 +31,11 @@ import { cn } from "@/lib/utils";
 import { useEventCreationForm } from "@/hooks/use-event-creation-hook";
 import { Controller, FormProvider, useFieldArray } from "react-hook-form";
 import { CreateEventFormValues } from "@/schema/events/event-creation.schema";
-import { Textarea } from "../ui/textarea";
 import MultipleDocumentUploader from "../ui/multi-document-uploader";
 import { EventManagementService } from "@/services/event-management.service";
 import { useUserProfile } from "@/hooks/user-store-hooks";
 import { toast } from "@/hooks/use-toast";
+import { TextEditor } from "./text-editor";
 
 interface CreateEventModalProps {
   isOpen: boolean;
@@ -262,12 +262,16 @@ const CreateEventModal = ({
                     <div className="lg:col-span-2">
                       <Label htmlFor="description">Description</Label>
 
-                      <Textarea
-                        id="description"
-                        rows={4}
-                        placeholder="Describe your event..."
-                        {...register("description")}
-                        className="w-full ..."
+                      <Controller
+                        name="description"
+                        control={control}
+                        render={({ field }) => (
+                          <TextEditor
+                            value={field.value}
+                            onChange={field.onChange}
+                            placeholder="Describe your event in detail..."
+                          />
+                        )}
                       />
 
                       {errors.description && (

@@ -6,6 +6,16 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export const formatPrice = (
+  price: number,
+  currency: string = "VND"
+): string => {
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: currency,
+  }).format(price);
+};
+
 export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("vi-VN", {
     style: "currency",
@@ -13,6 +23,31 @@ export function formatCurrency(amount: number): string {
     maximumFractionDigits: 0,
   }).format(amount);
 }
+
+export function formatEventTime(startTime: string, endTime: string): string {
+  const start = new Date(startTime);
+  const end = new Date(endTime);
+
+  const dateOptions: Intl.DateTimeFormatOptions = {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  };
+
+  const timeOptions: Intl.DateTimeFormatOptions = {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  };
+
+  const dateStr = start.toLocaleDateString("en-US", dateOptions);
+  const startTimeStr = start.toLocaleTimeString("en-US", timeOptions);
+  const endTimeStr = end.toLocaleTimeString("en-US", timeOptions);
+
+  return `${dateStr}, ${startTimeStr} - ${endTimeStr}`;
+}
+
 export function formatDate(
   date: Date | string | Timestamp | undefined
 ): string | undefined {
@@ -175,4 +210,13 @@ export function getStatusColor(status: string) {
     cancelled: "text-red-600",
   };
   return colors[status as keyof typeof colors] || "text-gray-600";
+}
+
+export function getBaseUrl() {
+  const fromEnv =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.SITE_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
+
+  return fromEnv ?? "http://localhost:4000";
 }

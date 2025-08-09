@@ -1,9 +1,15 @@
 import React from "react";
 import { AlertTriangle, RefreshCw, Wifi, Server } from "lucide-react";
 
-export const ErrorMessage = ({ error, onReload }) => {
+export const ErrorMessage = ({
+  error,
+  onReload,
+}: {
+  error: string;
+  onReload?: () => void;
+}) => {
   const getErrorDetails = (error) => {
-    const errorMessage = error?.message || error || "Đã có lỗi xảy ra";
+    const errorMessage = error?.message || error || "There is something wrong";
 
     if (errorMessage.includes("network") || errorMessage.includes("fetch")) {
       return {

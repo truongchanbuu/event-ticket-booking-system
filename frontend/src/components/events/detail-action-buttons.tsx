@@ -43,10 +43,10 @@ export default function DetailActionButtons({
   const [showAddPaymentMethod, setShowAddPaymentMethod] = useState(false);
   const { methods, isLoading } = usePaymentMethods();
 
-  const [cancelReason, setCancelReason] = useState<string | undefined>();
+  const [cancelledReason, setCancelReason] = useState<string | undefined>();
   const handleCancelEvent = async () => {
     try {
-      await cancelEvent(cancelReason ?? "No reason provided.");
+      await cancelEvent(cancelledReason ?? "No reason provided.");
     } catch (e) {
       console.error(e);
     } finally {
@@ -200,7 +200,7 @@ export default function DetailActionButtons({
               placeholder="No reason provided"
               className="resize-none"
               rows={3}
-              value={cancelReason}
+              value={cancelledReason}
               maxLength={300}
               onChange={(e) => setCancelReason(e.target.value)}
             />

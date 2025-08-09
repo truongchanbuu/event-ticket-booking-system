@@ -1,6 +1,7 @@
-import { Attendee, Event, EventContributor, TicketType } from "@/schema";
+import { Attendee, Event, EventContributor, EventDetail } from "@/schema";
 import { fetchAPI } from "../base";
 import { APIResponse, GetParams } from "@/schema/api";
+import { getBaseUrl } from "@/lib/utils";
 
 export interface EventsResponse extends APIResponse<Event[]> {}
 export interface EventReponse extends APIResponse<Event> {}
@@ -41,7 +42,7 @@ export async function getEventByID(eventID: string): Promise<EventReponse> {
  */
 export async function createOrganizerEvent(
   eventData: Partial<Event>
-): Promise<{ eventID: string }> {
+): Promise<EventReponse> {
   return fetchEvents<{ data: Event }>("/me/events", {
     method: "POST",
     body: JSON.stringify(eventData),
@@ -128,4 +129,43 @@ export async function updateContributorAPI(eventID, contributorID, data) {
       body: JSON.stringify(data),
     }
   );
+}
+
+export type EventFetchResult =
+  | { kind: "ok"; data: EventDetail }
+  | { kind: "cancelled"; reason?: string }
+  | { kind: "not_found" }
+  | { kind: "error"; message: string };
+
+export async function fetchEventBySlug(
+  slug: string,
+  init?: RequestInit
+): Promise<EventFetchResult> {
+  const url = new URL(
+    `/api/events/${encodeURIComponent(slug)}`,
+    getBaseUrl()
+  ).toString();
+  const res = await fetch(url, {
+    ...init,
+    next: { revalidate: 60, ...(init as any)?.next },
+    headers: { accept: "application/json", ...(init?.headers || {}) },
+  });
+
+  if (res.status === 410) {
+    const body = await res.json().catch(() => ({}));
+    return {
+      kind: "cancelled",
+      reason: body?.data?.cancelledReason || body?.message,
+    };
+  }
+
+  if (res.status === 404) return { kind: "not_found" };
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    return { kind: "error", message: body || `HTTP ${res.status}` };
+  }
+
+  const result = await res.json();
+  return { kind: "ok", data: result.data };
 }

@@ -31,6 +31,7 @@ const Footer = () => {
     "/organizers",
     "/payment",
     "/admin",
+    "/events/",
   ];
 
   const shouldShowFooter = !hideFooterPrefixes.some((prefix) =>

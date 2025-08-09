@@ -141,6 +141,7 @@ export class RedisService {
 
   async getOrSet(key, fetchFn, ttl = this.defaultTTL, { trackingKey } = {}) {
     const hit = await this.get(key);
+    console.log(`[HIT CACHE: ${JSON.stringify(hit)}]`);
     if (hit !== null) return hit;
 
     if (this._inflight.has(key)) return this._inflight.get(key);

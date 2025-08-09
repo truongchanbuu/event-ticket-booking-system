@@ -9,7 +9,7 @@ import EventFilterBar from "@/components/events/event-filter-bar";
 import EventLoadingSkeleton from "@/components/events/event-loading-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Event, EventFilters } from "@/schema";
-import { useDebounce } from "@/hooks/use-debounce-callback";
+import { useDebounceCallback } from "@/hooks/use-debounce-callback";
 import { AppUser } from "@/schema/user";
 
 const MAX_SUGGEST_ORGANIZER = 6;
@@ -35,7 +35,7 @@ export default function EventsPage() {
   const suggestedOrganizers = organizers.slice(0, MAX_SUGGEST_ORGANIZER);
 
   // Debounced filter change using custom hook
-  const debouncedSetFilters = useDebounce(setFilters, DEBOUNCE_DELAY);
+  const debouncedSetFilters = useDebounceCallback(setFilters, DEBOUNCE_DELAY);
 
   // Fetch events with pagination
   const fetchEvents = async (
@@ -51,7 +51,7 @@ export default function EventsPage() {
       const pageSize = 6;
 
       // Lọc theo filter
-      let filtered = mockEvents;
+      let filtered = [];
 
       // Filter by categories
       if (currentFilters.categories && currentFilters.categories.length > 0) {
