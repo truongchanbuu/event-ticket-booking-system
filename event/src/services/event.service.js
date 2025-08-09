@@ -21,7 +21,6 @@ export class EventService {
     constructor({
         db,
         redisService,
-        // redisLockService,  // ❌ không dùng nữa
         contributorService,
         ticketClientService,
         eventLifecycleEventService,
@@ -58,6 +57,9 @@ export class EventService {
 
             // Danh sách events theo tổ chức
             EVENTS_BY_ORG_ID: (orgID) => `events:org:${orgID}`,
+
+            EVENT_CONTRIBUTORS_BY_ID: (eventID) =>
+                `event:${eventID}:contributors`,
         };
     }
 
@@ -78,6 +80,7 @@ export class EventService {
         if (this.redisService.invalidateByTrackingKey) {
             return this.redisService.invalidateByTrackingKey(tracking);
         }
+
         return this.redisService.del(
             this.CACHE_KEYS.EVENT_BY_ID(eventID),
             this.CACHE_KEYS.EVENT_TICKET_TYPES_BY_ID(eventID),
@@ -939,6 +942,7 @@ export class EventService {
                 cacheKey,
                 fetchFromDatabase,
                 REDIS_TTL.EVENT_DEFAULT,
+                { trackingKey: `event:${eventID}:attendees` },
             );
         } catch (err) {
             this.logger.error("[getEventAttendees] Redis error:", err);
@@ -978,6 +982,7 @@ export class EventService {
                 cacheKey,
                 fetchFromDatabase,
                 REDIS_TTL.EVENT_DEFAULT,
+                { trackingKey: `event:${eventID}:attendees` },
             );
         } catch (err) {
             this.logger.error("[countEventAttendees] Redis error:", err);
@@ -1144,6 +1149,7 @@ export class EventService {
                 cacheKey,
                 fetchFromDatabase,
                 REDIS_TTL.TICKET_TYPES_DEFAULT,
+                { trackingKey: this.CACHE_KEYS.EVENT_TRACKING(eventID) },
             );
         } catch (err) {
             this.logger.error("[getEventTicketTypes] Redis error:", err);
@@ -1172,6 +1178,7 @@ export class EventService {
                 cacheKey,
                 fetchFromDb,
                 REDIS_TTL.EVENT_DEFAULT,
+                { trackingKey: this.CACHE_KEYS.EVENT_TRACKING(eventID) },
             );
         } catch (err) {
             this.logger.error("[getEventContributors] Redis error:", err);

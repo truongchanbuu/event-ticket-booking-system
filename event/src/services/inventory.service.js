@@ -46,6 +46,22 @@ export class InventoryService {
                     ts: new Date().toISOString(),
                 }),
             );
+
+            try {
+                if (slug) {
+                    await this.redis.del(`availability:slug:${slug}`);
+                } else {
+                    await this.redis.invalidateByTrackingKey(
+                        `event:${eventId}`,
+                    );
+                }
+            } catch (e) {
+                this.logger.warn("[availability.invalidate] failed", {
+                    e: e.message,
+                    eventId,
+                    slug,
+                });
+            }
         }
         return res;
     }
@@ -66,6 +82,22 @@ export class InventoryService {
                     ts: new Date().toISOString(),
                 }),
             );
+
+            try {
+                if (slug) {
+                    await this.redis.del(`availability:slug:${slug}`);
+                } else {
+                    await this.redis.invalidateByTrackingKey(
+                        `event:${eventId}`,
+                    );
+                }
+            } catch (e) {
+                this.logger.warn("[availability.invalidate] failed", {
+                    e: e.message,
+                    eventId,
+                    slug,
+                });
+            }
         }
         return { ok: ok === 1, newRemaining: Number(newRemaining) };
     }

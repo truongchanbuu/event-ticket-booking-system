@@ -43,6 +43,8 @@ export class AvailabilityService {
                         data: { message: "Event cancelled" },
                     };
 
+                const eventId = detail.eventID || detail.eventId; // đảm bảo lấy được ID
+
                 const ttIds = (detail.ticketTypes || [])
                     .map((t) => t.ticketTypeID)
                     .filter(Boolean);
@@ -54,12 +56,16 @@ export class AvailabilityService {
                         lastUpdatedAt: ts,
                         etag: this.etagOf(0, "EMPTY", ts),
                     };
-                    if (this.ttlMs)
-                        await this.cache.set(
-                            this.cacheKey(slug),
-                            payload,
-                            this.ttlMs,
-                        );
+
+                    if (this.ttlMs) {
+                        const ttlSec = Math.ceil(this.ttlMs / 1000);
+                        await this.cache.set(this.cacheKey(slug), payload, {
+                            ttl: ttlSec,
+                            trackingKey: eventId
+                                ? `event:${eventId}`
+                                : undefined,
+                        });
+                    }
                     return payload;
                 }
 
@@ -79,12 +85,14 @@ export class AvailabilityService {
                     etag: this.etagOf(total, status, ts),
                 };
 
-                if (this.ttlMs)
-                    await this.cache.set(
-                        this.cacheKey(slug),
-                        payload,
-                        this.ttlMs,
-                    );
+                if (this.ttlMs) {
+                    const ttlSec = Math.ceil(this.ttlMs / 1000);
+                    await this.cache.set(this.cacheKey(slug), payload, {
+                        ttl: ttlSec,
+                        trackingKey: eventId ? `event:${eventId}` : undefined,
+                    });
+                }
+
                 return payload;
             })();
             this.inflight.set(slug, p);
