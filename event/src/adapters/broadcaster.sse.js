@@ -1,72 +1,131 @@
 export class EmbeddedBroadcaster {
-    constructor({ redisPubSub, logger = console }) {
+    constructor({ redisPubSub, availabilityService, logger = console }) {
         this.sub = redisPubSub;
+        this.availability = availabilityService;
         this.logger = logger;
-        this.sinks = new Map(); // eventId -> Set<res>
+        this.sinks = new Map(); // key = slug -> Set<res>
+        this.MAX_PER_KEY = 10000;
     }
 
-    _setFor(id) {
-        if (!this.sinks.has(id)) this.sinks.set(id, new Set());
-        return this.sinks.get(id);
+    _setFor(key) {
+        if (!this.sinks.has(key)) this.sinks.set(key, new Set());
+        return this.sinks.get(key);
     }
 
     async start() {
         await this.sub.connect?.();
-        await this.sub.psubscribe("availability:*", ({ channel, message }) => {
-            const eventId = channel.split(":")[1];
-            const set = this.sinks.get(eventId);
-            if (!set || set.size === 0) return;
 
-            let payload;
-            try {
-                payload = JSON.parse(message);
-            } catch {
-                payload = { raw: message };
-            }
-
-            for (const res of set) {
+        // Nhận mọi sự kiện thay đổi
+        await this.sub.psubscribe(
+            "availability:*",
+            async ({ channel, message }) => {
                 try {
-                    const idLine = payload?.etag ? `id: ${payload.etag}\n` : "";
-                    res.write(`${idLine}event: update\n`);
-                    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+                    const parts = channel.split(":"); // availability:<eventId> hoặc availability:<eventId>:<slug>
+                    const eventId = parts[1];
+                    let payload = JSON.parse(message || "{}");
+                    const slug = payload.slug || parts[2]; // Ưu tiên slug trong message
+
+                    if (!slug) return; // không biết slug thì chịu, hoặc map eventId->slug ở đây
+
+                    const sinks = this.sinks.get(slug);
+                    if (!sinks || sinks.size === 0) return;
+
+                    // Lấy snapshot chuẩn từ service (đảm bảo payload + ETag đồng nhất polling)
+                    const snap = await this.availability.getBySlug(slug);
+                    if (snap?.status !== 200) return;
+
+                    for (const res of [...sinks]) {
+                        try {
+                            if (snap.etag) res.write(`id: ${snap.etag}\n`);
+                            res.write(`event: update\n`);
+                            res.write(`data: ${JSON.stringify(snap)}\n\n`);
+                        } catch (e) {
+                            try {
+                                res.end();
+                            } catch {}
+                            sinks.delete(res);
+                        }
+                    }
+                    if (sinks.size === 0) this.sinks.delete(slug);
                 } catch (e) {
-                    try {
-                        res.end();
-                    } catch {}
-                    set.delete(res);
+                    this.logger.warn("[Broadcaster] push failed", {
+                        err: e.message,
+                    });
                 }
-            }
-        });
+            },
+        );
+
         this.logger.info("[Broadcaster] Subscribed availability:*");
     }
 
-    // Express handler
-    sseHandler = (req, res) => {
-        const { id } = req.params;
-        console.log(`EVENT ID: ${id}`);
+    // Express handler: /availability/stream/:slug
+    sseHandler = async (req, res) => {
+        const slug = String(req.params.slug || req.query.slug || "");
+        if (!slug) {
+            res.status(400).json({ message: "Missing slug" });
+            return;
+        }
+
+        // SSE headers
         req.socket.setTimeout?.(0);
         res.writeHead(200, {
             "Content-Type": "text/event-stream; charset=utf-8",
-            "Cache-Control": "no-cache, no-transform",
+            "Cache-Control": "no-store, no-transform",
             Connection: "keep-alive",
             "X-Accel-Buffering": "no",
         });
+        res.flushHeaders?.();
+        res.write(`retry: 3000\n\n`);
 
-        const set = this._setFor(id);
-        set.add(res);
+        const sinks = this._setFor(slug);
+        if (sinks.size >= this.MAX_PER_KEY) {
+            res.write(`event: error\ndata: {"message":"Too many clients"}\n\n`);
+            res.end();
+            return;
+        }
+        sinks.add(res);
 
+        // Heartbeat để giữ kết nối
         const hb = setInterval(() => {
             try {
                 res.write(`event: ping\ndata: {}\n\n`);
             } catch {}
-        }, 25_000);
+        }, 25000);
 
-        req.on("close", () => {
+        // Snapshot ban đầu (giống polling lần đầu)
+        try {
+            const lastId = req.get?.("Last-Event-ID");
+            const snap = await this.availability.getBySlug(slug);
+
+            console.log(`snap: ${JSON.stringify(snap)}`);
+
+            if (snap?.status === 200) {
+                if (!lastId || lastId !== snap.etag) {
+                    if (snap.etag) res.write(`id: ${snap.etag}\n`);
+                    res.write(`event: update\n`);
+                    res.write(`data: ${JSON.stringify(snap)}\n\n`);
+                }
+            } else {
+                res.write(
+                    `event: error\ndata: ${JSON.stringify({ status: snap?.status || 503 })}\n\n`,
+                );
+            }
+        } catch (e) {
+            res.write(
+                `event: error\ndata: ${JSON.stringify({ message: "initial snapshot failed" })}\n\n`,
+            );
+        }
+
+        const onClose = () => {
             clearInterval(hb);
-            set.delete(res);
+            sinks.delete(res);
+            if (sinks.size === 0) this.sinks.delete(slug);
             try {
                 res.end();
             } catch {}
-        });
+        };
+        req.on("close", onClose);
+        req.on?.("aborted", onClose);
+        res.on?.("error", onClose);
     };
 }

@@ -7,11 +7,7 @@ export class AvailabilityRoutes {
 
         this.router.get(
             "/",
-            (req, res, next) => {
-                console.log(`NEXT`);
-                next();
-            },
-            this.availabilityController.getAvailabilityBySlug,
+            this.availabilityController.getAvailabilityBySlugPolling,
         );
     }
 }

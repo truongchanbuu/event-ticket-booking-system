@@ -4,6 +4,9 @@ export class AvailabilitySSERoutes {
     constructor({ broadcaster }) {
         this.router = Router();
 
-        this.router.get("/:id/availability/stream", broadcaster.sseHandler);
+        this.router.get(
+            "/:id/availability/stream/:slug",
+            broadcaster.sseHandler,
+        );
     }
 }

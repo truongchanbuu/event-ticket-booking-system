@@ -25,8 +25,6 @@ export async function GET(
       },
     });
 
-    console.log(`up: ${upstream}`);
-
     const text = await upstream.text();
     const json = (() => {
       try {

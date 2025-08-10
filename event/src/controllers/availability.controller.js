@@ -20,7 +20,6 @@ export class AvailabilityController {
         if (!slug) return res.status(400).json({ message: "Missing slug" });
 
         const result = await this.availabilityService.getBySlug(String(slug));
-        console.log(`result: ${JSON.stringify(result)}`);
 
         const cacheControl =
             this.edgeTtlSec > 0

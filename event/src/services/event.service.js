@@ -24,6 +24,7 @@ export class EventService {
         redisService,
         contributorService,
         ticketClientService,
+        redisPubSub,
         eventLifecycleEventService,
         logger = console,
     }) {
@@ -31,6 +32,7 @@ export class EventService {
         this.db = db;
         this.eventCollection = db.collection(EVENTS_COLLECTION || "events");
         this.redisService = redisService;
+        this.redisPubSub = redisPubSub;
         this.contributorService = contributorService;
         this.ticketClientService = ticketClientService;
         this.eventLifecycleEventService = eventLifecycleEventService;
@@ -545,22 +547,24 @@ export class EventService {
     }
 
     async publishEvent(eventID, organizerID) {
-        if (!eventID)
+        if (!eventID) {
             throw new AppError({
                 statusCode: 400,
                 message: "eventID is required",
             });
-
-        if (!organizerID)
+        }
+        if (!organizerID) {
             throw new AppError({
                 statusCode: 400,
                 message: "organizerID is required",
             });
+        }
 
-        // 1) Kiểm tra có ticket types
-        const eventTicketTypes =
+        // 1) Kiểm tra ticket types (shape mới: {status, data})
+        const ttResp =
             await this.ticketClientService.getEventTicketTypes(eventID);
-        if (!Array.isArray(eventTicketTypes) || eventTicketTypes.length === 0) {
+        const ticketTypes = Array.isArray(ttResp?.data) ? ttResp.data : [];
+        if (ttResp?.status !== 200 || ticketTypes.length === 0) {
             throw new AppError({
                 statusCode: 400,
                 errorCode: ERROR_CODE.INVALID_DATA,
@@ -572,35 +576,39 @@ export class EventService {
         const eventRef = this.eventCollection.doc(eventID);
         let eventData = null;
 
-        // 2) Ghi trạng thái
+        // 2) Transaction: chuyển trạng thái → PUBLISHED
         await this.db.runTransaction(async (tx) => {
             const eventDoc = await tx.get(eventRef);
-            if (!eventDoc.exists)
+            if (!eventDoc.exists) {
                 throw new AppError({
                     statusCode: 404,
                     errorCode: ERROR_CODE.NOT_FOUND,
                     message: "Event Not Found.",
                 });
-
+            }
             const event = eventDoc.data();
-            if (event.organizer?.organizerID !== organizerID)
+
+            if (event.organizer?.organizerID !== organizerID) {
                 throw new AppError({
                     statusCode: 401,
                     errorCode: ERROR_CODE.UNAUTHORIZED,
                     message: "Unauthorized",
                 });
-            if (event.status === EVENT_STATUS.PUBLISHED)
+            }
+            if (event.status === EVENT_STATUS.PUBLISHED) {
                 throw new AppError({
                     statusCode: 400,
                     errorCode: ERROR_CODE.INVALID_OPERATION,
                     message: "Already published.",
                 });
-            if (event.startTime && new Date(event.startTime) < new Date())
+            }
+            if (event.startTime && new Date(event.startTime) < new Date()) {
                 throw new AppError({
                     statusCode: 400,
                     errorCode: ERROR_CODE.INVALID_DATA,
                     message: "Event already passed.",
                 });
+            }
 
             tx.update(eventRef, {
                 status: EVENT_STATUS.PUBLISHED,
@@ -608,28 +616,68 @@ export class EventService {
                 updatedAt: new Date().toISOString(),
             });
 
-            eventData = event; // lưu để dùng sau transaction
+            eventData = event; // dùng sau transaction
         });
 
-        // 3) Invalidate cache theo trackingKey
-        await this._invalidateEvent(eventID, {
-            organizerID: eventData?.organizer?.organizerID,
-            slug: eventData?.slug,
-        });
+        const slug = eventData?.slug;
 
-        const tt = await this.ticketClientService.getEventTicketTypes(eventID);
+        // 3) Khởi tạo inventory + invVersion (và KHÔNG reset sai nếu đã có remaining)
+        try {
+            await Promise.all([
+                ...ticketTypes.map((t) => {
+                    const initial = t.remainingQuantity ?? t.totalQuantity ?? 0;
+                    return this.redisService.setRaw(
+                        `inv:${t.ticketTypeID}:remaining`,
+                        String(Math.max(0, initial)),
+                        { ttl: 0 }, // có thể thêm { nx: true } nếu muốn chỉ set nếu chưa có
+                    );
+                }),
+                // ensure invVersion tồn tại
+                this.redisService.setRaw(`event:${eventID}:inv:version`, "0", {
+                    ttl: 0,
+                }),
+            ]);
+        } catch (e) {
+            this.logger.warn(
+                "[publishEvent] init inventory failed (non-fatal)",
+                { eventID, err: e?.message },
+            );
+        }
 
-        await Promise.all(
-            tt.map((t) =>
-                this.redisService.setRaw(
-                    `inv:${t.ticketTypeID}:remaining`,
-                    String(t.totalQuantity),
-                    { ttl: 0 },
-                ),
-            ),
-        );
+        // 4) Invalidate cache theo event trackingKey (để lần đọc sau ra snapshot mới)
+        try {
+            await this._invalidateEvent(eventID, {
+                organizerID: eventData?.organizer?.organizerID,
+                slug,
+            });
+        } catch (e) {
+            this.logger.warn("[publishEvent] invalidate cache failed", {
+                eventID,
+                err: e?.message,
+            });
+        }
 
-        // 5) Emit lifecycle event
+        // 5) (SSE) Phát tín hiệu cho broadcaster đẩy snapshot ngay (nếu bật SSE)
+        try {
+            if (this.redisPubSub && (slug || true)) {
+                await this.redisPubSub.publish(
+                    `availability:${eventID}`,
+                    JSON.stringify({
+                        eventId: eventID,
+                        slug,
+                        reason: "publishEventInit",
+                        ts: Date.now(),
+                    }),
+                );
+            }
+        } catch (e) {
+            this.logger.warn("[publishEvent] pubsub notify failed", {
+                eventID,
+                err: e?.message,
+            });
+        }
+
+        // 6) Emit lifecycle event (không đổi)
         await this.eventLifecycleEventService.sendEventPublished({
             eventID,
             organizerID,

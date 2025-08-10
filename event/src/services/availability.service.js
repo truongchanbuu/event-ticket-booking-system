@@ -3,6 +3,10 @@ import { createHash } from "crypto";
 import { EVENT_STATUS } from "../enums/event-status.js";
 import { sleep, withTimeout } from "@event_ticket_booking_system/shared";
 
+const T_EVENTS_MS = 600; // detail theo slug (qua proxy)
+const T_TICKETS_MS = 600; // ticket types
+const T_INV_MS = 250; // redis (nhanh hơn)
+
 export class AvailabilityService {
     constructor({
         redisService,
@@ -62,13 +66,10 @@ export class AvailabilityService {
                 try {
                     await sleep(this.coalesceMs);
 
-                    // ✅ Timeout cứng cho event detail (vd 500ms)
                     const detail = await withTimeout(
-                        () =>
-                            retryOnce(() =>
-                                this.events.getPublicEventDetail(slug),
-                            ),
-                        500,
+                        (signal) =>
+                            this.events.getPublicEventDetail(slug, { signal }),
+                        T_EVENTS_MS,
                     );
 
                     if (!detail) {

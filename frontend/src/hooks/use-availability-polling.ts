@@ -67,8 +67,6 @@ export function useAvailabilityPolling(
           }
         );
 
-        console.log(`FE: ${JSON.stringify(res)}`);
-
         if (res.status === 304) {
           schedule();
           return;

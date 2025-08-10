@@ -17,8 +17,11 @@ export function sleep(ms) {
 }
 
 export async function withTimeout(fn, ms) {
-  const timeout = new Promise((_, rej) =>
-    setTimeout(() => rej(new Error(`timeout:${ms}ms`)), ms)
-  );
-  return Promise.race([fn(), timeout]);
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(new Error(`timeout:${ms}ms`)), ms);
+  try {
+    return await fn(ac.signal);
+  } finally {
+    clearTimeout(t);
+  }
 }
