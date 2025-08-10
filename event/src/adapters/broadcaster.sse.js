@@ -42,7 +42,8 @@ export class EmbeddedBroadcaster {
 
     // Express handler
     sseHandler = (req, res) => {
-        const { id } = req.params; // eventId
+        const { id } = req.params;
+        console.log(`EVENT ID: ${id}`);
         req.socket.setTimeout?.(0);
         res.writeHead(200, {
             "Content-Type": "text/event-stream; charset=utf-8",

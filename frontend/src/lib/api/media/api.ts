@@ -4,7 +4,7 @@ import { RequestInit } from "next/dist/server/web/spec-extension/request";
 import { string } from "zod";
 
 async function fetchMedia<T>(path: string, options: RequestInit): Promise<T> {
-  return fetchAPI<T>(`/public/media/${path}`, options);
+  return fetchAPI<T>(`/private/media/${path}`, options);
 }
 
 export async function signUpload(

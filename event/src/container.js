@@ -26,7 +26,7 @@ import { TicketTypeSnapshotRepo } from "./repositories/TicketRepository.js";
 import { CreateTicketTypeSnapshotUseCase } from "./kafka/consumer/CreateTicketTypeSnapshot.js";
 import { UpdateTicketTypeSnapshotUseCase } from "./kafka/consumer/UpdateTicketTypeSnapshot.js";
 import { DeleteTicketTypeSnapshotUseCase } from "./kafka/consumer/DeleteTicketTypeSnapshot.js";
-import { EventLifecycleEventService } from "./kafka/event-lifecycle.js";
+import { EventLifecycleEventService } from "./kafka/event-lifecycle.producer.js";
 import { ContributorService } from "./services/contributor.service.js";
 import { InternalRoutes } from "./routes/internal.routes.js";
 import { ApiRoutes } from "./routes/api.routes.js";
@@ -34,6 +34,8 @@ import { TicketClientService } from "./services/ticket-client.service.js";
 import { InventoryService } from "./services/inventory.service.js";
 import { EmbeddedBroadcaster } from "./adapters/broadcaster.sse.js";
 import { AvailabilitySSERoutes } from "./routes/availability.see.routes.js";
+import { TestRoutes } from "./routes/test.routes.js";
+import { AvailabilityRoutes } from "./routes/availability.routes.js";
 
 export async function configureContainer() {
     const logger = console;
@@ -164,6 +166,7 @@ export async function configureContainer() {
         eventRoutes: asClass(EventRoutes).singleton(),
         profileRoutes: asClass(ProfileRoutes).singleton(),
         internalRoutes: asClass(InternalRoutes).singleton(),
+        availabilityRoutes: asClass(AvailabilityRoutes).singleton(),
         availabilitySseRoutes: asClass(AvailabilitySSERoutes).singleton(),
         apiRoutes: asClass(ApiRoutes).singleton(),
 
@@ -180,9 +183,14 @@ export async function configureContainer() {
         messageDispatcher: asClass(MessageDispatcher).singleton(),
     });
 
+    if (config.app.nodeEnv === "development") {
+        container.register({
+            testRoutes: asClass(TestRoutes).singleton(),
+        });
+    }
+
     logger.info("✅ All dependencies registered. Container is ready.");
 
-    // (tuỳ chọn) expose shutdown hook để app gọi trong SIGTERM
     container.register({
         shutdown: asFunction(
             ({ kafkaService, redisClient, redisPubSub, logger }) => {

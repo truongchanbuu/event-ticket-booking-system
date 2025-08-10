@@ -217,6 +217,14 @@ export class RedisService {
     }
   }
 
+  async eval(lua, keys = [], args = []) {
+    return this._eval(lua, keys, args);
+  }
+
+  async evalsha(sha, keys = [], args = []) {
+    return this._evalsha(sha, keys, args);
+  }
+
   async scriptLoad(lua) {
     if (!lua) throw new Error("Lua script is required for scriptLoad");
     try {
@@ -231,17 +239,41 @@ export class RedisService {
   }
 
   // ---------- tagging & invalidation ----------
-  async invalidateByTrackingKey(tag) {
+  async invalidateByTrackingKey(tag, opts = {}) {
+    const { debug = true, sample = 10, useUnlink = true } = opts;
     const tagKey = this._key(tag);
     try {
       const members = await this.r.smembers(tagKey);
-      if (!members?.length) return 0;
+      if (!members?.length) {
+        if (debug) this.logger.info(`[Redis] Tag empty: ${tagKey}`);
+        return 0;
+      }
 
-      // Chunked DEL to avoid huge commands
+      if (debug) {
+        const show = members.slice(0, sample);
+        this.logger.info(
+          `[Redis] Tag ${tagKey} has ${members.length} members. Sample:`,
+          show
+        );
+        try {
+          // Lấy TTL một số key để chắc là mình đang xoá đúng thứ
+          const p = this.r.pipeline();
+          show.forEach((k) => p.pttl(k));
+          const ttls = (await p.exec()).map((x) => x[1]);
+          this.logger.info(`[Redis] PTTL sample (ms):`, ttls);
+        } catch {}
+      }
+
+      // Chunked DEL/UNLINK to avoid huge commands
       const CHUNK = 256;
-      for (let i = 0; i < members.length; i += CHUNK) {
+      for (let i = 0; i < members.length; i = CHUNK) {
         const batch = members.slice(i, i + CHUNK);
         await this.r.del(...batch);
+        if (useUnlink && typeof this.r.unlink === "function") {
+          await this.r.unlink(...batch);
+        } else {
+          await this.r.del(...batch);
+        }
       }
       await this.r.del(tagKey);
       this.logger.info(

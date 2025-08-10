@@ -1,50 +1,50 @@
-// app/api/events/[slug]/route.ts
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-const BASE = process.env.EVENT_SERVICE_URL!;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const SERVICE_TOKEN = process.env.EVENT_SERVICE_TOKEN;
 
 export async function GET(
   _req: Request,
-  { params }: { params: Promise<{ slug: string }> }
+  { params }: { params: { slug: string } }
 ) {
-  const { slug } = await params;
+  const { slug } = params;
   const ctrl = new AbortController();
   const to = setTimeout(() => ctrl.abort(), 2500);
 
   try {
-    const upstream = await fetch(`${BASE}/events/${slug}`, {
-      signal: ctrl.signal,
-      headers: {
-        accept: "application/json",
-        ...(SERVICE_TOKEN ? { authorization: `Bearer ${SERVICE_TOKEN}` } : {}),
-      },
-      next: { revalidate: 60 },
-    });
-
-    const bodyText = await upstream.text();
-    const tryJson = () => {
-      try {
-        return JSON.parse(bodyText);
-      } catch {
-        return { message: bodyText || upstream.statusText };
+    const upstream = await fetch(
+      `/api/proxy/public/events/${encodeURIComponent(slug)}`,
+      {
+        signal: ctrl.signal,
+        cache: "no-store", // ⬅️ quan trọng: không tạo fetch cache trong Next
+        headers: {
+          accept: "application/json",
+          ...(SERVICE_TOKEN
+            ? { authorization: `Bearer ${SERVICE_TOKEN}` }
+            : {}),
+        },
       }
-    };
+    );
+
+    const text = await upstream.text();
+    const json = (() => {
+      try {
+        return JSON.parse(text);
+      } catch {
+        return { message: text || upstream.statusText };
+      }
+    })();
 
     if (upstream.status === 200) {
-      return NextResponse.json(tryJson(), {
-        headers: {
-          "Cache-Control": "public, s-maxage=60, stale-while-revalidate=30",
-        },
-      });
+      return NextResponse.json(json, { status: 200 });
     }
-    if (upstream.status === 404) {
-      return NextResponse.json(tryJson(), { status: 404 });
-    }
-    if (upstream.status === 410) {
-      return NextResponse.json(tryJson(), { status: 410 });
-    }
+    if (upstream.status === 404)
+      return NextResponse.json(json, { status: 404 });
+    if (upstream.status === 410)
+      return NextResponse.json(json, { status: 410 });
 
     return NextResponse.json(
       { message: "Upstream error", status: upstream.status },

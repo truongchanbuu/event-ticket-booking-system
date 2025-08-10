@@ -67,7 +67,7 @@ export function EventContainer({ event }: EventContainerProps) {
         {/* Right Column - Availability */}
         <div className="md:sticky md:top-8">
           <AvailabilityClient
-            eventId={event.eventID || event.slug}
+            eventID={event.eventID || event.slug}
             slug={event.slug}
             totalCapacity={event.stats?.totalTickets ?? 0}
           />

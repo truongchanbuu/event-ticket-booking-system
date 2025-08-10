@@ -480,7 +480,13 @@ export class KafkaService {
 
   // ---- helper: sender factory ----
   createTopicSender(topic, eventSourceName) {
-    return async ({ key, value, eventType, partition }) => {
+    const hash32 = (s) => {
+      let h = 2166136261;
+      for (let i = 0; i < s.length; i++) h = (h ^ s.charCodeAt(i)) * 16777619;
+      return Math.abs(h | 0);
+    };
+
+    return async ({ key, value, eventType, partition, headers = {} }) => {
       if (this.connectionState !== "CONNECTED") {
         this.logger.error(
           { eventSourceName, topic },
@@ -488,6 +494,7 @@ export class KafkaService {
         );
         throw new Error("Kafka is not connected.");
       }
+
       if (!eventType) {
         this.logger.warn(
           { eventSourceName, topic },
@@ -495,14 +502,49 @@ export class KafkaService {
         );
       }
 
-      const headers = {
+      // normalize key
+      const normKey = ensureSafeValue(key);
+
+      const normValue = ensureSafeValue(value);
+
+      const baseHeaders = {
         "event-type": eventType || "unknown",
+        "event-version": headers["event-version"] || "1",
         "source-service":
-          process.env.KAFKA_PRODUCER_SERVICE_NAME || "unknown-service",
+          process.env.KAFKA_PRODUCER_SERVICE_NAME ||
+          eventSourceName ||
+          "unknown-service",
+        "content-type": headers["content-type"] || "application/json",
         "x-sent-at": Date.now().toString(),
       };
+      const mergedHeaders = { ...baseHeaders, ...headers };
 
-      await this.send(topic, [{ key, value, headers, partition }]);
+      let targetPartition = partition;
+      if (
+        targetPartition == null &&
+        typeof normKey === "string" &&
+        this.topicPartitions?.[topic] > 0
+      ) {
+        const n = this.topicPartitions[topic]; // số partition nếu bạn có cache metadata
+        targetPartition = n ? hash32(normKey) % n : undefined;
+      }
+
+      try {
+        await this.send(topic, [
+          {
+            key: normKey,
+            value: normValue,
+            headers: mergedHeaders,
+            partition: targetPartition,
+          },
+        ]);
+      } catch (err) {
+        this.logger.error(
+          { eventSourceName, topic, eventType, err: err?.message },
+          "Kafka send failed"
+        );
+        throw err;
+      }
     };
   }
 }

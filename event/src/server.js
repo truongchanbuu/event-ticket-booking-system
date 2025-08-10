@@ -81,10 +81,11 @@ async function bootstrap() {
             }
 
             try {
-                await kafkaService.disconnect();
-                rootLogger.debug("✅ Kafka connections closed gracefully.");
+                const shutdown = container.resolve("shutdown");
+                await shutdown();
+                rootLogger.debug("✅ Closing connections gracefully.");
             } catch (error) {
-                rootLogger.error("❌ Error closing Kafka connections:", error);
+                rootLogger.error("❌ Error closing connections:", error);
             }
 
             rootLogger.debug("👋 Shutdown complete. Exiting now.");

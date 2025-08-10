@@ -1,8 +1,14 @@
-export const AUTH_EVENTS = "auth.events";
-export const USER_EVENTS = "user.events";
-export const TICKET_TYPES_EVENTS = "ticket.events";
-export const APPLICATION_EVENTS = "application.events";
-export const BOOKING_EVENTS = "booking.events";
-export const PAYMENT_EVENTS = "payment.events";
-export const NOTIFICATION_EVENTS = "notification.events";
-export const EVENT_LIFECYCLE_EVENTS = "event.lifecycle.events";
+export const TOPICS = Object.freeze({
+  EVENT: process.env.KAFKA_TOPIC_EVENT_LIFECYCLE || "event.lifecycle.events",
+  AVAILABILITY:
+    process.env.KAFKA_TOPIC_AVAILABILITY || "event.availability.events",
+  TICKET: process.env.KAFKA_TOPIC_TICKET || "ticket.lifecycle.events",
+  ORDER: process.env.KAFKA_TOPIC_ORDER || "order.lifecycle.events",
+  PAYMENT: process.env.KAFKA_TOPIC_PAYMENT || "payment.lifecycle.events",
+  ATTENDEE: process.env.KAFKA_TOPIC_ATTENDEE || "attendee.lifecycle.events",
+  APPLICATION:
+    process.env.KAFKA_TOPIC_APPLICATION || "application.lifecycle.events",
+  NOTIFICATION:
+    process.env.KAFKA_TOPIC_NOTIFICATION || "notification.dispatch.events",
+  AUDIT: process.env.KAFKA_TOPIC_AUDIT || "audit.log.events",
+});

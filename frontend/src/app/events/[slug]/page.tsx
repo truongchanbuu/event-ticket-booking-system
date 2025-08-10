@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import type { EventDetail } from "@/schema";
 import { EVENT_STATUS } from "@/schema/enums/event-status";
 import { fetchEventBySlug } from "@/lib/api/events/api";
-import { EventCancelledUI } from "@/components/events/event-cancelled";
-import { ErrorMessage } from "@/components/ui/error-ui-with-reload";
 import { EventContainer } from "./EventContainer";
 import EventNotFound from "@/components/events/event-not-found";
 
@@ -18,7 +15,9 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const result = await fetchEventBySlug(slug, { cache: "force-cache" });
+  const result = await fetchEventBySlug(slug, {
+    next: { tags: [`event:slug:${slug}`] },
+  });
 
   if (result.kind === "not_found") {
     return {
@@ -52,7 +51,6 @@ export async function generateMetadata({
   }
 
   const event = result.data!;
-  console.log(`EVNT: ${JSON.stringify(event)}`);
   const title =
     event.seo?.title ?? event.openGraph?.title ?? event.title ?? "Sự kiện";
   const description =
@@ -145,7 +143,9 @@ export default async function EventPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const result = await fetchEventBySlug(slug);
+  const result = await fetchEventBySlug(slug, {
+    next: { tags: [`event:slug:${slug}`] },
+  });
 
   if (result.kind !== "ok") {
     return <EventNotFound />;

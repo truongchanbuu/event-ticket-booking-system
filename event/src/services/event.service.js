@@ -20,12 +20,14 @@ import { createEventSlug, reserveUniqueSlugTx } from "../utils/utils.js";
 export class EventService {
     constructor({
         db,
+        config,
         redisService,
         contributorService,
         ticketClientService,
         eventLifecycleEventService,
         logger = console,
     }) {
+        this.config = config;
         this.db = db;
         this.eventCollection = db.collection(EVENTS_COLLECTION || "events");
         this.redisService = redisService;
@@ -75,16 +77,48 @@ export class EventService {
     _cacheGetOrSet({ key, ttl, trackingKey, fetchFn }) {
         return this.redisService.getOrSet(key, fetchFn, ttl, { trackingKey });
     }
-    _invalidateEvent(eventID) {
+
+    async _invalidateEvent(eventID, { organizerID, slug } = {}) {
         const tracking = this.CACHE_KEYS.EVENT_TRACKING(eventID);
         if (this.redisService.invalidateByTrackingKey) {
-            return this.redisService.invalidateByTrackingKey(tracking);
+            await this.redisService.invalidateByTrackingKey(tracking);
         }
 
-        return this.redisService.del(
+        if (slug) {
+            await this.redisService.del(
+                this.CACHE_KEYS.EVENT_DETAIL_SLUG(slug),
+            );
+        }
+
+        if (organizerID) {
+            await this.redisService.del(
+                this.CACHE_KEYS.EVENTS_BY_ORG_ID(organizerID),
+            );
+        }
+
+        await this.redisService.del(
             this.CACHE_KEYS.EVENT_BY_ID(eventID),
             this.CACHE_KEYS.EVENT_TICKET_TYPES_BY_ID(eventID),
         );
+
+        if (slug) {
+            console.log(
+                `SLUG: ${slug} - ${this.config.service_urls.frontend}/api/internal/revalidate-event`,
+            );
+            fetch(
+                `${this.config.service_urls.frontend}/api/internal/revalidate-event`,
+                {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({
+                        slug,
+                        secret: this.config.service_keys.revalidate_key,
+                    }),
+                },
+            ).catch((err) => {
+                this.logger.warn("[Revalidate] Failed", { err: err.message });
+            });
+        }
     }
 
     // -----------------------
@@ -240,7 +274,6 @@ export class EventService {
                 .collection(TICKET_TYPES_SUBCOLLECTION)
                 .orderBy("price", "asc")
                 .get();
-
             const ticketTypes = ttSnap.docs.map((d) => {
                 const t = d.data();
                 const sold = Number(t.soldQuantity ?? 0);
@@ -266,6 +299,7 @@ export class EventService {
                     ticketTypes.every((x) => x.isSoldOut),
             });
 
+            // set cache **một lần duy nhất** kèm trackingKey
             await this._cacheSet({
                 key: cacheKey,
                 value: result,
@@ -276,19 +310,15 @@ export class EventService {
             return result;
         };
 
+        const cached = await this._cacheGet(cacheKey);
+        if (cached !== null) return cached;
+
         try {
-            const data = await this._cacheGetOrSet({
-                key: cacheKey,
-                ttl: 60,
-                fetchFn,
-            });
-            // controller có thể check cờ này để set 410
-            return data;
+            return await fetchFn();
         } catch (err) {
             this.logger.error(`[getPublicEventDetail] error for slug=${norm}`, {
                 err: err?.message,
             });
-            // fallback một lần, không throw trong fetchFn để tránh vòng lặp
             return fetchFn();
         }
     }
@@ -506,12 +536,10 @@ export class EventService {
             updatedEvent = { ...existingEvent, ...updateData };
         });
 
-        await this._invalidateEvent(eventID);
-        await this.redisService.del(
-            this.CACHE_KEYS.EVENTS_BY_ORG_ID(
-                updatedEvent?.organizer?.organizerID ?? "unknown",
-            ),
-        );
+        await this._invalidateEvent(eventID, {
+            organizerID: actor?.userID,
+            slug: updatedEvent?.slug,
+        });
 
         return updatedEvent;
     }
@@ -584,14 +612,11 @@ export class EventService {
         });
 
         // 3) Invalidate cache theo trackingKey
-        await this._invalidateEvent(eventID);
-        await this.redisService.del(
-            this.CACHE_KEYS.EVENTS_BY_ORG_ID(
-                eventData?.organizer?.organizerID ?? "unknown",
-            ),
-        );
+        await this._invalidateEvent(eventID, {
+            organizerID: eventData?.organizer?.organizerID,
+            slug: eventData?.slug,
+        });
 
-        // 4) Khởi tạo tồn kho (IMPORTANT)
         const tt = await this.ticketClientService.getEventTicketTypes(eventID);
 
         await Promise.all(
@@ -674,12 +699,10 @@ export class EventService {
             cancelledEvent = { ...event, ...updateData };
         });
 
-        await this._invalidateEvent(eventID);
-        await this.redisService.del(
-            this.CACHE_KEYS.EVENTS_BY_ORG_ID(
-                cancelledEvent?.organizer?.organizerID ?? "unknown",
-            ),
-        );
+        await this._invalidateEvent(eventID, {
+            organizerID: cancelledEvent?.organizer?.organizerID,
+            slug: cancelledEvent?.slug,
+        });
 
         const attendeesCount = await this.countEventAttendees(eventID);
         if (attendeesCount > 0) {

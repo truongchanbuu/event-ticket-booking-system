@@ -6,16 +6,18 @@ import { checkJson, errorHandler } from "@event_ticket_booking_system/shared";
 import { ERROR_CODE } from "@event_ticket_booking_system/shared";
 import { AppError } from "@event_ticket_booking_system/shared";
 
-import healthRouter from "./routes/health.js";
 import { registry } from "./metrics/availability.metric.js";
 
 export function createApp({ container, config, logger }) {
     const app = express();
 
     app.use((req, res, next) => {
-        console.log(
-            `📨 ${req.method} ${req.url} - ${new Date().toISOString()}`,
-        );
+        if (req.url !== "/metrics") {
+            console.log(
+                `📨 ${req.method} ${req.url} - ${new Date().toISOString()}`,
+            );
+        }
+
         next();
     });
 
@@ -23,7 +25,6 @@ export function createApp({ container, config, logger }) {
     app.use(express.json());
     app.use(checkJson);
 
-    app.use("/api/health", healthRouter);
     app.get("/metrics", async (_req, res) => {
         res.set("Content-Type", registry.contentType);
         res.end(await registry.metrics());
@@ -33,6 +34,11 @@ export function createApp({ container, config, logger }) {
 
     const apiRoutes = container.resolve("apiRoutes");
     app.use("/api", apiRoutes.router);
+
+    if (config.app.nodeEnv === "development") {
+        const testRoutes = container.resolve("testRoutes");
+        app.use("/api", testRoutes.router);
+    }
 
     app.use((req, res, next) =>
         next(new AppError("Not Found", 404, ERROR_CODE.NOT_FOUND)),

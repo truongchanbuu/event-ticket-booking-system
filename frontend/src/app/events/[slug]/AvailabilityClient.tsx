@@ -1,203 +1,163 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { AlertTriangle, ExternalLink } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Availability } from "@/schema";
-import { fetchAPI } from "@/lib/api";
-import { formatPrice } from "@/lib/utils";
-
-interface AvailabilityClientProps {
-  eventId: string;
-  slug: string;
-  totalCapacity?: number;
-}
+import { useEffect, useRef, useState } from "react";
+import { useAvailabilityPolling } from "@/hooks/use-availability-polling";
+import PurchaseButton from "./PurchaseButton";
+import {
+  AlertCircle,
+  Calendar,
+  Info,
+  Loader2,
+  Package,
+  Search,
+  ShoppingCart,
+} from "lucide-react";
 
 export function AvailabilityClient({
-  eventId,
+  eventID,
   slug,
-  totalCapacity,
-}: AvailabilityClientProps) {
-  const [availability, setAvailability] = useState<Availability | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-
-  const fetchAvailability = async (signal?: AbortSignal) => {
-    try {
-      const data = (await fetchAPI(`/public/events/${eventId}/availability`, {
-        signal,
-        cache: "no-store",
-      })) as Availability;
-
-      setAvailability(data);
-      setError(null);
-      setLastUpdate(new Date());
-    } catch (err) {
-      if (err instanceof Error && err.name !== "AbortError") {
-        setError(err.message);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  totalCapacity = 0,
+}: {
+  eventID: string;
+  slug: string;
+  totalCapacity?: number;
+}) {
+  const [sseOk, setSseOk] = useState<boolean>(false);
 
   useEffect(() => {
-    abortControllerRef.current = new AbortController();
-    fetchAvailability(abortControllerRef.current.signal);
-
-    intervalRef.current = setInterval(() => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-      abortControllerRef.current = new AbortController();
-      fetchAvailability(abortControllerRef.current.signal);
-    }, 12000);
-
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
+    if (!eventID) return;
+    const es = new EventSource(`/api/proxy/stream/availability/${eventID}`);
+    const onUpdate = (ev: MessageEvent) => {
+      // nếu muốn: set state từ SSE và setSseOk(true)
+      setSseOk(true);
+      // parse payload & cập nhật UI tuỳ bạn
     };
-  }, [eventId]);
+    es.addEventListener("update", onUpdate);
+    es.onerror = () => {
+      es.close();
+      setSseOk(false);
+    };
+    return () => {
+      es.removeEventListener("update", onUpdate);
+      es.close();
+    };
+  }, [eventID]);
 
-  const isLowStock = (): boolean => {
-    if (!availability || !totalCapacity) {
-      return (availability?.remaining ?? 0) <= 5;
-    }
+  // 2) polling fallback (chạy khi sseOk=false)
+  const { data, loading, error } = useAvailabilityPolling(slug, {
+    enabled: !sseOk,
+    baseIntervalMs: 12_000,
+  });
 
-    return (
-      availability.remaining <= Math.max(5, Math.floor(totalCapacity * 0.1))
-    );
-  };
-
-  const canPurchase = (): boolean => {
-    return availability?.status === "ONSALE" && !error;
-  };
-
-  const getStatusText = (): string => {
-    if (!availability) return "";
-
-    switch (availability.status) {
-      case "SOLD_OUT":
-        return "Đã hết vé";
-      case "PAUSED":
-        return "Tạm ngưng bán vé";
-      case "ONSALE":
-        return `Còn ${availability.remaining} vé`;
-      default:
-        return "Không có thông tin";
-    }
-  };
-
-  if (loading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Ticket Information</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-2/3" />
-          <Skeleton className="h-10 w-full" />
-        </CardContent>
-      </Card>
-    );
-  }
+  const remaining = (data ?? []).reduce(
+    (sum, x) => sum + (x?.remaining || 0),
+    0
+  );
+  const soldOut = remaining <= 0;
+  const threshold = Math.max(5, Math.floor(totalCapacity * 0.1));
+  const lowStock = !soldOut && remaining <= threshold;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Thông tin vé</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {error ? (
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : availability ? (
-          <>
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="font-medium">Only From:</span>
-                <span className="text-2xl font-bold text-primary">
-                  {formatPrice(availability.price, availability.currency)}
-                </span>
-              </div>
-
-              <div
-                className="flex justify-between items-center"
-                aria-live="polite"
-                aria-atomic="true"
-              >
-                <span>Tình trạng</span>
-                <span
-                  className={`font-medium ${
-                    availability.status === "SOLD_OUT"
-                      ? "text-red-600"
-                      : availability.status === "PAUSED"
-                        ? "text-yellow-600"
-                        : "text-green-600"
-                  }`}
-                >
-                  {getStatusText()}
-                </span>
-              </div>
-
-              {availability.status === "ONSALE" && isLowStock() && (
-                <Alert className="border-amber-200 bg-amber-50">
-                  <AlertTriangle className="h-4 w-4 text-amber-600" />
-                  <AlertDescription className="text-amber-800">
-                    Chỉ còn ít vé! Hãy nhanh tay đặt vé.
-                  </AlertDescription>
-                </Alert>
+    <section className="rounded-2xl border p-4" aria-live="polite">
+      <h2 className="text-xl font-semibold">Ticket Info</h2>
+      {loading && !data ? (
+        <div className="flex flex-col items-center py-8 space-y-3">
+          <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+          <p className="text-sm text-gray-600">Loading event details...</p>
+        </div>
+      ) : error === "CANCELLED" ? (
+        <div className="flex flex-col items-center py-8 space-y-2">
+          <Calendar className="w-6 h-6 text-red-500" />
+          <div className="text-center">
+            <p className="text-sm font-medium text-red-700">Event Cancelled</p>
+            <p className="text-xs text-red-600">
+              This event is no longer available
+            </p>
+          </div>
+        </div>
+      ) : error === "NOT_FOUND" ? (
+        <div className="flex flex-col items-center py-8 space-y-2">
+          <Search className="w-6 h-6 text-gray-400" />
+          <div className="text-center">
+            <p className="text-sm font-medium text-gray-700">Event Not Found</p>
+            <p className="text-xs text-gray-500">
+              The event you're looking for doesn't exist
+            </p>
+          </div>
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center py-8 space-y-2">
+          <AlertCircle className="w-6 h-6 text-red-500" />
+          <div className="text-center">
+            <p className="text-sm font-medium text-red-700">
+              Something went wrong
+            </p>
+            <p className="text-xs text-red-600">
+              Failed to load event information
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div
+          className={`rounded-lg mt-4 p-4 border ${
+            soldOut
+              ? "bg-red-50 border-red-100"
+              : lowStock
+                ? "bg-blue-50 border-blue-100"
+                : "bg-green-50 border-green-100"
+          }`}
+        >
+          <div className="flex items-center space-x-3">
+            <div className="mt-0.5">
+              {soldOut ? (
+                <Package className="w-5 h-5 text-red-500" />
+              ) : lowStock ? (
+                <Info className="w-5 h-5 text-blue-500" />
+              ) : (
+                <ShoppingCart className="w-5 h-5 text-green-500" />
               )}
             </div>
-
-            <Button
-              className="w-full"
-              size="lg"
-              disabled={!canPurchase()}
-              aria-disabled={!canPurchase()}
-              onClick={() => {
-                // TODO: Navigate to ticket purchase page
-                window.open(`/events/${slug}/tickets`, "_blank");
-              }}
-            >
-              {availability.status === "SOLD_OUT"
-                ? "Đã hết vé"
-                : availability.status === "PAUSED"
-                  ? "Tạm ngưng bán"
-                  : error
-                    ? "Không thể mua vé"
-                    : "Mua vé"}
-              {canPurchase() && <ExternalLink className="ml-2 h-4 w-4" />}
-            </Button>
-
-            {lastUpdate && (
-              <p className="text-xs text-gray-500 text-center">
-                Cập nhật lúc {lastUpdate.toLocaleTimeString("vi-VN")}
+            <div className="space-y-1">
+              <p
+                className={`text-lg font-semibold ${
+                  soldOut
+                    ? "text-red-700"
+                    : lowStock
+                      ? "text-blue-700"
+                      : "text-green-700"
+                }`}
+              >
+                {soldOut
+                  ? "Sold Out"
+                  : remaining === 1
+                    ? "Last One!"
+                    : lowStock
+                      ? `Only ${remaining} Left`
+                      : `${remaining} Available`}
               </p>
-            )}
-          </>
-        ) : (
-          <Alert>
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
-              Không có thông tin vé cho sự kiện này.
-            </AlertDescription>
-          </Alert>
-        )}
-      </CardContent>
-    </Card>
+              <p
+                className={`text-sm ${
+                  soldOut
+                    ? "text-red-600"
+                    : lowStock
+                      ? "text-blue-600"
+                      : "text-green-600"
+                }`}
+              >
+                {soldOut
+                  ? "This item is currently unavailable"
+                  : remaining === 1
+                    ? "Only 1 ticket remaining"
+                    : lowStock
+                      ? "Limited availability - act fast!"
+                      : remaining > 10
+                        ? "Good availability"
+                        : "Limited quantity"}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }

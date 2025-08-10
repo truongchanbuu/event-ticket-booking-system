@@ -63,7 +63,7 @@ export async function updateOrganizerEvent(
 }
 
 export async function publishEventAPI(eventID) {
-  return fetchEvents(`/public/events/${eventID}/publish`, {
+  return fetchEvents(`/private/events/${eventID}/publish`, {
     method: "POST",
   });
 }
@@ -90,7 +90,7 @@ export async function getAttendees(
   }
 
   const queryString = searchParams.toString();
-  const url = `/public/events/${eventID}/attendees${queryString ? `?${queryString}` : ""}`;
+  const url = `/private/events/${eventID}/attendees${queryString ? `?${queryString}` : ""}`;
   return fetchEvents<AttendeesResponse>(url);
 }
 
@@ -107,7 +107,7 @@ export async function createAttendee(
 // Contributors
 export async function removeContributor(eventID, contributorID) {
   return fetchEvents(
-    `/public/events/${eventID}/contributors/${contributorID}`,
+    `/private/events/${eventID}/contributors/${contributorID}`,
     {
       method: "DELETE",
     }
@@ -115,7 +115,7 @@ export async function removeContributor(eventID, contributorID) {
 }
 
 export async function createContributorAPI(eventID, data) {
-  return fetchEvents(`/public/events/${eventID}/contributors`, {
+  return fetchEvents(`/private/events/${eventID}/contributors`, {
     method: "POST",
     body: JSON.stringify(data),
   });
@@ -123,7 +123,7 @@ export async function createContributorAPI(eventID, data) {
 
 export async function updateContributorAPI(eventID, contributorID, data) {
   return fetchEvents(
-    `/public/events/${eventID}/contributors/${contributorID}`,
+    `/private/events/${eventID}/contributors/${contributorID}`,
     {
       method: "PUT",
       body: JSON.stringify(data),
@@ -136,18 +136,22 @@ export type EventFetchResult =
   | { kind: "cancelled"; reason?: string }
   | { kind: "not_found" }
   | { kind: "error"; message: string };
-
 export async function fetchEventBySlug(
   slug: string,
-  init?: RequestInit
+  init: RequestInit = {}
 ): Promise<EventFetchResult> {
   const url = new URL(
     `/api/events/${encodeURIComponent(slug)}`,
     getBaseUrl()
   ).toString();
+
+  const nextOpt = (init as any).next ?? {};
+  const tags: string[] = nextOpt.tags ?? [`event:slug:${slug}`];
+  const revalidate: number | false = nextOpt.revalidate ?? 60;
+
   const res = await fetch(url, {
     ...init,
-    next: { revalidate: 60, ...(init as any)?.next },
+    next: { ...nextOpt, tags, revalidate },
     headers: { accept: "application/json", ...(init?.headers || {}) },
   });
 
@@ -158,7 +162,6 @@ export async function fetchEventBySlug(
       reason: body?.data?.cancelledReason || body?.message,
     };
   }
-
   if (res.status === 404) return { kind: "not_found" };
 
   if (!res.ok) {

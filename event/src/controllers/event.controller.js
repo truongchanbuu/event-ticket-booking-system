@@ -144,7 +144,6 @@ export class EventController {
             actor,
             req.body.cancelledReason,
         );
-        console.log(`res: ${JSON.stringify(result)}`);
 
         return res.status(200).json({ success: true, data: result });
     }
@@ -261,12 +260,6 @@ export class EventController {
         const slug = decodeURIComponent(String(raw).trim());
 
         const eventData = await this.eventService.getPublicEventDetail(slug);
-
-        console.log("SLUG:", slug);
-        console.log(
-            "EVENT DATA:",
-            eventData ? JSON.stringify(eventData) : null,
-        );
 
         if (!eventData) {
             return res.status(404).json({ error: "Event not found" });

@@ -1,10 +1,7 @@
 import dotenv from "dotenv";
 import path from "path";
-import {
-    EVENT_LIFECYCLE_EVENTS,
-    TICKET_TYPES_EVENTS,
-} from "@event_ticket_booking_system/shared";
-import { redisConfig } from "./redis.config.js";
+import { TOPICS } from "@event_ticket_booking_system/shared";
+import { redisConfig } from "@event_ticket_booking_system/shared/config/index.js";
 
 const env = process.env.NODE_ENV || "development";
 const envFiles = [`.env.${env}`, `.env`]; // ưu tiên theo NODE_ENV
@@ -60,9 +57,11 @@ const config = {
 
     service_keys: {
         ticket_service: process.env.TICKET_SERVICE_SECRET_KEY,
+        revalidate_key: process.env.REVALIDATE_KEY,
     },
     service_urls: {
-        ticket_service: process.env.TICKET_SERVICE_URL, // TODO: validate URL nếu cần
+        ticket_service: process.env.TICKET_SERVICE_URL,
+        frontend: process.env.FRONTEND_URL,
     },
 
     kafka: {
@@ -93,10 +92,9 @@ const config = {
         producer_name:
             process.env.KAFKA_PRODUCER_SERVICE_NAME || "event-service",
 
-        // ⚠ Đảm bảo đây là TÊN TOPIC (string), không phải enum event-type
         topics: {
-            main_events: EVENT_LIFECYCLE_EVENTS, // e.g. "events.lifecycle.v1"
-            ticket_type_events: TICKET_TYPES_EVENTS, // e.g. "events.ticket-types.v1"
+            main_events: TOPICS.EVENT, // e.g. "events.lifecycle.v1"
+            ticket_type_events: TOPICS.TICKET, // e.g. "events.ticket-types.v1"
         },
 
         // group ids: duy nhất cho service

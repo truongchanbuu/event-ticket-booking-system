@@ -7,23 +7,23 @@ export interface TicketTypesResponse extends APIResponse<TicketType[]> {}
 export async function getEventTicketTypes(
   eventID: string
 ): Promise<TicketTypesResponse> {
-  return fetchAPI(`/public/tickets/${eventID}`);
+  return fetchAPI(`/private/tickets/${eventID}`);
 }
 
 export async function createTicketType(ticketData) {
-  return fetchAPI("/public/tickets", {
+  return fetchAPI("/private/tickets", {
     method: "POST",
     body: JSON.stringify(ticketData),
   });
 }
 
 export async function updateTicketType(ticketTypeID: string, ticketData) {
-  return fetchAPI(`/public/tickets/${ticketTypeID}`, {
+  return fetchAPI(`/private/tickets/${ticketTypeID}`, {
     method: "PUT",
     body: JSON.stringify(ticketData),
   });
 }
 
 export async function deleteTicketType(ticketTypeID: string) {
-  return fetchAPI(`/public/tickets/${ticketTypeID}`, { method: "DELETE" });
+  return fetchAPI(`/private/tickets/${ticketTypeID}`, { method: "DELETE" });
 }

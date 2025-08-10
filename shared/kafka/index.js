@@ -3,3 +3,4 @@ export * from "./topics.js";
 export * from "./kafka.events.js";
 export * from "./consumer/index.js";
 export * from "./create-service.js";
+export * from "./utils.js";

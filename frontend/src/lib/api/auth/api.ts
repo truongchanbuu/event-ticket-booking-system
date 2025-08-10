@@ -2,7 +2,7 @@ import { SignUploadResponse } from "@/schema";
 import { fetchAPI } from "../base";
 
 async function fetchAuth<T>(path: string, options: RequestInit): Promise<T> {
-  return fetchAPI<T>(`/public/auth${path}`, options);
+  return fetchAPI<T>(`/private/auth${path}`, options);
 }
 
 export async function createSession(): Promise<SignUploadResponse> {

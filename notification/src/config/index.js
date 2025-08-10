@@ -1,8 +1,5 @@
 import 'dotenv/config';
-import {
-  APPLICATION_EVENTS,
-  EVENT_LIFECYCLE_EVENTS,
-} from '@event_ticket_booking_system/shared';
+import { TOPICS } from '@event_ticket_booking_system/shared';
 
 export default {
   app: {
@@ -47,8 +44,8 @@ export default {
       retries: 5,
     },
     topics: {
-      application_events: APPLICATION_EVENTS,
-      attendee_events: EVENT_LIFECYCLE_EVENTS,
+      application_events: TOPICS.APPLICATION,
+      attendee_events: TOPICS.EVENT,
     },
     sessionTimeout: 300000,
     heartbeatInterval: 10000,

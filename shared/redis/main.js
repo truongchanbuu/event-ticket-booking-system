@@ -57,7 +57,6 @@ export function createRedisClient({ config, logger = console }) {
   const backend = config.redis.backend;
 
   if (backend === "tcp-single") {
-    console.log(`URL: ${JSON.stringify(config.redis)}`);
     const url = config.redis.single?.url;
     if (!url) throw new Error("[Redis] Missing single.url");
     const tlsEnabled =
