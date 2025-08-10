@@ -51,6 +51,14 @@ const config = {
             process.env.AVAILABILITY_CACHE_TTL_MS ?? "0",
             10,
         ),
+
+        edgeTtlSec: Number.isFinite(
+            parseInt(process.env.AVAIL_EDGE_TTL_SEC, 10),
+        )
+            ? parseInt(process.env.AVAIL_EDGE_TTL_SEC, 10)
+            : Number.isFinite(edgeTtlSec)
+              ? edgeTtlSec
+              : 0,
     },
 
     redis: redisConfig,

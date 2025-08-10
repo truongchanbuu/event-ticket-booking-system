@@ -5,29 +5,27 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const SERVICE_TOKEN = process.env.EVENT_SERVICE_TOKEN;
+const BASE = process.env.EVENT_SERVICE_URL;
 
 export async function GET(
   _req: Request,
-  { params }: { params: { slug: string } }
+  { params }: { params: Promise<{ slug: string }> }
 ) {
-  const { slug } = params;
+  const { slug } = await params;
   const ctrl = new AbortController();
   const to = setTimeout(() => ctrl.abort(), 2500);
 
   try {
-    const upstream = await fetch(
-      `/api/proxy/public/events/${encodeURIComponent(slug)}`,
-      {
-        signal: ctrl.signal,
-        cache: "no-store", // ⬅️ quan trọng: không tạo fetch cache trong Next
-        headers: {
-          accept: "application/json",
-          ...(SERVICE_TOKEN
-            ? { authorization: `Bearer ${SERVICE_TOKEN}` }
-            : {}),
-        },
-      }
-    );
+    const upstream = await fetch(`${BASE}/events/${slug}`, {
+      signal: ctrl.signal,
+      cache: "no-store",
+      headers: {
+        accept: "application/json",
+        ...(SERVICE_TOKEN ? { authorization: `Bearer ${SERVICE_TOKEN}` } : {}),
+      },
+    });
+
+    console.log(`up: ${upstream}`);
 
     const text = await upstream.text();
     const json = (() => {

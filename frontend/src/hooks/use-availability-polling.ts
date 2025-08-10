@@ -67,6 +67,8 @@ export function useAvailabilityPolling(
           }
         );
 
+        console.log(`FE: ${JSON.stringify(res)}`);
+
         if (res.status === 304) {
           schedule();
           return;
@@ -77,7 +79,7 @@ export function useAvailabilityPolling(
           setError("CANCELLED");
           setData(null);
           setLoading(false);
-          return; // dừng hẳn (tuỳ bạn muốn dừng)
+          return;
         }
 
         if (res.status === 404) {

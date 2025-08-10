@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuth } from "firebase-admin/auth";
 import { initializeFirebaseAdmin } from "@/lib/firebase-admin";
+import { resolveParams } from "@/lib/api";
 
 const meServiceRegistry = {
   events: process.env.EVENT_SERVICE_URL,
@@ -9,16 +10,6 @@ const meServiceRegistry = {
   payment: process.env.PAYMENT_SERVICE_URL,
 };
 
-/**
- * Hàm helper để đảm bảo params được resolve, vì nó có thể là một Promise.
- */
-async function resolveParams<T>(params: T | Promise<T>): Promise<T> {
-  return params instanceof Promise ? await params : params;
-}
-
-/**
- * Handler chính, được chia sẻ bởi tất cả các phương thức HTTP (GET, POST, etc.).
- */
 async function handler(
   req: NextRequest,
   context: { params: { path?: string[] } } // path có thể không tồn tại nếu request là /me
@@ -43,7 +34,6 @@ async function handler(
     );
   }
 
-  // --- 2. Định tuyến (Routing) ---
   const resolvedParams = await resolveParams(context.params);
 
   const pathParts = resolvedParams.path || [];

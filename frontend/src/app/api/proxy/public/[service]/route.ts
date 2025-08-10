@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { handler, resolveParams } from "../proxy-logic";
+import { handler } from "../proxy-logic";
+import { resolveParams } from "@/lib/api";
 
 export async function GET(
   req: NextRequest,

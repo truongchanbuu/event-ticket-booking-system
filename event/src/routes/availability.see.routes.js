@@ -4,13 +4,6 @@ export class AvailabilitySSERoutes {
     constructor({ broadcaster }) {
         this.router = Router();
 
-        this.router.get(
-            "/:id/availability/stream",
-            (req, res, next) => {
-                console.log(`COMMING....`);
-                next();
-            },
-            broadcaster.sseHandler,
-        );
+        this.router.get("/:id/availability/stream", broadcaster.sseHandler);
     }
 }

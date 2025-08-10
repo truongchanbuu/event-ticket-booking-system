@@ -2,65 +2,53 @@ export class TicketClientService {
     constructor({ config, logger = console, internalHttpClient }) {
         this.ticketUrl = config.service_urls.ticket_service;
         this.ticketServiceKey = config.service_keys.ticket_service;
-        console = logger;
-        this.internalGet = internalHttpClient.get;
+        this.logger = logger;
+        this.http = internalHttpClient;
     }
 
-    async getEventTicketTypes(eventID) {
-        if (!eventID || typeof eventID !== "string") {
-            console.warn("[getEventTicketTypes] Invalid eventID", {
-                eventID,
+    _ticketsUrl(eventId) {
+        return `${this.ticketUrl}/internal/tickets/${eventId}`;
+    }
+
+    async getEventTicketTypes(eventId) {
+        if (typeof eventId !== "string" || !eventId.trim()) {
+            this.logger.warn("[TicketClientService] Invalid eventId", {
+                eventId,
             });
-            return [];
+            return { status: 400, data: [] };
         }
 
-        const url = `${this.ticketUrl}/internal/tickets/${eventID}`;
-
         try {
-            const response = await this.internalGet({
-                url,
+            const res = await this.http.get({
+                url: this._ticketsUrl(eventId),
                 apiKey: this.ticketServiceKey,
             });
+            const status = typeof res?.status === "number" ? res.status : 502;
+            const data = Array.isArray(res?.data) ? res.data : [];
+            const version = res?.version;
 
-            console.log(`response in get tickets: ${JSON.stringify(response)}`);
-
-            if (response.status === 200 && Array.isArray(response.data)) {
-                return response.data;
+            if (status !== 200) {
+                this.logger.warn(
+                    "[TicketClientService] Non-200 from ticket service",
+                    {
+                        eventId,
+                        status,
+                        message: res?.message,
+                    },
+                );
             }
 
-            console.error("[getEventTicketTypes] Unexpected response", {
-                eventID,
-                status: response.status,
-                data: response.data,
-            });
-
-            return [];
-        } catch (error) {
-            if (error.code === "ECONNABORTED") {
-                console.error("[getEventTicketTypes] Timeout", {
-                    eventID,
-                    timeout: 3000,
-                });
-            } else if (error.code === "ECONNRESET") {
-                console.error("[getEventTicketTypes] Connection reset", {
-                    eventID,
-                    message: error.message,
-                });
-            } else if (error.response) {
-                console.error("[getEventTicketTypes] Error response", {
-                    eventID,
-                    status: error.response.status,
-                    data: error.response.data,
-                });
-            } else {
-                console.error("[getEventTicketTypes] Unknown network error", {
-                    eventID,
-                    message: error.message,
-                    stack: error.stack,
-                });
-            }
-
-            return [];
+            return { status, data, version };
+        } catch (err) {
+            this.logger.error(
+                "[TicketClientService] getEventTicketTypes failed",
+                {
+                    eventId,
+                    message: err?.message,
+                    code: err?.code,
+                },
+            );
+            return { status: 503, data: [] };
         }
     }
 }
