@@ -131,25 +131,32 @@ export class EventService {
             limit = 20,
             orderBy = "createdAt",
             sortOrder = "desc",
-            status = null,
-            lastCursor = null, // { valueForOrderBy, id } (tuỳ orderBy)
-            isDeleted = false,
+            status,
+            lastCursor = null, // { valueForOrderBy, id }
+            isDeleted,
         } = options;
 
         try {
             let query = this.eventCollection;
 
-            if (status) query = query.where("status", "==", status);
+            if (status !== undefined && status !== null && status !== "") {
+                query = query.where("status", "==", status);
+            }
 
-            // ⚠ Tránh '!=' vì dễ vỡ index; nếu không có cờ isDeleted thì bỏ filter này
-            if (typeof isDeleted === "boolean")
+            if (Object.prototype.hasOwnProperty.call(options, "isDeleted")) {
+                if (typeof isDeleted !== "boolean") {
+                    throw new Error("isDeleted must be boolean when provided");
+                }
                 query = query.where("isDeleted", "==", isDeleted);
+            }
 
-            query = query.orderBy(orderBy, sortOrder);
+            query = query.orderBy(orderBy, sortOrder).orderBy("__name__");
 
-            if (lastCursor && lastCursor.valueForOrderBy !== undefined) {
-                // Cursor an toàn: truyền đúng thứ tự field theo orderBy (và id nếu cần)
-                query = query.startAfter(lastCursor.valueForOrderBy);
+            if (lastCursor?.valueForOrderBy !== undefined && lastCursor?.id) {
+                query = query.startAfter(
+                    lastCursor.valueForOrderBy,
+                    lastCursor.id,
+                );
             }
 
             query = query.limit(limit);
@@ -165,19 +172,16 @@ export class EventService {
             }
 
             const docs = snapshot.docs;
-            const events = docs.map((doc) => {
-                const data = doc.data();
-                return {
-                    eventID: doc.id,
-                    ...data,
-                };
-            });
+            const events = docs.map((doc) => ({
+                eventID: doc.id,
+                ...doc.data(),
+            }));
 
             const lastDoc = docs[docs.length - 1];
             const lastValue = lastDoc?.get(orderBy);
             const nextCursor =
                 lastDoc && lastValue !== undefined
-                    ? { valueForOrderBy: lastValue }
+                    ? { valueForOrderBy: lastValue, id: lastDoc.id }
                     : null;
 
             return {
@@ -621,27 +625,29 @@ export class EventService {
 
         const slug = eventData?.slug;
 
-        // 3) Khởi tạo inventory + invVersion (và KHÔNG reset sai nếu đã có remaining)
         try {
-            await Promise.all([
-                ...ticketTypes.map((t) => {
-                    const initial = t.remainingQuantity ?? t.totalQuantity ?? 0;
-                    return this.redisService.setRaw(
-                        `inv:${t.ticketTypeID}:remaining`,
-                        String(Math.max(0, initial)),
-                        { ttl: 0 }, // có thể thêm { nx: true } nếu muốn chỉ set nếu chưa có
-                    );
-                }),
-                // ensure invVersion tồn tại
-                this.redisService.setRaw(`event:${eventID}:inv:version`, "0", {
-                    ttl: 0,
-                }),
-            ]);
+            await this.inventoryService.seedManySharded(ticketTypes);
+
+            await this.redisService.setRaw(
+                `event:${eventID}:inv:version`,
+                "0",
+                { ttl: 0, nx: true }, // 👈 nếu wrapper hỗ trợ NX, tránh đè
+            );
         } catch (e) {
+            if (e?.code === "INVENTORY_SEED_MISMATCH") {
+                this.logger.warn(
+                    "[publishEvent] seed mismatch → abort publish",
+                    { eventID, err: e.message },
+                );
+                // propagate để chặn publish (đúng với chính sách: thay đổi capacity sau publish phải migrate)
+                throw e;
+            }
             this.logger.warn(
-                "[publishEvent] init inventory failed (non-fatal)",
+                "[publishEvent] seed inventory failed (non-fatal?)",
                 { eventID, err: e?.message },
             );
+            // tuỳ policy: bạn có thể throw để fail sớm, hoặc cho phép tiếp tục nếu chỉ 1 số ticketTypes bị EXISTS
+            throw e;
         }
 
         // 4) Invalidate cache theo event trackingKey (để lần đọc sau ra snapshot mới)
@@ -764,6 +770,15 @@ export class EventService {
         }
 
         return cancelledEvent;
+    }
+
+    async getPublishedEventIds() {
+        const snapshot = await this.eventCollection
+            .where("status", "==", "published")
+            .select()
+            .get();
+
+        return snapshot.docs.map((doc) => doc.id);
     }
 
     // -----------------------

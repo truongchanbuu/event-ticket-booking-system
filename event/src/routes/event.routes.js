@@ -15,8 +15,6 @@ export class EventRoutes {
     }
 
     initRoutes() {
-        this.router.get("/", verifyToken, checkAdmin);
-
         this.router.put(
             "/:eventID/contributors/:contributorID",
             verifyToken,

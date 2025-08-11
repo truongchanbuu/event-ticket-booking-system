@@ -3,8 +3,17 @@ export class EmbeddedBroadcaster {
         this.sub = redisPubSub;
         this.availability = availabilityService;
         this.logger = logger;
-        this.sinks = new Map(); // key = slug -> Set<res>
+
+        // slug -> Set<res>
+        this.sinks = new Map();
         this.MAX_PER_KEY = 10000;
+
+        // Debounce per slug: slug -> Timeout
+        this.pending = new Map();
+        this.coalesceMs = 80;
+
+        // Dedup theo ETag: res -> etag
+        this.lastEtag = new WeakMap();
     }
 
     _setFor(key) {
@@ -12,45 +21,73 @@ export class EmbeddedBroadcaster {
         return this.sinks.get(key);
     }
 
+    _schedulePush = (slug) => {
+        if (this.pending.has(slug)) return;
+        const t = setTimeout(async () => {
+            this.pending.delete(slug);
+            const sinks = this.sinks.get(slug);
+            if (!sinks || sinks.size === 0) return;
+
+            let snap;
+            try {
+                snap = await this.availability.getBySlug(slug);
+            } catch (e) {
+                this.logger.warn("[Broadcaster] snapshot failed", {
+                    slug,
+                    err: e?.message,
+                });
+                return;
+            }
+            if (!snap || snap.status !== 200) return;
+
+            for (const res of [...sinks]) {
+                try {
+                    const last = this.lastEtag.get(res);
+                    if (snap.etag && last === snap.etag) continue; // ✅ dedup
+
+                    if (snap.etag) {
+                        this.lastEtag.set(res, snap.etag);
+                        res.write(`id: ${snap.etag}\n`);
+                    }
+                    res.write(`event: update\n`);
+                    res.write(`data: ${JSON.stringify(snap)}\n\n`);
+                } catch {
+                    try {
+                        res.end();
+                    } catch {}
+                    sinks.delete(res);
+                    this.lastEtag.delete(res);
+                }
+            }
+            if (sinks.size === 0) this.sinks.delete(slug);
+        }, this.coalesceMs);
+        this.pending.set(slug, t);
+    };
+
     async start() {
         await this.sub.connect?.();
 
-        // Nhận mọi sự kiện thay đổi
+        // Nhận mọi sự kiện thay đổi tồn kho
         await this.sub.psubscribe(
             "availability:*",
             async ({ channel, message }) => {
                 try {
-                    const parts = channel.split(":"); // availability:<eventId> hoặc availability:<eventId>:<slug>
+                    const parts = String(channel).split(":"); // availability:<eventId>[:<slug>]
                     const eventId = parts[1];
-                    let payload = JSON.parse(message || "{}");
-                    const slug = payload.slug || parts[2]; // Ưu tiên slug trong message
+                    const payload = JSON.parse(message || "{}");
+                    const slug = payload.slug || parts[2]; // Ưu tiên slug trong payload
 
-                    if (!slug) return; // không biết slug thì chịu, hoặc map eventId->slug ở đây
-
+                    if (!slug) return; // không xác định được slug thì bỏ
                     const sinks = this.sinks.get(slug);
                     if (!sinks || sinks.size === 0) return;
 
-                    // Lấy snapshot chuẩn từ service (đảm bảo payload + ETag đồng nhất polling)
-                    const snap = await this.availability.getBySlug(slug);
-                    if (snap?.status !== 200) return;
-
-                    for (const res of [...sinks]) {
-                        try {
-                            if (snap.etag) res.write(`id: ${snap.etag}\n`);
-                            res.write(`event: update\n`);
-                            res.write(`data: ${JSON.stringify(snap)}\n\n`);
-                        } catch (e) {
-                            try {
-                                res.end();
-                            } catch {}
-                            sinks.delete(res);
-                        }
-                    }
-                    if (sinks.size === 0) this.sinks.delete(slug);
+                    // ✅ debounce/coalesce theo slug
+                    this._schedulePush(slug);
                 } catch (e) {
-                    this.logger.warn("[Broadcaster] push failed", {
-                        err: e.message,
-                    });
+                    this.logger.warn(
+                        "[Broadcaster] psubscribe handler failed",
+                        { err: e?.message },
+                    );
                 }
             },
         );
@@ -58,7 +95,6 @@ export class EmbeddedBroadcaster {
         this.logger.info("[Broadcaster] Subscribed availability:*");
     }
 
-    // Express handler: /availability/stream/:slug
     sseHandler = async (req, res) => {
         const slug = String(req.params.slug || req.query.slug || "");
         if (!slug) {
@@ -85,23 +121,22 @@ export class EmbeddedBroadcaster {
         }
         sinks.add(res);
 
-        // Heartbeat để giữ kết nối
         const hb = setInterval(() => {
             try {
                 res.write(`event: ping\ndata: {}\n\n`);
             } catch {}
         }, 25000);
 
-        // Snapshot ban đầu (giống polling lần đầu)
         try {
             const lastId = req.get?.("Last-Event-ID");
             const snap = await this.availability.getBySlug(slug);
-
-            console.log(`snap: ${JSON.stringify(snap)}`);
-
             if (snap?.status === 200) {
-                if (!lastId || lastId !== snap.etag) {
-                    if (snap.etag) res.write(`id: ${snap.etag}\n`);
+                const last = this.lastEtag.get(res);
+                if (!lastId || lastId !== snap.etag || last !== snap.etag) {
+                    if (snap.etag) {
+                        this.lastEtag.set(res, snap.etag);
+                        res.write(`id: ${snap.etag}\n`);
+                    }
                     res.write(`event: update\n`);
                     res.write(`data: ${JSON.stringify(snap)}\n\n`);
                 }
@@ -110,7 +145,7 @@ export class EmbeddedBroadcaster {
                     `event: error\ndata: ${JSON.stringify({ status: snap?.status || 503 })}\n\n`,
                 );
             }
-        } catch (e) {
+        } catch {
             res.write(
                 `event: error\ndata: ${JSON.stringify({ message: "initial snapshot failed" })}\n\n`,
             );
@@ -118,8 +153,10 @@ export class EmbeddedBroadcaster {
 
         const onClose = () => {
             clearInterval(hb);
-            sinks.delete(res);
-            if (sinks.size === 0) this.sinks.delete(slug);
+            const set = this.sinks.get(slug);
+            set?.delete(res);
+            if (set && set.size === 0) this.sinks.delete(slug);
+            this.lastEtag.delete(res);
             try {
                 res.end();
             } catch {}

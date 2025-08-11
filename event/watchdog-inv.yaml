@@ -1,0 +1,22 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+    name: inv-watchdog
+spec:
+    schedule: "*/5 * * * *"
+    jobTemplate:
+        spec:
+            template:
+                spec:
+                    containers:
+                        - name: watchdog
+                          image: your-registry/event-service:latest
+                          command: ["node", "src/scripts/watchdog-inventory.js"]
+                          envFrom:
+                              - secretRef: { name: event-env }
+                          env:
+                              - name: DRY_RUN # tắt ở prod, bật ở staging
+                                value: "false"
+                              - name: VERBOSE
+                                value: "false"
+                    restartPolicy: Never

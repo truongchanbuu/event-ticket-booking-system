@@ -44,6 +44,7 @@ const config = {
         port: Number(process.env.PORT) || 3000,
         nodeEnv: env,
         serviceKey: process.env.SERVICE_SECRET_KEY,
+        url: process.env.SELF_URL || "http://localhost:3002",
     },
 
     availability: {

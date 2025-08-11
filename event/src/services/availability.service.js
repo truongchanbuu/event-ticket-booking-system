@@ -56,7 +56,6 @@ export class AvailabilityService {
             if (cached) return { ...cached, _cacheHit: true };
         }
 
-        // ✅ Check inflight cap TRƯỚC khi tạo promise
         if (this.inflight.size >= this.MAX_INFLIGHT) {
             return { status: 503, data: { message: "Busy" } };
         }
@@ -168,7 +167,7 @@ export class AvailabilityService {
                     // Inventory (timeout ngắn hơn)
                     const { remains, invVersion } = await withTimeout(
                         () =>
-                            this.inv.readCountersWithVersion(
+                            this.inv.readAggregatedCountersWithVersion(
                                 eventId,
                                 ticketTypeIds,
                             ),
@@ -226,14 +225,5 @@ export class AvailabilityService {
         }
 
         return this.inflight.get(slug);
-    }
-}
-
-async function retryOnce(fn, delay = 50) {
-    try {
-        return await fn();
-    } catch {
-        await new Promise((r) => setTimeout(r, delay + Math.random() * delay));
-        return fn();
     }
 }

@@ -19,9 +19,11 @@ async function bootstrap() {
         await broadcaster.start();
 
         const inventoryService = container.resolve("inventoryService");
-        const reservePath = path.join(__dirname, "./scripts/lua/reserve.lua");
-        const releasePath = path.join(__dirname, "./scripts/lua/release.lua");
+        const seedPath = path.join(__dirname, "./inventory/lua/seed.lua");
+        const reservePath = path.join(__dirname, "./inventory/lua/reserve.lua");
+        const releasePath = path.join(__dirname, "./inventory/lua/release.lua");
 
+        const seedLua = await fs.readFile(seedPath, "utf8");
         const reserveLua = await fs.readFile(reservePath, "utf8");
         const releaseLua = await fs.readFile(releasePath, "utf8");
 
@@ -32,7 +34,7 @@ async function bootstrap() {
             releaseLua?.length,
         );
 
-        await inventoryService.initialize({ reserveLua, releaseLua });
+        await inventoryService.initialize({ seedLua, reserveLua, releaseLua });
 
         const config = container.resolve("config");
         const rootLogger = container.resolve("logger");

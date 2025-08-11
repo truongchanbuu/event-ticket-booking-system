@@ -76,6 +76,7 @@ export function createRedisClient({ config, logger = console }) {
       // basic
       get: (k) => io.get(k),
       setEx: (k, v, ttlSec) => io.setex(k, ttlSec, v),
+      setex: (k, ttlSec, v) => io.setex(k, ttlSec, v),
       del: (...keys) => (keys.length ? io.del(...keys) : Promise.resolve(0)),
       sadd: (k, ...members) => io.sadd(k, ...members),
       smembers: (k) => io.smembers(k),
@@ -123,6 +124,7 @@ export function createRedisClient({ config, logger = console }) {
       raw: cluster,
       get: (k) => cluster.get(k),
       setEx: (k, v, ttlSec) => cluster.setex(k, ttlSec, v),
+      setex: (k, ttlSec, v) => cluster.setex(k, ttlSec, v),
       del: (...keys) =>
         keys.length ? cluster.del(...keys) : Promise.resolve(0),
       sadd: (k, ...members) => cluster.sadd(k, ...members),

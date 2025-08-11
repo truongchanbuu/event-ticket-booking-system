@@ -1,5 +1,7 @@
 import { createContainer, asValue, asClass, asFunction } from "awilix";
 import config from "./config/index.js";
+import { assertInventoryConfig } from "./config/inventory-flags.js";
+assertInventoryConfig(console);
 
 import {
     createKafkaService,

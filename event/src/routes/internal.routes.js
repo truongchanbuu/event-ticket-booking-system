@@ -14,5 +14,11 @@ export class InternalRoutes {
             verifyApiToken,
             this.internalController.getEventOrganizerID,
         );
+
+        this.router.get(
+            "/events/ids",
+            verifyApiToken,
+            this.internalController.getPublishedEventIds,
+        );
     }
 }

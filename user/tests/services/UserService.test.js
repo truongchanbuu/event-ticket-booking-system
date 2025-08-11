@@ -1,7 +1,5 @@
 import request from "supertest";
 import createApp from "../../src/app.js";
-import { seedUsers } from "../../scripts/seeds.js";
-import container from "../../src/container.js";
 
 const USER_TOKEN =
     "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJuYW1lIjoiY3VzdG9tZXIiLCJwaWN0dXJlIjoiIiwicm9sZSI6ImN1c3RvbWVyIiwiZW1haWwiOiJjdXN0b21lckBnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiYXV0aF90aW1lIjoxNzQ5NjA3ODI2LCJ1c2VyX2lkIjoiUHE5T0lOSHJMRFIxek5WM00yRDQwRDNNUXJWVCIsImZpcmViYXNlIjp7ImlkZW50aXRpZXMiOnsiZW1haWwiOlsiY3VzdG9tZXJAZ21haWwuY29tIl19LCJzaWduX2luX3Byb3ZpZGVyIjoicGFzc3dvcmQifSwiaWF0IjoxNzQ5NjA3ODI2LCJleHAiOjE3NDk2MTE0MjYsImF1ZCI6ImV2ZW50LXRpY2tldC1ib29raW5nLXN5cy00NGViNCIsImlzcyI6Imh0dHBzOi8vc2VjdXJldG9rZW4uZ29vZ2xlLmNvbS9ldmVudC10aWNrZXQtYm9va2luZy1zeXMtNDRlYjQiLCJzdWIiOiJQcTlPSU5IckxEUjF6TlYzTTJENDBEM01RclZUIn0.";

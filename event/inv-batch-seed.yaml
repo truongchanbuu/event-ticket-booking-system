@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+    name: inv-seed-batch
+spec:
+    schedule: "0 3 * * *" # 03:00 hằng ngày hoặc set manual rồi toggle
+    jobTemplate:
+        spec:
+            template:
+                spec:
+                    containers:
+                        - name: seed
+                          image: your-registry/event-service:latest
+                          command:
+                              ["node", "src/scripts/batch-seed-inventory.js"]
+                          envFrom:
+                              - secretRef: { name: event-env }
+                          resources:
+                              requests: { cpu: "100m", memory: "128Mi" }
+                    restartPolicy: Never
