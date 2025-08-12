@@ -26,13 +26,13 @@ export class ReservationReaper {
      * @param {Object} [deps.config={}] - { reaper: { enabled, batchSize, tickMs, lockTtl } }
      */
     constructor({
-        redisClient,
+        redisService,
         eventInventoryClient,
         reservationProducer,
         logger = console,
         config = {},
     }) {
-        this.redis = redisClient;
+        this.redis = redisService;
         this.eventInv = eventInventoryClient;
         this.reservationProducer = reservationProducer;
         this.logger = logger;
@@ -198,6 +198,43 @@ export class ReservationReaper {
                     [userHoldKey],
                     [reservationId],
                 );
+
+                try {
+                    const graceMs = Number(
+                        this.config?.reservation?.graceMs ?? 0,
+                    );
+                    if (graceMs > 0) {
+                        // 1) Lưu snapshot (để late payment có thể re-reserve)
+                        const snapKey = `reservation:expired:${reservationId}`;
+                        const snapTtlSec = Math.ceil((graceMs + 30_000) / 1000); // buffer 30s
+                        const snapshot = {
+                            v: 1,
+                            reservationId,
+                            eventId: hold.eventId,
+                            userId: hold.userId || null,
+                            lines: hold.lines || [],
+                            expiredAt: hold.expiresAt,
+                            createdAt: hold.createdAt,
+                        };
+                        await this.redis.setex(
+                            snapKey,
+                            snapTtlSec,
+                            JSON.stringify(snapshot),
+                        );
+
+                        const when = Number(hold.expiresAt) + graceMs;
+                        await this.redis.zadd(
+                            "auto_cancel:due",
+                            when,
+                            reservationId,
+                        );
+                    }
+                } catch (e) {
+                    this.logger.warn("[reaper] snapshot/schedule failed", {
+                        reservationId,
+                        e: e?.message,
+                    });
+                }
 
                 // Cleanup data
                 await Promise.allSettled([

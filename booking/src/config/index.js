@@ -21,9 +21,6 @@ export const config = {
         lockTtl: Number(process.env.AUTOCANCEL_LOCK_TTL ?? 10),
     },
 
-    holdTtlSec: Number(process.env.HOLD_TTL_SEC || 900),
-    idemTtlPadSec: Number(process.env.IDEM_TTL_PAD_SEC || 60),
-    reservationMaxQty: Number(process.env.RESERVATION_MAX_QTY || 10),
     rateLimitResPerMin: Number(process.env.RATE_LIMIT_RES_PER_MIN || 60),
 
     redis: redisConfig,
