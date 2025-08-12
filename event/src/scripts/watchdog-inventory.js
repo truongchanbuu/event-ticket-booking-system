@@ -9,7 +9,6 @@ assertInventoryConfig(console);
 console.log("[seed-batch] effective prefix =", REDIS_INV_PREFIX);
 
 import Redis from "ioredis";
-import { internalHttpClient } from "@event_ticket_booking_system/shared";
 import { metaKey, shardKey } from "../inventory/key.js";
 import { TicketClientService } from "../services/ticket-client.service.js";
 import { EventSource } from "./libs/event-source.js";
@@ -19,19 +18,14 @@ const REDIS_URL = process.env.REDIS_URL || "redis://127.0.0.1:6379";
 
 const eventSource = new EventSource({
     mode: process.env.EVENTS_SOURCE_MODE || "service",
-    eventServiceUrl: process.env.EVENT_SERVICE_URL,
-    eventServiceKey: process.env.SERVICE_SECRET_KEY,
-    http: internalHttpClient,
     logger: LOG,
 });
 
 const ticketClient = new TicketClientService({
-    config: {
-        service_urls: { ticket_service: process.env.TICKET_SERVICE_URL },
-        service_keys: { ticket_service: process.env.TICKET_SERVICE_SECRET_KEY },
+    tickets: {
+        baseURL: process.env.TICKET_SERVICE_URL,
+        apiKey: process.env.TICKET_SERVICE_SECRET_KEY,
     },
-    internalHttpClient: internalHttpClient,
-    logger: LOG,
 });
 
 async function listTicketTypesOfEvent(eventId) {

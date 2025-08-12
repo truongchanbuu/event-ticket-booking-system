@@ -1,10 +1,10 @@
 import { AppError, ERROR_CODE } from "@event_ticket_booking_system/shared";
 
 export class EventClientService {
-    constructor({ config, internalHttpClient }) {
-        this.eventUrl = config.service_urls.event_service;
-        this.eventServiceKey = config.service_keys.event_service;
-        this.internalGet = internalHttpClient.get;
+    constructor({ config, httpRegistry }) {
+        this.eventUrl = config.serviceUrls.eventService;
+        this.eventServiceKey = config.serviceKeys.eventService;
+        this.internalGet = httpRegistry.events.get;
     }
 
     async isEventOrganizer(eventID, uid) {

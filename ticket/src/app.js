@@ -30,7 +30,13 @@ export function createApp({ container, config, logger }) {
     app.use("/api", apiRoutes.router);
 
     app.use((req, res, next) => {
-        next(new AppError("Not Found", 404, ERROR_CODE.NOT_FOUND));
+        next(
+            new AppError({
+                message: "Not Found",
+                statusCode: 404,
+                errorCode: ERROR_CODE.NOT_FOUND,
+            }),
+        );
     });
     app.use(errorHandler);
 

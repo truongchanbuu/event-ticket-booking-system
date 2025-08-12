@@ -14,7 +14,6 @@ import path from "node:path";
 
 import { EventSource } from "./libs/event-source.js";
 
-import { internalHttpClient } from "@event_ticket_booking_system/shared";
 import { TicketClientService } from "../services/ticket-client.service.js";
 import { metaKey, shardKey, versionKey } from "../inventory/key.js";
 import { allocateShards } from "../inventory/sharding.js";
@@ -24,18 +23,16 @@ const SEED_SHARDS = Number(process.env.INVENTORY_SHARD_COUNT || 16);
 
 const eventSource = new EventSource({
     mode: process.env.EVENTS_SOURCE_MODE || "service",
-    eventServiceUrl: process.env.EVENT_SERVICE_URL,
-    eventServiceKey: process.env.SERVICE_SECRET_KEY,
-    http: internalHttpClient,
     logger: console,
 });
 
 const ticketClient = new TicketClientService({
-    config: {
-        service_urls: { ticket_service: process.env.TICKET_SERVICE_URL },
-        service_keys: { ticket_service: process.env.TICKET_SERVICE_SECRET_KEY },
+    httpRegistry: {
+        tickets: {
+            baseURL: process.env.TICKET_SERVICE_URL,
+            apiKey: process.env.TICKET_SERVICE_SECRET_KEY,
+        },
     },
-    internalHttpClient: internalHttpClient,
     logger: console,
 });
 

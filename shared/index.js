@@ -42,3 +42,5 @@ export * from "./redis/index.js";
 export * from "./axios/index.js";
 
 export * from "./helpers/index.js";
+
+export * from "./config/index.js";

@@ -4,7 +4,7 @@ import {
     AVAILABILITY_RESTOCKED,
     TOPICS,
     buildEnvelope,
-} from "@event_ticket_booking_system/shared"; // hoặc shared/messaging/event-types
+} from "@event_ticket_booking_system/shared";
 
 export class AvailabilityProducer {
     constructor({ kafkaService, config, logger = console }) {
@@ -14,10 +14,10 @@ export class AvailabilityProducer {
 
         this.sendToTopic = kafkaService.createTopicSender(
             topic,
-            config.kafka.producer_name,
+            config.kafka.producerName,
         );
 
-        this.producerName = config.kafka?.producer_name || "inventory-service";
+        this.producerName = config.kafka?.producerName || "inventory-service";
         this.schemaVersion = 1;
     }
 
@@ -40,10 +40,6 @@ export class AvailabilityProducer {
     }
 
     // ---------- API ----------
-    /**
-     * Gửi khi tồn kho thay đổi (reserve/release)
-     * @param {{eventId:string, ticketTypeId:string, remaining:number, op:"reserve"|"release"}} payload
-     */
     async changed(payload, meta) {
         const enriched = {
             ...payload,

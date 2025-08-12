@@ -74,13 +74,27 @@ export function createRedisClient({ config, logger = console }) {
       kind: "tcp-single",
       raw: io,
       // basic
+      exists: (k) => io.exists(k),
       get: (k) => io.get(k),
-      setEx: (k, v, ttlSec) => io.setex(k, ttlSec, v),
       setex: (k, ttlSec, v) => io.setex(k, ttlSec, v),
+      setNXEx: (k, ttlSec, v) => io.set(k, v, "EX", ttlSec, "NX"),
       del: (...keys) => (keys.length ? io.del(...keys) : Promise.resolve(0)),
       sadd: (k, ...members) => io.sadd(k, ...members),
+      zadd: (k, ...args) => io.zadd(k, ...args),
       smembers: (k) => io.smembers(k),
       mget: (keys) => (keys?.length ? io.mget(...keys) : Promise.resolve([])),
+      incr: (k) => io.incr(k),
+      expire: (k, s) => io.expire(k, s),
+      ttl: (k) => io.ttl(k),
+      pttl: (k) => io.pttl(k),
+      zrangebyscore: (k, ...args) => io.zrangebyscore(k, ...args),
+      zrem: (k, ...members) => io.zrem(k, ...members),
+      hgetall: (k) => io.hgetall(k),
+      hset: (k, ...rest) =>
+        typeof rest[0] === "object" && !Array.isArray(rest[0])
+          ? io.hset(k, rest[0])
+          : io.hset(k, ...rest),
+      hdel: (k, ...fields) => io.hdel(k, ...fields),
       // script
       script: (sub, lua) => io.script(sub, lua),
       evalsha: (sha, numKeys, ...args) => io.evalsha(sha, numKeys, ...args),
@@ -122,15 +136,29 @@ export function createRedisClient({ config, logger = console }) {
     return {
       kind: "tcp-cluster",
       raw: cluster,
+      exists: (k) => cluster.exists(k),
       get: (k) => cluster.get(k),
-      setEx: (k, v, ttlSec) => cluster.setex(k, ttlSec, v),
       setex: (k, ttlSec, v) => cluster.setex(k, ttlSec, v),
+      setNXEx: (k, ttlSec, v) => cluster.set(k, v, "EX", ttlSec, "NX"),
       del: (...keys) =>
         keys.length ? cluster.del(...keys) : Promise.resolve(0),
       sadd: (k, ...members) => cluster.sadd(k, ...members),
       smembers: (k) => cluster.smembers(k),
       mget: (keys) =>
         keys?.length ? cluster.mget(...keys) : Promise.resolve([]),
+      incr: (k) => cluster.incr(k),
+      expire: (k, s) => cluster.expire(k, s),
+      ttl: (k) => cluster.ttl(k),
+      pttl: (k) => cluster.pttl(k),
+      zrangebyscore: (k, ...args) => cluster.zrangebyscore(k, ...args),
+      zrem: (k, ...members) => cluster.zrem(k, ...members),
+      hgetall: (k) => cluster.hgetall(k),
+      hset: (k, ...rest) =>
+        typeof rest[0] === "object" && !Array.isArray(rest[0])
+          ? cluster.hset(k, rest[0])
+          : cluster.hset(k, ...rest),
+      hdel: (k, ...fields) => cluster.hdel(k, ...fields),
+      zadd: (k, ...args) => cluster.zadd(k, ...args),
       script: (sub, lua) => cluster.script(sub, lua),
       evalsha: (sha, numKeys, ...args) =>
         cluster.evalsha(sha, numKeys, ...args),

@@ -16,12 +16,12 @@ export default {
         serviceKey: process.env.SERVICE_SECRET_KEY,
     },
 
-    service_keys: {
-        event_service: process.env.EVENT_SERVICE_SECRET_KEY,
+    serviceKeys: {
+        eventService: process.env.EVENT_SERVICE_SECRET_KEY,
     },
 
-    service_urls: {
-        event_service: process.env.EVENT_SERVICE_URL,
+    serviceUrls: {
+        eventService: process.env.EVENT_SERVICE_URL,
     },
 
     redis: redisConfig,
@@ -47,7 +47,7 @@ export default {
         },
         sessionTimeout: 300000,
         heartbeatInterval: 10000,
-        producer_name: process.env.KAFKA_PRODUCER_SERVICE_NAME || "app",
+        producerName: process.env.KAFKA_PRODUCER_SERVICE_NAME || "app",
         topics: {
             event_lifecycle: TOPICS.EVENT,
         },

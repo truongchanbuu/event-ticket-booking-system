@@ -5,9 +5,9 @@ import config from "./config/index.js";
 import {
     createLoggerFactory,
     createRedisClient,
+    createServiceClients,
     db,
     EVENT_PUBLISHED,
-    internalHttpClient,
     MessageDispatcher,
     RedisLockService,
     RedisService,
@@ -23,9 +23,6 @@ import { InternalRoutes } from "./routes/internal.routes.js";
 import { ApiRoutes } from "./routes/api.routes.js";
 import { PublishTicketTypesSnapshotUseCase } from "./kafka/use-case/PublishEventSnapshotUseCase.js";
 
-/**
- * Hàm factory để tạo, đăng ký, và khởi động DI container.
- */
 export async function configureContainer() {
     // const logger = createLoggerFactory(config.app).logger;
     const logger = console;
@@ -34,10 +31,16 @@ export async function configureContainer() {
     const kafkaServiceInstance = await createKafkaService({ config, logger });
     logger.info("✅ Kafka service instance created successfully.");
 
+    const httpRegistry = createServiceClients({
+        events: {
+            baseURL: config.serviceUrls.eventService,
+            apiKey: config.serviceKeys.eventService,
+        },
+    });
+
     const container = createContainer();
 
     const handlerMap = {
-        // Mapping cho Ticket Type
         [EVENT_PUBLISHED]: "publishTicketTypesSnapshotUseCase",
     };
 
@@ -46,7 +49,7 @@ export async function configureContainer() {
         config: asValue(config),
         db: asValue(db),
         handlerMap: asValue(handlerMap),
-        internalHttpClient: asValue(internalHttpClient),
+        httpRegistry: asValue(httpRegistry),
 
         kafkaService: asValue(kafkaServiceInstance),
         redisClient: asFunction(createRedisClient).singleton(),

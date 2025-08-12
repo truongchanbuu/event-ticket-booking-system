@@ -1,6 +1,11 @@
 import path from "path";
 import fs from "fs";
 
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 import {
     INVENTORY_SHARDING_ENABLED,
     INVENTORY_MULTI_PROBE,
@@ -14,10 +19,16 @@ import { metaKey, shardKey, versionKey } from "../inventory/key.js";
 import { allocateShards, pickShardIndex } from "../inventory/sharding.js";
 
 export class InventoryService {
-    constructor({ redisService, logger = console, pubsub }) {
+    constructor({
+        redisService,
+        logger = console,
+        redisPubSub,
+        availabilityProducer,
+    }) {
         this.redis = redisService;
         this.logger = logger;
-        this.pubsub = pubsub;
+        this.pubsub = redisPubSub;
+        this.availabilityProducer = availabilityProducer;
         this.shas = { reserve: null, release: null, seed: null };
         this._metaCache = new Map(); // ticketTypeId -> { shardCount, ts }
     }
@@ -40,10 +51,7 @@ export class InventoryService {
     // Seeding
     async loadSeedLua() {
         if (this.shas.seed) return this.shas.seed;
-        const luaPath = path.resolve(
-            process.cwd(),
-            "../src/inventory/lua/seed.lua",
-        );
+        const luaPath = path.resolve(__dirname, "../inventory/lua/seed.lua");
         const script = fs.readFileSync(luaPath, "utf8");
         this.shas.seed = await this.redis.scriptLoad(script);
         this.logger.info("[inventory] Lua loaded (seed)", {
@@ -53,51 +61,45 @@ export class InventoryService {
     }
 
     async seedSharded(
-        ticketTypeId,
+        ttId,
         capacity,
         shardCount,
-        { prefix = REDIS_INV_PREFIX } = {},
+        {
+            ttlSec = 7 * 24 * 3600,
+            forceRepair = false,
+            prefix = REDIS_INV_PREFIX,
+        } = {},
     ) {
-        if (!ticketTypeId) throw new Error("ticketTypeId is required");
-        const cap = Math.max(0, Number(capacity ?? 0));
-        const m = Number.isFinite(shardCount)
-            ? Math.max(1, Math.floor(shardCount))
-            : 16;
+        const m = Math.max(1, Math.floor(shardCount));
+        const allocs = allocateShards(capacity, m);
 
-        const allocs = allocateShards(cap, m);
-        const meta = metaKey(ticketTypeId, prefix);
-
+        const meta = metaKey(ttId, { prefix, hashTag: true });
         const keys = [
             meta,
-            ...allocs.map((_, i) => shardKey(ticketTypeId, i, prefix)),
+            ...Array.from({ length: m }, (_, i) =>
+                shardKey(ttId, i, { prefix, hashTag: true }),
+            ),
         ];
-        const argv = [String(cap), String(m), ...allocs.map(String)];
+
+        const argv = [
+            String(capacity), // ARGV[1]
+            String(m), // ARGV[2]
+            String(ttlSec || 0), // ARGV[3]
+            forceRepair ? "1" : "0", // ARGV[4]
+            ...allocs.map(String), // ARGV[5..]
+        ];
 
         const sha = await this.loadSeedLua();
-        const result = await this.redis.evalsha(sha, keys, argv); // wrapper của bạn
+        const res = await this.redis.evalsha(sha, keys, argv);
 
-        if (result === "MISMATCH") {
-            const err = new Error(
-                `[inventory.seed] MISMATCH for ${ticketTypeId}: capacity/shardCount differ from existing meta`,
-            );
-            err.code = "INVENTORY_SEED_MISMATCH";
-            throw err;
+        if (res === "MISMATCH") throw new Error("INVENTORY_SEED_MISMATCH");
+        if (
+            !["OK", "EXISTS"].includes(String(res)) &&
+            !String(res).startsWith("REPAIRED:")
+        ) {
+            throw new Error(`INVENTORY_SEED_UNEXPECTED:${res}`);
         }
-        if (result !== "OK" && result !== "EXISTS") {
-            const err = new Error(
-                `[inventory.seed] Unexpected result: ${result}`,
-            );
-            err.code = "INVENTORY_SEED_UNEXPECTED";
-            throw err;
-        }
-
-        this.logger.info("[inventory.seed]", {
-            ticketTypeId,
-            capacity: cap,
-            shardCount: m,
-            status: result,
-        });
-        return { status: result, capacity: cap, shardCount: m };
+        return res; // "OK" | "EXISTS" | "REPAIRED:N"
     }
 
     async seedManySharded(ticketTypes, { prefix = REDIS_INV_PREFIX } = {}) {
@@ -117,23 +119,52 @@ export class InventoryService {
 
     async getShardCount(ttId) {
         const now = Date.now();
-        const hit = this._metaCache.get(ttId);
-        if (hit && now - hit.ts < SHARDCOUNT_CACHE_TTL_MS)
-            return hit.shardCount;
+        const cached = this._metaCache.get(ttId);
+        if (cached && now - cached.ts < SHARDCOUNT_CACHE_TTL_MS) {
+            return cached.shardCount;
+        }
 
-        const mKey = metaKey(ttId);
-        const m = await this.redis.hgetall(mKey); // wrapper: hgetall
+        this.logger.warn("[inv.debug] adapter", {
+            hasHgetall: typeof this.redis?.hgetall,
+            kind: this.redis?.kind,
+            prefix: this.redis?.prefix,
+        });
+
+        const kTag = metaKey(ttId, true); // inv:{TT_A}:meta
+        const kNo = metaKey(ttId, false); // inv:TT_A:meta
+
+        const m1 = await this.redis.hgetall(kTag);
+        const m2 =
+            m1 && Object.keys(m1).length ? null : await this.redis.hgetall(kNo);
+
+        this.logger.warn("[inv.debug] meta read", {
+            ttId,
+            kTag,
+            kNo,
+            m1,
+            m2,
+        });
+
+        const m = m1 && Object.keys(m1).length ? m1 : m2;
         const sc = Number(m?.shardCount ?? 0);
+
         if (!Number.isFinite(sc) || sc <= 0) {
+            // 5) Log thêm DB/Keyspace (single-node mới có DB)
+            try {
+                const info = await this.redis.raw?.info?.("keyspace"); // ioredis only
+                this.logger.warn("[inv.debug] keyspace", { keyspace: info });
+            } catch {}
+
             throw new Error(`[inventory] meta missing shardCount for ${ttId}`);
         }
+
         this._metaCache.set(ttId, { shardCount: sc, ts: now });
         return sc;
     }
 
     async loadReserveLua() {
         if (this.shas.reserve) return this.shas.reserve;
-        const p = path.resolve("../src/inventory/lua/reserve.lua");
+        const p = path.resolve(__dirname, "../inventory/lua/reserve.lua");
         const script = fs.readFileSync(p, "utf8");
         this.shas.reserve = await this.redis.scriptLoad(script);
         this.logger.info("[inventory] Lua loaded (reserve)", {
@@ -144,7 +175,7 @@ export class InventoryService {
 
     async loadReleaseLua() {
         if (this.shas.release) return this.shas.release;
-        const p = path.resolve("../src/inventory/lua/release.lua");
+        const p = path.resolve(__dirname, "../inventory/lua/release.lua");
         const script = fs.readFileSync(p, "utf8");
         this.shas.release = await this.redis.scriptLoad(script);
         this.logger.info("[inventory] Lua loaded (release)", {
@@ -157,13 +188,15 @@ export class InventoryService {
         ttId,
         shardCount,
         affinityKey,
-        maxProbe = INVENTORY_MULTI_PROBE,
+        extraProbes = INVENTORY_MULTI_PROBE,
     ) {
         const first = pickShardIndex(affinityKey || ttId, shardCount);
+        const total = Math.min(1 + Math.max(0, extraProbes), shardCount); // first + extra
         const order = [first];
-        let step = 7 % shardCount || 1;
-        while (order.length < Math.min(maxProbe, shardCount)) {
-            order.push((first + step) % shardCount);
+        let offset = 1;
+        while (order.length < total) {
+            order.push((first + offset) % shardCount);
+            offset++;
         }
         return order;
     }
@@ -181,12 +214,11 @@ export class InventoryService {
 
         for (const idx of probes) {
             const key = shardKey(ttId, idx);
-            const verK = eventId ? versionKey(eventId) : ""; // truyền rỗng nếu không có
-            const [ok, val, ver] = await this.redis.evalsha(
-                sha,
-                [key, verK],
-                [String(qty)],
-            );
+            const keys = eventId ? [key, versionKey(eventId)] : [key];
+            const [ok, val, ver] = await this.redis.evalsha(sha, keys, [
+                String(qty),
+            ]);
+
             if (ok === 1 || ok === "1") {
                 const newRemaining = Number(val);
                 await this._afterChange({
@@ -197,7 +229,9 @@ export class InventoryService {
                     remaining: newRemaining,
                     qty,
                     shardIndex: idx,
+                    invVersion: Number(ver ?? 0),
                 });
+
                 return {
                     ok: true,
                     shardIndex: idx,
@@ -220,41 +254,116 @@ export class InventoryService {
         remaining,
         qty,
         shardIndex,
+        invVersion,
     }) {
-        if (this.pubsub && eventId) {
-            try {
-                await this.pubsub.publish(
-                    `availability:${eventId}`,
-                    JSON.stringify({
-                        eventId,
-                        slug,
-                        ticketTypeId: ttId,
-                        remaining,
-                        ts: new Date().toISOString(),
-                        action,
-                        qty,
-                        shardIndex,
-                    }),
-                );
-            } catch (e) {
-                this.logger.warn("[availability.pub] failed", {
-                    e: e.message,
-                    eventId,
-                    ttId,
-                    action,
-                });
-            }
+        // 1) Invalidate cache theo slug (không block)
+        const invalidate = slug
+            ? this.redis.del(`availability:slug:${slug}`).catch((e) => {
+                  this.logger.warn("[availability.invalidate] failed", {
+                      e: e.message,
+                      eventId,
+                      slug,
+                      ttId,
+                  });
+              })
+            : Promise.resolve();
+
+        if (!eventId) {
+            await invalidate;
+            return;
         }
+
+        // 2) Tính tổng sau thay đổi (nếu chưa có aggregate total key)
+        let totalAfter = 0;
         try {
-            if (slug) await this.redis.del(`availability:slug:${slug}`);
+            totalAfter = await this._sumShards(ttId);
         } catch (e) {
-            this.logger.warn("[availability.invalidate] failed", {
-                e: e.message,
-                eventId,
-                slug,
+            this.logger.warn("[availability.sum] failed", {
                 ttId,
+                e: e.message,
             });
         }
+        const delta = action === "reserve" ? -Math.abs(qty) : Math.abs(qty);
+        const totalBefore = totalAfter - delta;
+
+        // 3) Pub/Sub payload nội bộ (realtime/cache)
+        const pubPayload = JSON.stringify({
+            eventId,
+            slug,
+            ticketTypeId: ttId,
+            action,
+            qty,
+            shardIndex,
+            remainingOnShard: remaining,
+            totalRemaining: totalAfter,
+            invVersion: Number(invVersion ?? 0),
+            ts: new Date().toISOString(),
+        });
+
+        const pub = this.pubsub
+            ? this.pubsub
+                  .publish(`availability:${eventId}`, pubPayload)
+                  .catch((e) => {
+                      this.logger.warn("[availability.pub] failed", {
+                          e: e.message,
+                          eventId,
+                          ttId,
+                          action,
+                      });
+                  })
+            : Promise.resolve();
+
+        // 4) Kafka availability (durable, cho các service khác)
+        const kafka = (async () => {
+            if (!this.availabilityProducer) return;
+            try {
+                await this.availabilityProducer.changed(
+                    {
+                        eventId,
+                        ticketTypeId: ttId,
+                        remaining: totalAfter,
+                        delta,
+                        invVersion: Number(invVersion ?? 0),
+                        shardIndex,
+                    },
+                    { source: "event-service" },
+                );
+                if (
+                    action === "reserve" &&
+                    totalAfter === 0 &&
+                    totalBefore > 0
+                ) {
+                    await this.availabilityProducer.soldOut(
+                        { eventId, ticketTypeId: ttId },
+                        { source: "event-service" },
+                    );
+                }
+                if (
+                    action === "release" &&
+                    totalBefore === 0 &&
+                    totalAfter > 0
+                ) {
+                    await this.availabilityProducer.restocked(
+                        { eventId, ticketTypeId: ttId, remaining: totalAfter },
+                        { source: "event-service" },
+                    );
+                }
+            } catch (e) {
+                this.logger.warn("[availability.kafka] failed", e?.message);
+            }
+        })();
+
+        // 5) chạy song song, không block đường chính quá lâu
+        await Promise.allSettled([invalidate, pub, kafka]);
+    }
+
+    async _sumShards(ttId) {
+        const m = await this.getShardCount(ttId);
+        const keys = Array.from({ length: m }, (_, i) => shardKey(ttId, i));
+        const vals = this.redis.mgetRaw
+            ? await this.redis.mgetRaw(keys)
+            : await Promise.all(keys.map((k) => this.redis.get(k)));
+        return vals.reduce((s, v) => s + Number(v ?? 0), 0);
     }
 
     async release(ttId, qty, { eventId, slug, shardIndex }) {
@@ -265,12 +374,10 @@ export class InventoryService {
         }
         const sha = await this.loadReleaseLua();
         const key = shardKey(ttId, shardIndex);
-        const verK = eventId ? versionKey(eventId) : "";
-        const [ok, newRemaining, ver] = await this.redis.evalsha(
-            sha,
-            [key, verK],
-            [String(qty)],
-        );
+        const keys = eventId ? [key, versionKey(eventId)] : [key];
+        const [ok, newRemaining, ver] = await this.redis.evalsha(sha, keys, [
+            String(qty),
+        ]);
 
         if (ok === 1 || ok === "1") {
             await this._afterChange({
@@ -281,6 +388,7 @@ export class InventoryService {
                 remaining: Number(newRemaining),
                 qty,
                 shardIndex,
+                invVersion: Number(ver ?? 0),
             });
             return {
                 ok: true,
@@ -298,36 +406,55 @@ export class InventoryService {
             ttIds.map((tt) => this.getShardCount(tt)),
         );
 
+        // 👉 bật hashTag để trùng format với seed
+        const keyOpts = { hashTag: true };
         const shardKeys = [];
         for (let i = 0; i < ttIds.length; i++) {
             const tt = ttIds[i];
             const m = shardCounts[i];
-            for (let j = 0; j < m; j++) shardKeys.push(shardKey(tt, j));
+            for (let j = 0; j < m; j++) {
+                shardKeys.push(shardKey(tt, j, keyOpts));
+            }
         }
 
-        const pipe = this.redis.pipeline ? this.redis.pipeline() : null;
-        let replies, rawShards, rawVersion;
+        console.warn("[read.debug]", {
+            ttIds,
+            shardCounts,
+            sample: shardKeys.slice(0, 8),
+        });
 
-        if (pipe) {
+        let rawShards, rawVersion;
+
+        if (typeof this.redis.pipeline === "function") {
+            const pipe = this.redis.pipeline();
             shardKeys.forEach((k) => pipe.get(k));
-            pipe.get(versionKey(eventId));
-            replies = await pipe.exec();
+            pipe.get(versionKey(eventId)); // key version không cần hashTag
+            const replies = await pipe.exec();
             rawShards = replies.slice(0, shardKeys.length).map((r) => r[1]);
             rawVersion = replies[shardKeys.length][1];
         } else {
-            rawShards = await this.redis.mgetRaw(shardKeys);
+            // Fallback an toàn: mget theo từng TT để tránh MGET cross-slot (nếu dùng cluster)
+            rawShards = [];
+            let cursor = 0;
+            for (let i = 0; i < ttIds.length; i++) {
+                const m = shardCounts[i];
+                const keys = Array.from({ length: m }, (_, j) =>
+                    shardKey(ttIds[i], j, keyOpts),
+                );
+                const part = await this.redis.mget(keys); // adapter có mget([...])
+                rawShards.push(...part);
+                cursor += m;
+            }
             rawVersion = await this.redis.get(versionKey(eventId));
         }
 
         const remains = [];
-        let cursor = 0;
+        let idx = 0;
         for (let i = 0; i < ttIds.length; i++) {
             const m = shardCounts[i];
             let sum = 0;
-            for (let j = 0; j < m; j++) {
-                sum += Number(rawShards[cursor + j] ?? 0);
-            }
-            cursor += m;
+            for (let j = 0; j < m; j++) sum += Number(rawShards[idx + j] ?? 0);
+            idx += m;
             remains.push(sum);
         }
 

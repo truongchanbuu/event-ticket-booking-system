@@ -1,5 +1,4 @@
 // scripts/tests/inv.verify.js
-import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { InventoryService } from "../../services/inventory.service.js";
@@ -9,8 +8,8 @@ import { shardKey, metaKey, versionKey } from "../../inventory/key.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const eventId = process.env.EV_ID || "EV_S";
-const ttId = process.env.TT_ID || "TT_S";
+const eventId = process.env.EV_ID || "EV_TEST";
+const ttId = process.env.TT_ID || "TT_TEST";
 
 (async () => {
     const redis = await createRedisService();

@@ -10,9 +10,9 @@ export class EventLifecycleEventService {
         const topic = config.kafka?.topics?.main_events || TOPICS.EVENT;
         this.topicSender = kafkaService.createTopicSender(
             topic,
-            config.kafka.producer_name,
+            config.kafka.producerName,
         );
-        this.producerName = config.kafka?.producer_name || "event-service";
+        this.producerName = config.kafka?.producerName || "event-service";
         this.schemaVersion = Number(config.kafka?.schemaVersion ?? 1);
     }
 

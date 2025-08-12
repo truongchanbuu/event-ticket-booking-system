@@ -2,6 +2,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { createRedisService } from "./inv.redis-wrapper.js";
 import { InventoryService } from "../../services/inventory.service.js";
+import {
+    createRedisClient,
+    RedisService,
+} from "@event_ticket_booking_system/shared";
+import config from "../../config/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,7 +17,16 @@ const capacity = Number(process.env.CAP || 100);
 const shardCount = Number(process.env.SC || 16);
 
 (async () => {
-    const redis = await createRedisService();
+    const redisClient = createRedisClient({
+        config: config,
+        logger: console,
+    });
+    const redis = new RedisService({
+        redisClient,
+        config: config,
+        logger: console,
+    });
+
     const inv = new InventoryService({ redisService: redis, logger: console });
     await inv.seedSharded(ttId, capacity, shardCount);
 

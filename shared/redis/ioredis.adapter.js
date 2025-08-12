@@ -11,7 +11,7 @@ export class IORedisAdapter {
   async get(key) {
     return this.client.get(key);
   }
-  async setEx(key, value, ttlSec) {
+  async setex(key, value, ttlSec) {
     return this.client.set(key, value, "EX", ttlSec);
   }
   async del(...keys) {

@@ -3,10 +3,6 @@ import { BaseValidator } from "@event_ticket_booking_system/shared";
 import { ALLOWED_PROVIDERS } from "../enums/payment-provider.js";
 
 export class PaymentValidator extends BaseValidator {
-    /**
-     * Validator cho việc tạo một phương thức thanh toán mới.
-     * Áp dụng cho route: POST /api/v1/payments/methods
-     */
     static validateCreatePaymentMethod = [
         checkSchema({
             provider: {
@@ -66,10 +62,6 @@ export class PaymentValidator extends BaseValidator {
         this.handleValidationErrors,
     ];
 
-    /**
-     * Validator cho việc cập nhật một phương thức thanh toán.
-     * Áp dụng cho route: PUT /api/v1/payments/methods/:id
-     */
     static validateUpdatePaymentMethod = [
         checkSchema({
             paymentMethodID: {
@@ -122,10 +114,6 @@ export class PaymentValidator extends BaseValidator {
         this.handleValidationErrors,
     ];
 
-    /**
-     * Validator cho việc xóa một phương thức thanh toán (chỉ cần check ID).
-     * Áp dụng cho route: DELETE /api/v1/payments/methods/:id
-     */
     static validateDeletePaymentMethod = [
         checkSchema({
             paymentMethodID: {
@@ -135,6 +123,45 @@ export class PaymentValidator extends BaseValidator {
                 },
                 notEmpty: {
                     errorMessage: "Invalid payment method ID.",
+                },
+            },
+        }),
+        this.handleValidationErrors,
+    ];
+
+    static validateConfirmByIntent = [
+        checkSchema({
+            paymentIntentID: {
+                in: ["body"],
+                optional: { options: { nullable: true, checkFalsy: true } },
+                isString: { errorMessage: "paymentIntentID must be a string." },
+                trim: true,
+            },
+            reservationID: {
+                in: ["body"],
+                optional: { options: { nullable: true, checkFalsy: true } },
+                isString: { errorMessage: "reservationID must be a string." },
+                trim: true,
+            },
+            refresh: {
+                in: ["body"],
+                optional: true,
+                isBoolean: { errorMessage: "refresh must be a boolean." },
+                toBoolean: true,
+            },
+            // Cross-field requirement
+            _atLeastOne: {
+                custom: {
+                    options: (_v, { req }) => {
+                        const { paymentIntentID, reservationID } =
+                            req.body || {};
+                        if (!paymentIntentID && !reservationID) {
+                            throw new Error(
+                                "Either paymentIntentID or reservationID is required.",
+                            );
+                        }
+                        return true;
+                    },
                 },
             },
         }),

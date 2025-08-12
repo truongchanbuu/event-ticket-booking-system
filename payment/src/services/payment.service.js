@@ -4,13 +4,35 @@ import {
     PROVIDER_TYPE_MAP,
 } from "@event_ticket_booking_system/shared";
 
+import {
+    PAYMENT_STATUS,
+    TERMINAL,
+    normalizeStatus,
+} from "../enums/payment-status.js";
+
 const PAYMENT_COLLECTION = "paymentMethods";
+const PAYMENT_INTENTS = "paymentIntents";
+const REFRESH_TTL_MS_DEFAULT = 10_000;
 
 export class PaymentService {
-    constructor({ db, redisService }) {
+    constructor({
+        db,
+        redisService,
+        providerClients = {},
+        paymentProducer,
+        logger = console,
+    }) {
         this.db = db;
         this.redisService = redisService;
+        this.logger = logger;
+
         this.paymentCollection = this.db.collection(PAYMENT_COLLECTION);
+
+        // INTENTS
+        this.paymentIntentCollection = this.db.collection(PAYMENT_INTENTS);
+        this.providers = providerClients;
+        this.paymentProducer = paymentProducer;
+        this.refreshTtlMs = REFRESH_TTL_MS_DEFAULT;
 
         this.CACHE_KEYS = {
             PAYMENT_METHODS_BY_USER_ID: (userID) => `payment:methods:${userID}`,
@@ -180,7 +202,6 @@ export class PaymentService {
     async updatePaymentMethod(userID, paymentMethodID, updates) {
         const docRef = this.paymentCollection.doc(paymentMethodID);
 
-        // If updating to default, make it transactional to avoid race conditions
         if (updates.isDefault === true) {
             await this.setDefaultPaymentMethod(userID, paymentMethodID);
         }
@@ -233,5 +254,244 @@ export class PaymentService {
         await this.invalidateCache(userID);
 
         return { success: true };
+    }
+
+    // ===================== Payment Intents (DB-first Confirm) =====================
+
+    async _getByPaymentIntentID(paymentIntentID) {
+        const snap = await this.paymentIntentCollection
+            .doc(paymentIntentID)
+            .get();
+        if (!snap.exists) return null;
+        return { paymentIntentID: snap.id, ...snap.data() };
+    }
+
+    async _getByReservationID(reservationID) {
+        // cần index: paymentIntents(reservationID asc)
+        const qs = await this.paymentIntentCollection
+            .where("reservationID", "==", reservationID)
+            .limit(1)
+            .get();
+        const doc = qs.docs[0];
+        if (!doc) return null;
+        return { paymentIntentID: doc.id, ...doc.data() };
+    }
+
+    async _maybePublishStatusChange(oldStatus, newStatus, intent) {
+        if (oldStatus === newStatus) return;
+
+        const payload = {
+            paymentIntentID: intent.paymentIntentID,
+            reservationID: intent.reservationID,
+            provider: intent.provider,
+            amount: intent.amount,
+            currency: intent.currency,
+            transactionId: intent.transactionId,
+            oldStatus,
+            newStatus,
+        };
+        const meta = {
+            idempotencyKey: `${intent.paymentIntentID}:${newStatus}`,
+        };
+
+        try {
+            if (newStatus === PAYMENT_STATUS.SUCCEEDED) {
+                await this.paymentProducer.succeeded(payload, meta);
+            } else if (newStatus === PAYMENT_STATUS.FAILED) {
+                await this.paymentProducer.failed(payload, meta);
+            } else if (newStatus === PAYMENT_STATUS.CANCELED) {
+                await this.paymentProducer.canceled(payload, meta);
+            } else if (newStatus === PAYMENT_STATUS.EXPIRED) {
+                await this.paymentProducer.expired(payload, meta);
+            } else {
+                await this.paymentProducer.statusUpdated(payload, meta);
+            }
+        } catch (e) {
+            this.logger.error(
+                "[PaymentService] publish failed:",
+                e?.message || e,
+            );
+        }
+    }
+
+    /**
+     * Confirm/check trạng thái payment theo paymentIntentID hoặc reservationID.
+     * - Không tin client payload: load toàn bộ từ DB
+     * - Nếu đã terminal => trả ngay
+     * - Nếu PENDING: chỉ gọi provider.verify khi refresh=true hoặc quá TTL
+     */
+    async confirmByIntent({ paymentIntentID, reservationID, refresh = false }) {
+        if (!paymentIntentID && !reservationID) {
+            throw new AppError({
+                message: "paymentIntentID or reservationID is required.",
+                errorCode: ERROR_CODE.INVALID_DATA,
+                statusCode: 400,
+            });
+        }
+
+        // 1) Load intent từ DB
+        const intent =
+            (paymentIntentID &&
+                (await this._getByPaymentIntentID(paymentIntentID))) ||
+            (reservationID && (await this._getByReservationID(reservationID)));
+
+        if (!intent) {
+            throw new AppError({
+                message: "Payment intent not found.",
+                errorCode: ERROR_CODE.NOT_FOUND,
+                statusCode: 404,
+            });
+        }
+
+        // Force fields we rely on
+        const {
+            paymentIntentID: pid,
+            reservationID: rid,
+            provider,
+            status: currentStatus = PAYMENT_STATUS.PENDING,
+            orderId,
+            transactionId,
+            amount,
+            currency = "VND",
+            lastProviderCheckAt,
+        } = intent;
+
+        // 2) Nếu terminal -> trả luôn (idempotent)
+        if (TERMINAL.has(currentStatus)) {
+            return {
+                ...intent,
+                status: currentStatus,
+                confirmed: currentStatus === PAYMENT_STATUS.SUCCEEDED,
+                refreshed: false,
+                source: "cache",
+            };
+        }
+
+        // 3) PENDING: quyết định có cần refresh provider?
+        const now = Date.now();
+        const lastCheckMs = lastProviderCheckAt
+            ? new Date(lastProviderCheckAt).getTime()
+            : 0;
+        const shouldRefresh = refresh || now - lastCheckMs > this.refreshTtlMs;
+
+        if (!shouldRefresh) {
+            return {
+                ...intent,
+                status: currentStatus,
+                confirmed: false,
+                refreshed: false,
+                source: "cache",
+            };
+        }
+
+        // 4) Gọi provider.verify bằng dữ liệu từ DB
+        const client = this.providers?.[provider];
+        if (!client || typeof client.verify !== "function") {
+            throw new AppError({
+                message: `Unsupported or missing provider client: ${provider}`,
+                errorCode: ERROR_CODE.INVALID_DATA,
+                statusCode: 400,
+            });
+        }
+
+        const providerResp = await client.verify({
+            orderId,
+            transactionId,
+            amount,
+            currency,
+            metadata: intent.metadata || {},
+        });
+
+        const newStatus = normalizeStatus(providerResp?.status);
+
+        // 5) Ghi nhận cập nhật trong transaction (chống race & idempotent)
+        const docRef = this.paymentIntentCollection.doc(pid);
+        let updated = null;
+
+        await this.db.runTransaction(async (tx) => {
+            const snap = await tx.get(docRef);
+            if (!snap.exists) {
+                throw new AppError({
+                    message: "Payment intent not found.",
+                    errorCode: ERROR_CODE.NOT_FOUND,
+                    statusCode: 404,
+                });
+            }
+
+            const cur = snap.data();
+            const curStatus = cur.status || PAYMENT_STATUS.PENDING;
+
+            // Nếu đã terminal, không downgrade/regress
+            if (TERMINAL.has(curStatus)) {
+                updated = { paymentIntentID: pid, ...cur, status: curStatus };
+                return;
+            }
+
+            const nowIso = new Date().toISOString();
+            const fieldsToUpdate = {
+                lastProviderCheckAt: nowIso,
+                providerLastRaw: providerResp || null,
+            };
+
+            // Chỉ cập nhật khi status đổi
+            if (newStatus !== curStatus) {
+                fieldsToUpdate.status = newStatus;
+                fieldsToUpdate.statusUpdatedAt = nowIso;
+                fieldsToUpdate.statusHistory = [
+                    ...(cur.statusHistory || []),
+                    {
+                        from: curStatus,
+                        to: newStatus,
+                        at: nowIso,
+                        reason: "provider.verify",
+                    },
+                ];
+
+                // Cập nhật các field nếu provider trả chính xác hơn
+                if (
+                    providerResp?.transactionId &&
+                    providerResp.transactionId !== cur.transactionId
+                ) {
+                    fieldsToUpdate.transactionId = providerResp.transactionId;
+                }
+                if (
+                    providerResp?.amount &&
+                    providerResp.amount !== cur.amount
+                ) {
+                    fieldsToUpdate.amount = providerResp.amount;
+                }
+                if (
+                    providerResp?.currency &&
+                    providerResp.currency !== cur.currency
+                ) {
+                    fieldsToUpdate.currency = providerResp.currency;
+                }
+            }
+
+            tx.update(docRef, fieldsToUpdate);
+            updated = { paymentIntentID: pid, ...cur, ...fieldsToUpdate };
+        });
+
+        // 6) Publish event nếu status đổi (idempotent nhờ idempotencyKey)
+        const oldStatus = intent.status || PAYMENT_STATUS.PENDING;
+        const effectiveStatus = updated.status || oldStatus;
+        if (effectiveStatus !== oldStatus) {
+            await this._maybePublishStatusChange(oldStatus, effectiveStatus, {
+                ...intent,
+                ...updated,
+                paymentIntentID: pid,
+                reservationID: rid,
+                provider,
+            });
+        }
+
+        return {
+            ...intent,
+            ...updated,
+            status: effectiveStatus,
+            confirmed: effectiveStatus === PAYMENT_STATUS.SUCCEEDED,
+            refreshed: true,
+            source: "provider",
+        };
     }
 }

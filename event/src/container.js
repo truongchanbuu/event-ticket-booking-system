@@ -5,13 +5,12 @@ assertInventoryConfig(console);
 
 import {
     createKafkaService,
-    createLoggerFactory,
     createRedisClient,
+    createServiceClients,
     db,
-    internalHttpClient,
     MessageDispatcher,
     RedisLockService,
-    RedisService, // bản ioredis-only đã optimize (có initialize())
+    RedisService,
     TICKET_TYPE_CREATED,
     TICKET_TYPE_DELETED,
     TICKET_TYPE_UPDATED,
@@ -38,6 +37,7 @@ import { EmbeddedBroadcaster } from "./adapters/broadcaster.sse.js";
 import { AvailabilitySSERoutes } from "./routes/availability.see.routes.js";
 import { TestRoutes } from "./routes/test.routes.js";
 import { AvailabilityRoutes } from "./routes/availability.routes.js";
+import { AvailabilityProducer } from "./kafka/availability-lifecycle.producer.js";
 
 export async function configureContainer() {
     const logger = console;
@@ -64,8 +64,15 @@ export async function configureContainer() {
         logger,
         redisClient: redisClient.raw, // truyền ioredis/cluster instance
     });
-    await redisService.initialize(); // load Lua scripts
+    await redisService.initialize();
     logger.info("✅ Redis service initialized.");
+
+    const httpRegistry = createServiceClients({
+        tickets: {
+            baseURL: config.serviceUrls.ticketService,
+            apiKey: config.serviceKeys.ticketService,
+        },
+    });
 
     // 2) Tạo container & register
     const container = createContainer();
@@ -82,7 +89,7 @@ export async function configureContainer() {
         config: asValue(config),
         db: asValue(db),
         handlerMap: asValue(handlerMap),
-        internalHttpClient: asValue(internalHttpClient),
+        httpRegistry: asValue(httpRegistry),
 
         // hạ tầng đã pre-init
         kafkaService: asValue(kafkaServiceInstance),
@@ -141,6 +148,8 @@ export async function configureContainer() {
             };
         }).singleton(),
 
+        availabilityProducer: asClass(AvailabilityProducer).singleton(),
+
         // broadcaster SSE
         broadcaster: asClass(EmbeddedBroadcaster).singleton(),
 
@@ -150,9 +159,7 @@ export async function configureContainer() {
         contributorService: asClass(ContributorService).singleton(),
         eventService: asClass(EventService).singleton(),
 
-        inventoryService: asClass(InventoryService)
-            .singleton()
-            .inject(() => ({ pubsub: container.resolve("redisPubSub") })),
+        inventoryService: asClass(InventoryService).singleton(),
 
         availabilityService: asClass(AvailabilityService).singleton(),
         eventLifecycleEventService: asClass(

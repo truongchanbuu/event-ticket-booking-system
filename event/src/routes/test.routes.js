@@ -15,7 +15,7 @@ export class TestRoutes {
             // set trực tiếp key Redis (bỏ qua Lua) — chỉ dùng trong DEV!
             const key = `inv:${ttId}:remaining`;
             const redis = req.container.resolve("redisClient"); // wrapper của bạn
-            await redis.setEx(key, String(remaining), 24 * 3600); // TTL 1 ngày để khỏi sót key
+            await redis.setex(key, String(remaining), 24 * 3600); // TTL 1 ngày để khỏi sót key
             return res.json({ ok: true, key, remaining });
         });
 

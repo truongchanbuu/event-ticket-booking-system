@@ -39,6 +39,14 @@ const heartbeatInterval = (() => {
     return Number.isFinite(v) ? v : 5_000; // 5s
 })();
 
+function getTtl(...values) {
+    for (const v of values) {
+        const n = parseInt(v, 10);
+        if (Number.isFinite(n)) return n;
+    }
+    return 0;
+}
+
 const config = {
     app: {
         port: Number(process.env.PORT) || 3000,
@@ -53,23 +61,17 @@ const config = {
             10,
         ),
 
-        edgeTtlSec: Number.isFinite(
-            parseInt(process.env.AVAIL_EDGE_TTL_SEC, 10),
-        )
-            ? parseInt(process.env.AVAIL_EDGE_TTL_SEC, 10)
-            : Number.isFinite(edgeTtlSec)
-              ? edgeTtlSec
-              : 0,
+        edgeTtlSec: getTtl(process.env.AVAIL_EDGE_TTL_SEC, 2),
     },
 
     redis: redisConfig,
 
-    service_keys: {
-        ticket_service: process.env.TICKET_SERVICE_SECRET_KEY,
-        revalidate_key: process.env.REVALIDATE_KEY,
+    serviceKeys: {
+        ticketService: process.env.TICKET_SERVICE_SECRET_KEY,
+        revalidateKey: process.env.REVALIDATE_KEY,
     },
-    service_urls: {
-        ticket_service: process.env.TICKET_SERVICE_URL,
+    serviceUrls: {
+        ticketService: process.env.TICKET_SERVICE_URL,
         frontend: process.env.FRONTEND_URL,
     },
 
@@ -98,7 +100,7 @@ const config = {
         sessionTimeout,
         heartbeatInterval,
 
-        producer_name:
+        producerName:
             process.env.KAFKA_PRODUCER_SERVICE_NAME || "event-service",
 
         topics: {

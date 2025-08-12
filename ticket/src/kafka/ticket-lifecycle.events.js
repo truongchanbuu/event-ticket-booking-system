@@ -13,7 +13,7 @@ export class TicketLifecycleEventService {
 
         this.topicSender = kafkaService.createTopicSender(
             topic,
-            config.kafka.producer_name,
+            config.kafka.producerName,
         );
     }
 

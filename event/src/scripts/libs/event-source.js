@@ -1,3 +1,5 @@
+import { createServiceClients } from "@event_ticket_booking_system/shared";
+
 export class EventSource {
     constructor(cfg) {
         this.cfg = cfg;
@@ -12,15 +14,15 @@ export class EventSource {
     }
 
     async _listFromService() {
-        const { eventServiceUrl, eventServiceKey, http } = this.cfg;
-        if (!eventServiceUrl || !http) {
-            throw new Error(
-                "[EventSource] service mode requires eventServiceUrl & http",
-            );
-        }
+        const http = createServiceClients({
+            events: {
+                baseURL: process.env.EVENT_SERVICE_URL,
+                apiKey: process.env.EVENT_SERVICE_SECRET_KEY,
+            },
+        });
 
-        const url = `${eventServiceUrl}/api/internal/events/ids`;
-        const res = await http.get({ url, apiKey: eventServiceKey });
+        const url = `/api/internal/events/ids`;
+        const res = await http.get(url);
 
         if (res.status !== 200) {
             this.log.warn("[EventSource] service non-200", {

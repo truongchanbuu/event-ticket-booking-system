@@ -1,16 +1,19 @@
 export class TicketClientService {
-    constructor({ config, logger = console, internalHttpClient }) {
-        this.ticketUrl = config.service_urls.ticket_service;
-        this.ticketServiceKey = config.service_keys.ticket_service;
+    constructor({ httpRegistry, logger = console }) {
+        if (!httpRegistry?.tickets) {
+            throw new Error(
+                "[TicketClientService] httpRegistry.tickets missing",
+            );
+        }
+        this.http = httpRegistry.tickets; // đã có baseURL + x-api-key sẵn
         this.logger = logger;
-        this.http = internalHttpClient;
     }
 
-    _ticketsUrl(eventId) {
-        return `${this.ticketUrl}/internal/tickets/${eventId}`;
+    _path(eventId) {
+        return `/internal/tickets/${encodeURIComponent(eventId)}`;
     }
 
-    async getEventTicketTypes(eventId) {
+    async getEventTicketTypes(eventId, opts = {}) {
         if (typeof eventId !== "string" || !eventId.trim()) {
             this.logger.warn("[TicketClientService] Invalid eventId", {
                 eventId,
@@ -19,10 +22,11 @@ export class TicketClientService {
         }
 
         try {
-            const res = await this.http.get({
-                url: this._ticketsUrl(eventId),
-                apiKey: this.ticketServiceKey,
+            const res = await this.http.get(this._path(eventId), {
+                signal: opts.signal,
+                headers: opts.headers, // nếu muốn propagate thêm (x-request-id đã tự add ở factory)
             });
+
             const status = typeof res?.status === "number" ? res.status : 502;
             const data = Array.isArray(res?.data) ? res.data : [];
             const version = res?.version;
@@ -30,11 +34,7 @@ export class TicketClientService {
             if (status !== 200) {
                 this.logger.warn(
                     "[TicketClientService] Non-200 from ticket service",
-                    {
-                        eventId,
-                        status,
-                        message: res?.message,
-                    },
+                    { eventId, status, message: res?.message },
                 );
             }
 

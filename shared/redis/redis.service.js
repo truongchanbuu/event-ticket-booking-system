@@ -3,7 +3,7 @@ import { serialize, deserialize } from "./serialize.js";
 
 export class RedisService {
   constructor({ config = {}, logger = console, redisClient }) {
-    this.prefix = config.prefix || "app";
+    this.prefix = config.prefix;
     this.defaultTTL = Number(config.defaultTTL || 300);
     this.logger = logger;
     this.r = redisClient;
@@ -48,14 +48,43 @@ export class RedisService {
     return loaded || this._sha1(lua);
   }
   async _evalsha(sha, keys, args) {
-    return this.r.evalsha(sha, keys.length, ...keys, ...args);
+    const ks = this._key ? keys.map((k) => this._key(k)) : keys;
+    return this.r.evalsha(sha, ks.length, ...ks, ...args);
   }
   async _eval(lua, keys, args) {
     return this.r.eval(lua, keys.length, ...keys, ...args);
   }
+  _normalizeZaddPairs(pairs) {
+    // chấp nhận:
+    // - [[score, member], ...]
+    // - [{ score, member }, ...]
+    // - { member: score, ... }
+    // - [score, member, score, member, ...] (giữ nguyên)
+    if (!pairs) return [];
+    if (Array.isArray(pairs)) {
+      if (pairs.length === 0) return [];
+      if (typeof pairs[0] !== "object") return pairs;
 
-  // ---------- lifecycle ----------
-  /** Gọi sau khi tạo service: await redisService.initialize() */
+      const flat = [];
+      for (const it of pairs) {
+        if (Array.isArray(it)) {
+          flat.push(it[0], it[1]);
+        } else if (it && typeof it === "object") {
+          flat.push(it.score, it.member);
+        }
+      }
+      return flat;
+    }
+    if (typeof pairs === "object") {
+      const flat = [];
+      for (const m of Object.keys(pairs)) {
+        flat.push(pairs[m], m);
+      }
+      return flat;
+    }
+    return [];
+  }
+
   async initialize() {
     try {
       this.SHA_SET_TAG = await this._scriptLoad(this.LUA_SET_TAG);
@@ -67,6 +96,27 @@ export class RedisService {
         e: e.message,
       });
     }
+  }
+
+  async quit() {
+    try {
+      if (typeof this.r?.quit === "function") {
+        return await this.r.quit();
+      }
+      if (typeof this.raw?.quit === "function") {
+        return await this.raw.quit(); // fallback ioredis raw
+      }
+      this.logger.debug("[RedisService] quit(): no-op");
+    } catch (e) {
+      this.logger.warn("[RedisService] quit error:", e?.message || e);
+    }
+  }
+
+  async connect() {
+    if (typeof this.r?.connect === "function") {
+      return this.r.connect();
+    }
+    this.logger.debug("[RedisService] connect(): no-op");
   }
 
   // ---------- core get/set ----------
@@ -159,6 +209,19 @@ export class RedisService {
     return this.r.set(k, stringValue);
   }
 
+  exists = async (key) => {
+    const k = this._key(key);
+    try {
+      const n = this.r?.raw?.exists
+        ? await this.r.raw.exists(k)
+        : await this.r.exists(k);
+      return n === 1;
+    } catch (e) {
+      this.logger.error(`[Redis] EXISTS ${k}`, { e: e.message });
+      return false;
+    }
+  };
+
   async del(...keys) {
     const full = keys.flat().filter(Boolean).map(this._key);
     if (!full.length) return 0;
@@ -193,6 +256,29 @@ export class RedisService {
     return p;
   }
 
+  hgetall = (k) => this.r.hgetall(this._key(k));
+  hget = (k, f) =>
+    this.r.raw.hget
+      ? this.r.raw.hget(this._key(k), f)
+      : this.r.hget(this._key(k), f);
+  hset = (k, f, v) =>
+    this.r.raw.hset
+      ? this.r.raw.hset(this._key(k), f, v)
+      : this.r.hset(this._key(k), f, v);
+
+  pttl = async (key) => {
+    const k = this._key(key);
+    try {
+      const ms = this.r?.raw?.pttl
+        ? await this.r.raw.pttl(k)
+        : await this.r.pttl(k);
+      return typeof ms === "number" ? ms : -2;
+    } catch (e) {
+      this.logger.error(`[Redis] PTTL ${k}`, { e: e.message });
+      return -2;
+    }
+  };
+
   // ---------- bulk ops ----------
   async mget(keys) {
     if (!keys?.length) return [];
@@ -217,12 +303,100 @@ export class RedisService {
     }
   }
 
+  async zrangebyscore(key, min, max, opts = {}) {
+    const k = this._key(key);
+    const args = [String(min), String(max)];
+
+    if (opts.withScores) args.push("WITHSCORES");
+    if (opts.limit) {
+      const off = Number(opts.limit.offset ?? 0);
+      const cnt = Number(opts.limit.count ?? 50);
+      args.push("LIMIT", String(off), String(cnt));
+    }
+
+    try {
+      const raw = this.r?.raw?.zrangebyscore
+        ? await this.r.raw.zrangebyscore(k, ...args)
+        : await this.r.zrangebyscore(k, ...args);
+
+      if (opts.withScores && opts.parse) {
+        const out = [];
+        for (let i = 0; i < raw.length; i += 2) {
+          out.push({ member: raw[i], score: Number(raw[i + 1]) });
+        }
+        return out;
+      }
+      return raw;
+    } catch (e) {
+      this.logger.error(`[Redis] ZRANGEBYSCORE ${k}`, { e: e.message });
+      throw e;
+    }
+  }
+
+  /** ZREM nhiều member */
+  async zrem(key, ...members) {
+    const k = this._key(key);
+    const flat = members.flat().filter((m) => m != null);
+    if (!flat.length) return 0;
+    try {
+      return this.r?.raw?.zrem
+        ? await this.r.raw.zrem(k, ...flat)
+        : await this.r.zrem(k, ...flat);
+    } catch (e) {
+      this.logger.error(`[Redis] ZREM ${k}`, { e: e.message });
+      throw e;
+    }
+  }
+
   async eval(lua, keys = [], args = []) {
     return this._eval(lua, keys, args);
   }
 
   async evalsha(sha, keys = [], args = []) {
     return this._evalsha(sha, keys, args);
+  }
+
+  async zadd(key, pairsOrScore, memberOrOpts, ...rest) {
+    const k = this._key(key);
+
+    const passThrough =
+      (typeof pairsOrScore === "number" || typeof pairsOrScore === "string") &&
+      (memberOrOpts !== undefined || rest.length > 0);
+
+    let args = [];
+    if (passThrough) {
+      args = [pairsOrScore, memberOrOpts, ...rest];
+    } else {
+      let opts = {};
+      let pairs = pairsOrScore;
+
+      if (
+        memberOrOpts &&
+        typeof memberOrOpts === "object" &&
+        !Array.isArray(memberOrOpts)
+      ) {
+        opts = memberOrOpts;
+      }
+
+      const flags = [];
+      if (opts.NX) flags.push("NX");
+      if (opts.XX) flags.push("XX");
+      if (opts.CH) flags.push("CH");
+      if (opts.INCR) flags.push("INCR");
+
+      const flatPairs = this._normalizeZaddPairs(pairs);
+      args = [...flags, ...flatPairs];
+    }
+
+    try {
+      if (this.r?.raw?.zadd) {
+        return await this.r.raw.zadd(k, ...args);
+      }
+      return await this.r.zadd(k, ...args);
+    } catch (e) {
+      this.logger.error(`[Redis] ZADD ${k}`, { e: e.message });
+      throw e;
+    }
   }
 
   async scriptLoad(lua) {

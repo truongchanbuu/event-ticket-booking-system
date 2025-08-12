@@ -15,7 +15,6 @@ function parseClusterNodes(str) {
     .map((s) => s.trim())
     .filter(Boolean)
     .map((n) => {
-      // Cho phép cả "redis://host:port" hoặc "host:port"
       if (n.startsWith("redis://") || n.startsWith("rediss://")) return n;
       return `redis://${n}`;
     });
@@ -37,7 +36,7 @@ export const redisConfig = {
   single: {
     // Ví dụ: redis://10.0.0.12:6379  (Memorystore Private IP)
     // Hoặc rediss://host:port nếu dùng TLS
-    url: process.env.REDIS_URL,
+    url: process.env.REDIS_URL || "redis://127.0.0.1:6379",
     tls:
       process.env.REDIS_TLS === "1" ||
       process.env.REDIS_URL?.startsWith("rediss://"),

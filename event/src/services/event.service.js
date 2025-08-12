@@ -105,16 +105,16 @@ export class EventService {
 
         if (slug) {
             console.log(
-                `SLUG: ${slug} - ${this.config.service_urls.frontend}/api/internal/revalidate-event`,
+                `SLUG: ${slug} - ${this.config.serviceUrls.frontend}/api/internal/revalidate-event`,
             );
             fetch(
-                `${this.config.service_urls.frontend}/api/internal/revalidate-event`,
+                `${this.config.serviceUrls.frontend}/api/internal/revalidate-event`,
                 {
                     method: "POST",
                     headers: { "content-type": "application/json" },
                     body: JSON.stringify({
                         slug,
-                        secret: this.config.service_keys.revalidate_key,
+                        secret: this.config.serviceKeys.revalidateKey,
                     }),
                 },
             ).catch((err) => {

@@ -16,6 +16,43 @@ export class PaymentController {
         this.deletePaymentMethod = catchAsync(
             this.deletePaymentMethod.bind(this),
         );
+
+        this.confirm = catchAsync(this.confirm.bind(this));
+    }
+
+    async confirm(req, res, next) {
+        const payload =
+            (req.validated && typeof req.validated === "object"
+                ? req.validated
+                : null) ||
+            (req.body && typeof req.body === "object" ? req.body : {});
+
+        const { paymentIntentID, reservationID, refresh = false } = payload;
+
+        const result = await this.svc.confirmByIntent({
+            paymentIntentID,
+            reservationID,
+            refresh,
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "Payment confirmation checked",
+            data: {
+                paymentIntentID: result.paymentIntentID,
+                reservationID: result.reservationID,
+                provider: result.provider,
+                status: result.status,
+                confirmed: result.confirmed,
+                refreshed: result.refreshed,
+                source: result.source, // "cache" | "provider"
+                amount: result.amount,
+                currency: result.currency,
+                transactionId: result.transactionId || null,
+                lastProviderCheckAt: result.lastProviderCheckAt || null,
+                statusUpdatedAt: result.statusUpdatedAt || null,
+            },
+        });
     }
 
     async getUserPaymentMethods(req, res) {

@@ -54,11 +54,11 @@ const config = {
 
     redis: redisConfig,
 
-    service_keys: {
-        ticket_service: process.env.TICKET_SERVICE_SECRET_KEY,
+    serviceKeys: {
+        ticketService: process.env.TICKET_SERVICE_SECRET_KEY,
     },
-    service_urls: {
-        ticket_service: process.env.TICKET_SERVICE_URL, // TODO: validate URL nếu cần
+    serviceUrls: {
+        ticketService: process.env.TICKET_SERVICE_URL, // TODO: validate URL nếu cần
     },
 
     kafka: {
@@ -86,8 +86,7 @@ const config = {
         sessionTimeout,
         heartbeatInterval,
 
-        producer_name:
-            process.env.KAFKA_PRODUCER_SERVICE_NAME || "user-service",
+        producerName: process.env.KAFKA_PRODUCER_SERVICE_NAME || "user-service",
         topics: {},
 
         // group ids: duy nhất cho service
