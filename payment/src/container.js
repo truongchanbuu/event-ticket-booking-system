@@ -18,11 +18,14 @@ import { ProfileRoutes } from "./routes/profile.routes.js";
 import { ApiRoutes } from "./routes/api.routes.js";
 import { InternalRoutes } from "./routes/internal.routes.js";
 import { PaymentProducer } from "./kafka/payment.producer.js";
-import { MomoClient } from "./providers/momo.client.js";
 import { PaymentSucceededHandler } from "../../booking/src/kafka/handlers/payment-succeeded.handler.js";
 import { PaymentFailedHandler } from "../../booking/src/kafka/handlers/payment-failed.handler.js";
 import { PaymentCanceledHandler } from "../../booking/src/kafka/handlers/payment-cancelled.handler.js";
 import { PaymentExpiredHandler } from "../../booking/src/kafka/handlers/payment-expired.handler.js";
+import { MomoProvider } from "./providers/momo.provider.js";
+import { MockMomoProvider } from "./providers/mock-momo.provider.js";
+import { MomoClient } from "./clients/momo.client.js";
+import { PaymentRoutes } from "./routes/payment.routes.js";
 
 export async function configureContainer() {
     const logger = console;
@@ -76,8 +79,38 @@ export async function configureContainer() {
             }))
             .singleton(),
 
-        providerClients: asFunction(() =>
-            container.resolve("momoClient"),
+        momoProvider: asClass(MomoProvider).singleton(),
+
+        orderStateStore: asFunction((c) =>
+            buildOrderStateStore({ redis: c.resolve("redisClient") }),
+        ).singleton(),
+
+        mockMomoProvider: asClass(MockMomoProvider)
+            .inject((c) => ({
+                ipnUrl: c.resolve("config").paymentClients.momo.ipnUrl,
+                store: c.resolve("orderStateStore"),
+                jitter: { min: 120, max: 600 },
+                errorRate: 0.01,
+                sendHttp: async (url, payload) => {
+                    await fetch(url, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload),
+                    });
+                },
+                logger: c.resolve("logger"),
+            }))
+            .singleton(),
+
+        // (optional) momoProvider: asClass(MomoProvider)...
+        paymentProviderFactory: asFunction((c) =>
+            makePaymentProviderFactory({
+                config: c.resolve("config"),
+                momoProvider: c.hasRegistration("momoProvider")
+                    ? c.resolve("momoProvider")
+                    : null,
+                mockMomoProvider: c.resolve("mockMomoProvider"),
+            }),
         ).singleton(),
 
         paymentProducer: asClass(PaymentProducer).singleton(),
@@ -88,6 +121,7 @@ export async function configureContainer() {
 
         profileRoutes: asClass(ProfileRoutes).singleton(),
         internalRoutes: asClass(InternalRoutes).singleton(),
+        paymentRoutes: asClass(PaymentRoutes).singleton(),
         apiRoutes: asClass(ApiRoutes).singleton(),
 
         paymentSucceededHandler: asClass(PaymentSucceededHandler).scoped(),

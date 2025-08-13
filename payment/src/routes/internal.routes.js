@@ -13,5 +13,11 @@ export class InternalRoutes {
             PaymentValidator.validateConfirmByIntent,
             this.paymentController.confirm,
         );
+
+        this.router.post(
+            "/payment/refund",
+            PaymentValidator.validateRefund,
+            this.paymentController.refund,
+        );
     }
 }

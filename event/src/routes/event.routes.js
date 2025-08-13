@@ -15,6 +15,46 @@ export class EventRoutes {
     }
 
     initRoutes() {
+        // ===== Public =====
+        // this.router.get(
+        //     "/availability",
+        //     this.availabilityController.getAvailabilityBySlug,
+        // );
+
+        this.router.get("/:slug", this.eventController.getPublicEventDetail);
+
+        this.router.get(
+            "/:eventID/tickets",
+            this.eventController.getEventTicketTypes,
+        );
+
+        this.router.get(
+            "/:eventID/contributors",
+            this.eventController.getEventContributors,
+        );
+
+        // ===== Authenticated (generic) =====
+        this.router.get(
+            "/:eventID/attendees",
+            verifyToken,
+            this.eventController.getEventAttendees,
+        );
+
+        this.router.post(
+            "/:eventID/attendees",
+            verifyToken,
+            this.eventController.createAttendee,
+        );
+
+        // ===== Contributors management =====
+        this.router.post(
+            "/:eventID/contributors",
+            verifyToken,
+            EventValidator.validateCreateContributor(),
+            EventValidator.handleValidationErrors,
+            this.eventController.createContributor,
+        );
+
         this.router.put(
             "/:eventID/contributors/:contributorID",
             verifyToken,
@@ -31,8 +71,7 @@ export class EventRoutes {
             this.eventController.removeContributor,
         );
 
-        this.router.get("/:slug", this.eventController.getPublicEventDetail);
-
+        // ===== Privileged actions (owner/admin) =====
         this.router.post(
             "/:eventID/publish",
             verifyToken,
@@ -40,41 +79,6 @@ export class EventRoutes {
             EventValidator.validatePublishEvent(),
             EventValidator.handleValidationErrors,
             this.eventController.publishEvent,
-        );
-
-        this.router.get(
-            "/:eventID/attendees",
-            verifyToken,
-            this.eventController.getEventAttendees,
-        );
-
-        this.router.post(
-            "/:eventID/attendees",
-            verifyToken,
-            this.eventController.createAttendee,
-        );
-
-        this.router.get(
-            "/:eventID/tickets",
-            this.eventController.getEventTicketTypes,
-        );
-
-        this.router.post(
-            "/:eventID/contributors",
-            verifyToken,
-            EventValidator.validateCreateContributor(),
-            EventValidator.handleValidationErrors,
-            this.eventController.createContributor,
-        );
-
-        this.router.get(
-            "/:eventID/contributors",
-            this.eventController.getEventContributors,
-        );
-
-        this.router.get(
-            "/availability",
-            this.availabilityController.getAvailabilityBySlug,
         );
     }
 }

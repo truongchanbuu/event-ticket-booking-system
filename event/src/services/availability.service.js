@@ -1,7 +1,12 @@
 import { createHash } from "crypto";
 
 import { EVENT_STATUS } from "../enums/event-status.js";
-import { sleep, withTimeout } from "@event_ticket_booking_system/shared";
+import {
+    AppError,
+    ERROR_CODE,
+    sleep,
+    withTimeout,
+} from "@event_ticket_booking_system/shared";
 
 const T_EVENTS_MS = 600; // detail theo slug (qua proxy)
 const T_TICKETS_MS = 600; // ticket types
@@ -72,13 +77,11 @@ export class AvailabilityService {
                     );
 
                     if (!detail) {
-                        const payload = {
-                            status: 404,
-                            data: { message: "Not found" },
-                        };
-                        if (this.ttlMs)
-                            await this.cache.set(key, payload, { ttl: 5 });
-                        return payload;
+                        throw new AppError({
+                            message: "Not found.",
+                            statusCode: 404,
+                            errorCode: ERROR_CODE.NOT_FOUND,
+                        });
                     }
 
                     if (detail.status === EVENT_STATUS.CANCELLED) {

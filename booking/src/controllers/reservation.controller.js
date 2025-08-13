@@ -51,7 +51,7 @@ export class ReservationController {
     }
 
     async confirmReservation(req, res) {
-        const { reservationId } = req.body; // POST /checkout/confirm
+        const { reservationId } = req.body; 
         const userId = req.get("x-user-id") || null;
         const result = await this.svc.confirmReservation({
             reservationId,

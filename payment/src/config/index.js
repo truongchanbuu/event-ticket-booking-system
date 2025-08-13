@@ -14,31 +14,24 @@ const config = {
         port: process.env.PORT || 3000,
         nodeEnv: env,
         serviceKey: process.env.SERVICE_SECRET_KEY,
+        url: process.env.SELF_URL,
     },
 
     redis: redisConfig,
     paymentClients: {
         momo: {
-            partnerCode: process.env.MOMO_PARTNER_CODE,
-            accessKey: process.env.MOMO_ACCESS_KEY,
-            secretKey: process.env.MOMO_SECRET_KEY,
-            // Domain MoMo (test/prod). Các path cụ thể MomoClient sẽ tự nối phía dưới.
+            mode: process.env.MOMO_MODE || "mock", // mock | merchant
+            partnerCode: process.env.MOMO_PARTNER_CODE || "MOCK_GLOBAL",
+            accessKey: process.env.MOMO_ACCESS_KEY || "demo_access",
+            secretKey: process.env.MOMO_SECRET_KEY || "demo_secret",
             endpoint: isProduction
                 ? "https://payment.momo.vn"
                 : "https://test-payment.momo.vn",
-            // URLs cho redirect + IPN
-            returnUrl: `${process.env.WEB_BASE_URL}/checkout/result`, // FE nhận kết quả
-            ipnUrl: `${process.env.PUBLIC_BASE_URL}/api/payment/momo/ipn`, // payment-service nhận webhook/IPN
-            // Tùy chọn
+            returnUrl: `${process.env.WEB_BASE_URL}/checkout/result`,
+            ipnUrl: `${process.env.PUBLIC_BASE_URL}/api/payment/momo/ipn`,
             timeoutMs: 5000,
-            captureType: "captureWallet", // hoặc "payWithMethod" (tùy flow bạn dùng)
+            captureType: "captureWallet",
             signature: "HMAC_SHA256",
-        },
-        autoCancel: {
-            failed: false,
-            canceled: false,
-            expired: false, // bật true nếu muốn trả vé ngay khi phiên thanh toán hết hạn
-            minTtlMs: 0, // hoặc auto-cancel nếu TTL còn < ngưỡng này
         },
     },
     serviceKeys: {},

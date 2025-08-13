@@ -18,6 +18,10 @@ export class PaymentController {
         );
 
         this.confirm = catchAsync(this.confirm.bind(this));
+        this.refund = catchAsync(this.refund.bind(this));
+
+        this.ipnMomo = this.ipnMomo.bind(this);
+        this.simulateMomoIpn = this.simulateMomoIpn.bind(this);
     }
 
     async confirm(req, res, next) {
@@ -53,6 +57,22 @@ export class PaymentController {
                 statusUpdatedAt: result.statusUpdatedAt || null,
             },
         });
+    }
+
+    async refund(req, res) {
+        const body = req.body && typeof req.body === "object" ? req.body : {};
+        const idemKey =
+            req.get("Idempotency-Key") || `${body.reservationID || ""}:refund`;
+
+        const { statusCode, envelope } =
+            await this.paymentService.createOrGetRefund({
+                reservationID: body.reservationID,
+                reason: body.reason,
+                metadata: body.metadata,
+                idemKey,
+            });
+
+        return res.status(statusCode || 200).json(envelope);
     }
 
     async getUserPaymentMethods(req, res) {
@@ -128,5 +148,70 @@ export class PaymentController {
             success: result.success,
             message: "Payment method deleted successfully.",
         });
+    }
+
+    // POST /api/payment/momo/ipn
+    async ipnMomo(req, res) {
+        const payload = req.body || {};
+        const provider = await this.paymentProviderFactory();
+        const v = await provider.verifyIpn(payload);
+        if (!v.ok) return res.sendStatus(400);
+
+        // lưu state cho verify() (mock)
+        if (provider.kind === "mock_momo") {
+            await this.mockMomoProvider.recordIpnState({
+                orderId: v.orderId,
+                resultCode: payload.resultCode,
+                transId: v.transactionId,
+                amount: v.amount,
+            });
+        }
+
+        // await this.paymentService.processIpnResult({
+        //     orderId: v.orderId,
+        //     reservationId:
+        //         this.paymentService.reservationIdFromOrderId?.(v.orderId) ||
+        //         v.orderId.replace(/^ORD_/, ""),
+        //     status: v.status,
+        //     amount: v.amount,
+        //     currency: v.currency,
+        //     transactionId: v.transactionId,
+        //     raw: v.raw,
+        // });
+
+        return res.sendStatus(204);
+    }
+
+    // POST /_simulator/payments/momo
+    async simulateMomoIpn(req, res) {
+        const {
+            orderId,
+            amount = 100000,
+            scene = "SUCCESS",
+            delayMs = 0,
+            repeat = 1,
+        } = req.body || {};
+        const resultCode =
+            scene === "SUCCESS"
+                ? 0
+                : scene === "CANCELED"
+                  ? 53
+                  : scene === "EXPIRED"
+                    ? 49
+                    : scene === "LATE_SUCCESS"
+                      ? 0
+                      : scene === "FAILED"
+                        ? 99
+                        : 0;
+
+        for (let i = 0; i < Number(repeat || 1); i++) {
+            await this.mockMomoProvider.simulateIpn({
+                orderId,
+                amount,
+                resultCode,
+                delayMs: i === 0 ? delayMs : 0,
+            });
+        }
+        return res.json({ ok: true, orderId, scene, delayMs, repeat });
     }
 }

@@ -22,11 +22,24 @@ export class AvailabilityProducer {
     }
 
     async send(type, key, payload, meta) {
+        const enrichedMeta = {
+            producer: this.producerName,
+            ...meta,
+        };
+
         const record = {
             eventType: type,
             key: String(key ?? ""),
-            value: JSON.stringify(buildEnvelope(type, payload, meta)),
+            value: buildEnvelope({
+                type,
+                payload,
+                enrichedMeta,
+                version: this.schemaVersion,
+            }),
         };
+
+        console.log(`send: ${record}`);
+
         try {
             return await this.sendToTopic(record);
         } catch (err) {
@@ -46,7 +59,7 @@ export class AvailabilityProducer {
             action: "availability_changed",
             changedAt: new Date().toISOString(),
         };
-        // partition theo eventId để giữ thứ tự theo event
+
         return this.send(AVAILABILITY_CHANGED, payload.eventId, enriched, meta);
     }
 

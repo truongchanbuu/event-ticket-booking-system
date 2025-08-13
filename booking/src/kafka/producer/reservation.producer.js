@@ -27,7 +27,7 @@ export class ReservationProducer {
         );
 
         this.producerName = config?.kafka?.producerName || "booking-service";
-        this.schemaVersion = Number(config?.kafka?.schemaVersion ?? 1);
+        this.schemaVersion = 1;
     }
 
     _send(type, key, payload, meta, headers) {
@@ -37,6 +37,7 @@ export class ReservationProducer {
             payload,
             meta: { producer: this.producerName, ...meta },
         });
+
         return this.topicSender({
             eventType: type,
             key: String(key ?? payload?.reservationId ?? ""),

@@ -5,15 +5,16 @@ export class EventInventoryClient {
                 "[EventInventoryClient] httpRegistry.events missing",
             );
         }
+
         this.http = httpRegistry.events;
         this.logger = logger;
     }
 
     _reservePath(ttId) {
-        return `/internal/inventory/${encodeURIComponent(ttId)}/reserve`;
+        return `/api/internal/inventory/${encodeURIComponent(ttId)}/reserve`;
     }
     _releasePath(ttId) {
-        return `/internal/inventory/${encodeURIComponent(ttId)}/release`;
+        return `/api/internal/inventory/${encodeURIComponent(ttId)}/release`;
     }
 
     /**

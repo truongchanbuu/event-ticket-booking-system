@@ -6,8 +6,17 @@ export class AvailabilityRoutes {
         this.availabilityController = availabilityController;
 
         this.router.get(
-            "/",
-            this.availabilityController.getAvailabilityBySlugPolling,
+            ["", "/"],
+            this.availabilityController.getAvailabilityBySlug,
         );
+
+        this.router.use((req, res) => {
+            console.log(
+                "[AVAIL ROUTER] 404 fallback",
+                req.method,
+                req.originalUrl,
+            );
+            res.status(404).json({ message: "availability route not found" });
+        });
     }
 }

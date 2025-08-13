@@ -3,7 +3,7 @@ import { serialize, deserialize } from "./serialize.js";
 
 export class RedisService {
   constructor({ config = {}, logger = console, redisClient }) {
-    this.prefix = config.prefix;
+    this.prefix = config.prefix ?? process.env.REDIS_PREFIX ?? "";
     this.defaultTTL = Number(config.defaultTTL || 300);
     this.logger = logger;
     this.r = redisClient;
@@ -36,7 +36,7 @@ export class RedisService {
   _sha1(s) {
     return createHash("sha1").update(s).digest("hex");
   }
-  _key = (k) => `${this.prefix}:${k}`;
+  _key = (k) => (this.prefix ? `${this.prefix}:${k}` : k);
   _jit = (ttl) => {
     const base = Number(ttl) || this.defaultTTL;
     const delta = Math.max(1, Math.floor(base * 0.1)); // ±10%
@@ -52,7 +52,8 @@ export class RedisService {
     return this.r.evalsha(sha, ks.length, ...ks, ...args);
   }
   async _eval(lua, keys, args) {
-    return this.r.eval(lua, keys.length, ...keys, ...args);
+    const ks = this._key ? keys.map((k) => this._key(k)) : keys;
+    return this.r.eval(lua, ks.length, ...ks, ...args);
   }
   _normalizeZaddPairs(pairs) {
     // chấp nhận:
@@ -209,6 +210,67 @@ export class RedisService {
     return this.r.set(k, stringValue);
   }
 
+  async setex(key, ttlSec, value) {
+    const k = this._key(key);
+    try {
+      const payload = typeof value === "string" ? value : serialize(value);
+      if (payload && payload.length > 512 * 1024) {
+        this.logger.warn(
+          `[Redis] Skip large value ${k} size=${payload.length}`
+        );
+        return false;
+      }
+      const ttl = Math.max(1, Number(ttlSec) | 0);
+
+      if (typeof this.r?.setex === "function") {
+        const res = await this.r.setex(k, ttl, payload);
+        return res === "OK" || res === 1 || res === true;
+      }
+
+      const setter = this.r?.raw?.set
+        ? this.r.raw.set.bind(this.r.raw)
+        : this.r.set?.bind(this.r);
+      if (!setter) throw new Error("SETEX_UNSUPPORTED");
+
+      const res = await setter(k, payload, "EX", ttl);
+      return res === "OK" || res === 1 || res === true;
+    } catch (e) {
+      this.logger.error(`[Redis] SETEX ${k}`, { e: e.message });
+      return false;
+    }
+  }
+
+  // Chỉ set nếu key chưa tồn tại, có TTL (giây). Trả về true/false
+  async setNXEx(key, value, ttl = this.defaultTTL, { jitter = true } = {}) {
+    const k = this._key(key);
+    try {
+      const payload = serialize(value);
+      if (payload && payload.length > 512 * 1024) {
+        this.logger.warn(
+          `[Redis] Skip large value ${k} size=${payload.length}`
+        );
+        return false;
+      }
+
+      const ttlSec = Number(jitter ? this._jit(ttl) : ttl) || this.defaultTTL;
+
+      // Ưu tiên dùng wrapper setNXEx nếu có (client đã cung cấp)
+      if (typeof this.r?.setNXEx === "function") {
+        const res = await this.r.setNXEx(k, ttlSec, payload);
+        return res === "OK" || res === 1 || res === true;
+      }
+
+      const setter = this.r?.raw?.set
+        ? this.r.raw.set.bind(this.r.raw)
+        : this.r.set.bind(this.r);
+      const res = await setter(k, payload, "EX", ttlSec, "NX");
+      return res === "OK" || res === 1 || res === true;
+    } catch (e) {
+      this.logger.error(`[Redis] setNXEx ${k}`, { e: e.message });
+      return false;
+    }
+  }
+
   exists = async (key) => {
     const k = this._key(key);
     try {
@@ -346,6 +408,18 @@ export class RedisService {
       this.logger.error(`[Redis] ZREM ${k}`, { e: e.message });
       throw e;
     }
+  }
+
+  multi() {
+    const cli = this.r?.raw?.multi ? this.r.raw : this.r;
+    if (!cli?.multi) throw new Error("MULTI_UNSUPPORTED");
+    return cli.multi();
+  }
+
+  pipeline() {
+    const cli = this.r?.raw?.pipeline ? this.r.raw : this.r;
+    if (!cli?.pipeline) throw new Error("PIPELINE_UNSUPPORTED");
+    return cli.pipeline();
   }
 
   async eval(lua, keys = [], args = []) {

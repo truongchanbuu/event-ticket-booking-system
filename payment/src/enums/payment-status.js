@@ -22,3 +22,9 @@ export const normalizeStatus = (s) => {
     if (["EXPIRED", "TIMEOUT"].includes(v)) return PAYMENT_STATUS.EXPIRED;
     return PAYMENT_STATUS.FAILED;
 };
+
+export const REFUND_STATUS = {
+    PENDING: "PENDING",
+    SUCCEEDED: "SUCCEEDED",
+    FAILED: "FAILED",
+};

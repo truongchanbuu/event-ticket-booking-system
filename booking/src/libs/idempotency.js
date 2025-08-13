@@ -8,17 +8,28 @@ export async function getIdemCached(redis, idem) {
 }
 
 export async function setIdemPending(redis, idem) {
-    return redis.setNXEx(
-        idemKey(idem),
-        config.holdTtlSec + config.idemTtlPadSec,
-        JSON.stringify({ status: "pending" }),
-    );
+    const holdTtlSec = Number(config.holdTtlSec) || 20;
+    const idemTtlPadSec = Number(config.idemTtlPadSec) || 5;
+    const ttl = holdTtlSec + idemTtlPadSec;
+
+    if (ttl <= 0) throw new Error("TTL must be positive");
+
+    const ok = await redis.setNXEx(idemKey(idem), { status: "pending" }, ttl, {
+        jitter: false,
+    });
+    return ok ? "OK" : "EXISTS";
 }
 
 export async function setIdemFinal(redis, idem, statusCode, body) {
-    return redis.setex(
+    const holdTtlSec = Number(config.holdTtlSec) || 20;
+    const idemTtlPadSec = Number(config.idemTtlPadSec) || 5;
+    const ttl = holdTtlSec + idemTtlPadSec;
+
+    if (ttl <= 0) throw new Error("TTL must be positive");
+
+    return redis.set(
         idemKey(idem),
-        config.holdTtlSec + config.idemTtlPadSec,
         JSON.stringify({ status: "done", statusCode, body }),
+        { ttl },
     );
 }

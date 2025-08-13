@@ -19,7 +19,7 @@ import { ReservationProducer } from "./kafka/producer/reservation.producer.js";
 import { PaymentClient } from "./services/payment-client.service.js";
 import { OrderService } from "./services/order.service.js";
 import { handlerMap } from "./kafka/consumer/handleMap.js";
-import { AutoCancelWorker } from "../workers/auto-cancel.worker.js";
+import { AutoCancelWorker } from "./workers/auto-cancel.worker.js";
 
 export async function configureContainer() {
     const logger = console;

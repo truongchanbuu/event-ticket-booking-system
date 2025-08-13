@@ -11,12 +11,13 @@ const holdZset = "hold_expiries";
 const confirmLockKey = (r) => `lock:confirm:${r}`;
 const committedKey = (r) => `reservation:committed:${r}`;
 
+// compare-del (unlock an toàn cho user_hold)
 const compareDelLua = `
-    if redis.call("GET", KEYS[1]) == ARGV[1] then
+  if redis.call("GET", KEYS[1]) == ARGV[1] then
     return redis.call("DEL", KEYS[1])
-    else
+  else
     return 0
-    end
+  end
 `;
 
 function normalizeAndMergeLines(lines, maxQty) {
@@ -41,7 +42,7 @@ function normalizeAndMergeLines(lines, maxQty) {
 
 export class ReservationService {
     constructor({
-        redisClient,
+        redisService,
         eventInventoryClient,
         reservationProducer,
         paymentClient,
@@ -49,23 +50,27 @@ export class ReservationService {
         logger = console,
         config = {},
     }) {
-        if (!redisClient) throw new Error("ReservationService: redis required");
+        if (!redisService)
+            throw new Error("ReservationService: redis required");
         if (!eventInventoryClient)
             throw new Error("ReservationService: eventInv required");
 
-        this.redis = redisClient;
+        this.redis = redisService;
         this.eventInv = eventInventoryClient;
         this.reservationProducer = reservationProducer;
         this.paymentClient = paymentClient;
         this.orders = orderService;
         this.logger = logger;
+        this.config = config;
 
+        // ENV fallback hợp lý
         this.holdTtlSec = Number.isFinite(config.holdTtlSec)
             ? Number(config.holdTtlSec)
-            : 900; // 15m
+            : Number(process.env.HOLD_TTL_SEC ?? 900);
+
         this.maxQty = Number.isFinite(config.maxQty)
             ? Number(config.maxQty)
-            : 20;
+            : Number(process.env.MAX_QTY_PER_LINE ?? 20);
 
         this.compareDelSha = null;
     }
@@ -79,7 +84,7 @@ export class ReservationService {
     userHoldKeyFrom(holdOrIds) {
         const userId = holdOrIds.userId ?? null;
         const eventId = holdOrIds.eventId;
-        const ip = holdOrIds.client?.ip ?? holdOrIds.clientIp ?? null;
+        const ip = holdOrIds.client?.ip ?? holdOrIds.clientIp ?? "unknown";
         return userId
             ? `user_hold:${userId}:${eventId}`
             : `user_hold_ip:${ip}:${eventId}`;
@@ -107,24 +112,38 @@ export class ReservationService {
         userId,
         userAgent,
     }) {
-        // 1) rate-limit nhẹ theo IP
-        const rl = await rateLimitOncePerMinute(
-            this.redis,
-            clientIp || "unknown",
-        );
-        if (!rl.allowed) {
-            return {
-                statusCode: 429,
-                body: {
-                    ok: false,
-                    error: "RATE_LIMITED",
-                    retryAfterSec: rl.retryAfterSec,
-                },
-            };
+        this.logger.debug?.("[reservation.create] input", {
+            eventId,
+            userId: userId || null,
+            clientIp: clientIp || null,
+            idemKey,
+        });
+
+        // 1) rate-limit nhẹ theo IP (dùng raw client vì libs kỳ vọng incr/expire/ttl)
+        if (process.env.RATE_LIMIT_PER_MINUTE !== "0") {
+            const rl = await rateLimitOncePerMinute(
+                this.redis.r,
+                clientIp || "unknown",
+            );
+            if (!rl.allowed) {
+                return {
+                    statusCode: 429,
+                    body: {
+                        ok: false,
+                        error: "RATE_LIMITED",
+                        retryAfterSec: rl.retryAfterSec,
+                    },
+                };
+            }
         }
 
         // 2) Idempotency cache
         const cached = await getIdemCached(this.redis, idemKey);
+        this.logger.debug?.("[reservation.create] idem.cached", {
+            has: !!cached,
+            status: cached?.status,
+        });
+
         if (cached?.status === "done") {
             return { statusCode: cached.statusCode || 201, body: cached.body };
         }
@@ -163,8 +182,12 @@ export class ReservationService {
             };
         }
 
-        // 4) Đặt idempotency pending
+        // 4) Đặt idempotency pending (libs trả "OK" | "EXISTS")
         const pend = await setIdemPending(this.redis, idemKey);
+        this.logger.debug?.("[reservation.create] idem.pending.set", {
+            result: pend,
+        });
+
         if (pend !== "OK") {
             return {
                 statusCode: 409,
@@ -181,55 +204,89 @@ export class ReservationService {
         const slug = `reservation:${reservationId}`;
         const expiresAt = Date.now() + this.holdTtlSec * 1000;
 
-        // Enforce 1 hold / user / event
-        const userHoldKey = userId
-            ? `user_hold:${userId}:${eventId}`
-            : `user_hold_ip:${clientIp}:${eventId}`;
-
-        const setOk = await this.redis.set(
+        // Enforce 1 hold / user / event (dùng đúng setNXEx boolean)
+        const userHoldKey = this.userHoldKeyFrom({ userId, eventId, clientIp });
+        this.logger.debug?.("[reservation.create] acquire user_hold", {
             userHoldKey,
-            reservationId,
-            "NX",
-            "EX",
-            this.holdTtlSec,
-        );
-        if (setOk !== "OK") {
-            const [[, existingId], [, pttl]] = await this.redis
-                .multi()
-                .get(userHoldKey)
-                .pttl(userHoldKey)
-                .exec();
-            return {
-                statusCode: 409,
-                body: {
-                    ok: false,
-                    error: "USER_ALREADY_HAS_HOLD_FOR_EVENT",
-                    reservationId: existingId || null,
-                    retryAfterMs: Math.max(0, Number(pttl || 0)),
+            holdTtlSec: this.holdTtlSec,
+        });
+
+        let acquired = false;
+        try {
+            acquired = await this.redis.setNXEx(
+                userHoldKey,
+                reservationId,
+                this.holdTtlSec,
+                {
+                    jitter: false,
                 },
+            );
+        } catch (e) {
+            this.logger.error("[reservation.create] setNXEx error", {
+                e: e?.message,
+            });
+            acquired = false;
+        }
+
+        this.logger.debug?.("[reservation.create] user_hold result", {
+            acquired,
+        });
+
+        if (!acquired) {
+            // đọc lại ai giữ + TTL còn lại (tránh multi với prefix)
+            const existingId = await this.redis.getRaw(userHoldKey);
+            const pttl = await this.redis.pttl(userHoldKey);
+            const body = {
+                ok: false,
+                error: "USER_ALREADY_HAS_HOLD_FOR_EVENT",
+                reservationId: existingId || null,
+                retryAfterMs: Math.max(0, Number(pttl || 0)),
             };
+            await setIdemFinal(this.redis, idemKey, 409, body);
+            return { statusCode: 409, body };
         }
 
         const reserved = [];
         try {
             // Reserve all-or-nothing
+            this.logger.debug?.("[reservation.create] reserve.start", {
+                reservationId,
+                slug,
+                lines: normLines,
+            });
+
             for (const l of normLines) {
                 const r = await this.eventInv.reserve(l.ttId, {
                     qty: l.qty,
                     eventId,
-                    hint: reservationId,
                     slug,
+                    affinityKey: reservationId,
                 });
-                if (!r?.ok) throw new Error("INSUFFICIENT_STOCK");
+
+                if (!r?.ok) {
+                    this.logger.error("[reservation.create] reserve.failed", {
+                        ttId: l.ttId,
+                        qty: l.qty,
+                        result: r,
+                    });
+                    throw new Error("INSUFFICIENT_STOCK");
+                }
+
                 reserved.push({
                     ttId: l.ttId,
                     qty: l.qty,
                     shardIndex: r.shardIndex,
                     invVersion: r.version ?? 0,
                 });
+                this.logger.debug?.("[reservation.create] reserve.ok", {
+                    ttId: l.ttId,
+                    qty: l.qty,
+                    shardIndex: r.shardIndex,
+                    version: r.version,
+                });
             }
 
-            // Persist hold + expiry index
+            // Persist hold + expiry index (KHÔNG stringify – RedisService tự serialize)
             const holdPayload = {
                 v: 1,
                 reservationId,
@@ -243,16 +300,15 @@ export class ReservationService {
                 client: { ip: clientIp || null, ua: userAgent || null },
                 slug,
             };
-            await this.redis.setex(
-                holdKey(reservationId),
-                this.holdTtlSec,
-                JSON.stringify(holdPayload),
-            );
+
+            await this.redis.set(holdKey(reservationId), holdPayload, {
+                ttl: this.holdTtlSec,
+            });
             await this.redis.zadd(holdZset, expiresAt, reservationId);
 
-            // Publish (non-blocking)
+            // Publish (best-effort)
             try {
-                await this.reservationProducer?.sendReservationCreated?.(
+                await this.reservationProducer.sendReservationCreated?.(
                     {
                         reservationId,
                         eventId,
@@ -267,7 +323,7 @@ export class ReservationService {
                     },
                 );
             } catch (e) {
-                this.logger.warn("[reservation.publish] failed", e?.message);
+                this.logger.warn("[reservation.publish] failed", e);
             }
 
             // Finalize idempotency
@@ -306,7 +362,10 @@ export class ReservationService {
                 return { statusCode: 409, body };
             }
 
-            this.logger.error("[reservation.create] unexpected", err);
+            this.logger.error("[reservation.create] unexpected", {
+                message: err?.message,
+                stack: err?.stack,
+            });
             const body = { ok: false, error: "INTERNAL" };
             await setIdemFinal(this.redis, idemKey, 500, body);
             return { statusCode: 500, body };
@@ -325,8 +384,8 @@ export class ReservationService {
         }
 
         const hKey = holdKey(reservationId);
-        const raw = await this.redis.get(hKey);
-        if (!raw) {
+        const hold = await this.redis.get(hKey);
+        if (!hold) {
             await this.redis.zrem(holdZset, reservationId).catch(() => {});
             return {
                 statusCode: 200,
@@ -334,8 +393,36 @@ export class ReservationService {
             };
         }
 
-        const hold = JSON.parse(raw);
         const slug = hold.slug || `reservation:${reservationId}`;
+
+        try {
+            if (this.paymentClient?.confirm) {
+                const resp = await this.paymentClient.confirm({
+                    reservationID: reservationId,
+                    refresh: false,
+                });
+                if (resp?.success) {
+                    const status = resp.data?.status; // PENDING | SUCCEEDED | FAILED | CANCELED | EXPIRED
+                    if (status === "SUCCEEDED") {
+                        // Idempotent refund theo reservationID
+                        await this.paymentClient.refund?.({
+                            reservationID: reservationId,
+                            reason,
+                            metadata: {
+                                eventId: hold.eventId,
+                                lines: hold.lines,
+                                source: "booking.cancelReservation",
+                            },
+                        });
+                    } else if (status === "PENDING") {
+                        // tuỳ chính sách: có thể trả 202 và hẹn retry/queue để VOID nếu provider hỗ trợ
+                        // return { statusCode: 202, body: { ok: false, error: "PAYMENT_PENDING_CANCEL_QUEUED" } };
+                    }
+                }
+            }
+        } catch (e) {
+            this.logger.warn("[cancelReservation.refund] failed", e?.message);
+        }
 
         // Release inventory (best-effort)
         await Promise.allSettled(
@@ -384,23 +471,24 @@ export class ReservationService {
         }
 
         // Idempotency (already committed?)
-        const already = await this.redis.get(committedKey(reservationId));
-        if (already === "1") {
+        const committed = await this.redis.getRaw(committedKey(reservationId));
+        if (committed === "1") {
             return {
                 statusCode: 200,
                 body: { ok: true, state: "ALREADY_COMMITTED" },
             };
         }
 
-        // Lock to avoid race with Kafka consumer
-        const got = await this.redis.set(
+        // Lock to avoid race với Kafka consumer
+        const lockAcquired = await this.redis.setNXEx(
             confirmLockKey(reservationId),
             "1",
-            "NX",
-            "EX",
             30,
+            {
+                jitter: false,
+            },
         );
-        if (got !== "OK") {
+        if (!lockAcquired) {
             return {
                 statusCode: 202,
                 body: { ok: false, error: "CONFIRM_IN_PROGRESS" },
@@ -410,21 +498,17 @@ export class ReservationService {
         try {
             // Load hold
             const hKey = holdKey(reservationId);
-            const raw = await this.redis.get(hKey);
-            if (!raw) {
-                await this.redis.set(
-                    committedKey(reservationId),
-                    "1",
-                    "EX",
-                    24 * 3600,
-                );
+            const hold = await this.redis.get(hKey);
+            if (!hold) {
+                await this.redis.set(committedKey(reservationId), "1", {
+                    ttl: 24 * 3600,
+                });
                 return {
                     statusCode: 200,
                     body: { ok: true, state: "ALREADY_CLEARED" },
                 };
             }
 
-            const hold = JSON.parse(raw);
             if (Date.now() > Number(hold.expiresAt || 0)) {
                 return {
                     statusCode: 409,
@@ -432,12 +516,16 @@ export class ReservationService {
                 };
             }
 
+            console.log(`PAYMENT...`);
             // Payment check (DB-first)
             if (this.paymentClient?.confirm) {
+                console.log(`PAYMENT STARTED...`);
                 const resp = await this.paymentClient.confirm({
                     reservationID: reservationId,
-                    refresh: false, // FE có thể gọi lại nhiều lần; refresh-on-demand khi cần
+                    refresh: false,
                 });
+
+                console.log(`PAYMENT RESP: ${JSON.stringify(resp)}`);
 
                 if (!resp.success) {
                     return {
@@ -465,19 +553,19 @@ export class ReservationService {
                     ? resp.data.amount
                     : null;
 
-                if (!this.orders?.createFromReservation) {
-                    this.logger.warn(
-                        "[confirmReservation] OrderService missing, skip order creation",
-                    );
-                } else {
+                if (this.orders?.createFromReservation) {
                     await this.orders.createFromReservation(hold, {
                         amount,
                         currency,
                         paymentIntentId,
                     });
+                } else {
+                    this.logger.warn(
+                        "[confirmReservation] OrderService missing, skip order creation",
+                    );
                 }
             } else {
-                // Không có paymentClient → tuỳ policy: ở đây vẫn commit (log cảnh báo)
+                // Không có paymentClient → commit theo policy (demo)
                 this.logger.warn(
                     "[confirmReservation] paymentClient missing; skipping paid check",
                 );
@@ -495,12 +583,9 @@ export class ReservationService {
             await Promise.allSettled([
                 this.redis.del(hKey),
                 this.redis.zrem(holdZset, reservationId),
-                this.redis.set(
-                    committedKey(reservationId),
-                    "1",
-                    "EX",
-                    24 * 3600,
-                ),
+                this.redis.set(committedKey(reservationId), "1", {
+                    ttl: 24 * 3600,
+                }),
             ]);
 
             // Publish committed (best-effort)
@@ -527,10 +612,9 @@ export class ReservationService {
             return { ok: false, reason: "RESERVATION_ID_REQUIRED" };
 
         const snapKey = `reservation:expired:${reservationId}`;
-        const raw = await this.redis.get(snapKey);
-        if (!raw) return { ok: false, reason: "NO_SNAPSHOT" };
+        const snap = await this.redis.get(snapKey); // object
+        if (!snap) return { ok: false, reason: "NO_SNAPSHOT" };
 
-        const snap = JSON.parse(raw);
         const now = Date.now();
         const graceMs = Number(this.config?.reservation?.graceMs ?? 0);
 
@@ -548,10 +632,10 @@ export class ReservationService {
             return { ok: false, reason: "GRACE_EXPIRED_REFUNDED" };
         }
 
-        // thử re-reserve all-or-nothing
         const slug = `late:${reservationId}`;
         const reserved = [];
         try {
+            // thử re-reserve all-or-nothing
             for (const l of snap.lines || []) {
                 const r = await this.eventInv.reserve(l.ttId, {
                     qty: l.qty,
@@ -592,12 +676,9 @@ export class ReservationService {
             await Promise.allSettled([
                 this.redis.del(snapKey),
                 this.redis.zrem("auto_cancel:due", reservationId),
-                this.redis.set(
-                    committedKey(reservationId),
-                    "1",
-                    "EX",
-                    24 * 3600,
-                ),
+                this.redis.set(committedKey(reservationId), "1", {
+                    ttl: 24 * 3600,
+                }),
             ]);
 
             // publish commit
@@ -640,7 +721,10 @@ export class ReservationService {
                 return { ok: false, reason: "OOS_REFUNDED" };
             }
 
-            this.logger.error("[lateCommit] unexpected", err);
+            this.logger.error("[lateCommit] unexpected", {
+                message: err?.message,
+                stack: err?.stack,
+            });
             return { ok: false, reason: "ERROR" };
         }
     }

@@ -23,6 +23,7 @@ export function createApp({ container, config, logger }) {
 
     if (config.app.nodeEnv === "development") app.use(cors());
     app.use(express.json());
+    app.use(express.urlencoded({ extended: false }));
     app.use(checkJson);
 
     app.get("/metrics", async (_req, res) => {

@@ -11,34 +11,27 @@ import {
     INVENTORY_MULTI_PROBE,
     INVENTORY_COMPAT_LEGACY,
     INVENTORY_SHARD_COUNT,
-    REDIS_INV_PREFIX,
     SHARDCOUNT_CACHE_TTL_MS,
 } from "../config/inventory-flags.js";
 
-import { metaKey, shardKey, versionKey } from "../inventory/key.js";
+import { metaKey, shardKey, versionKeyByTicketType } from "../inventory/key.js";
 import { allocateShards, pickShardIndex } from "../inventory/sharding.js";
 
 export class InventoryService {
     constructor({
+        inventoryMetaRepo,
         redisService,
         logger = console,
         redisPubSub,
         availabilityProducer,
     }) {
+        this.inventoryMetaRepo = inventoryMetaRepo;
         this.redis = redisService;
         this.logger = logger;
         this.pubsub = redisPubSub;
         this.availabilityProducer = availabilityProducer;
         this.shas = { reserve: null, release: null, seed: null };
         this._metaCache = new Map(); // ticketTypeId -> { shardCount, ts }
-    }
-
-    invKey(ttId) {
-        return `inv:${ttId}:remaining`;
-    }
-
-    invVersionKey(eventId) {
-        return `event:${eventId}:inv:version`;
     }
 
     async initialize({ seedLua, reserveLua, releaseLua }) {
@@ -64,22 +57,22 @@ export class InventoryService {
         ttId,
         capacity,
         shardCount,
-        {
-            ttlSec = 7 * 24 * 3600,
-            forceRepair = false,
-            prefix = REDIS_INV_PREFIX,
-        } = {},
+        { ttlSec = 7 * 24 * 3600, forceRepair = false, eventId } = {},
     ) {
         const m = Math.max(1, Math.floor(shardCount));
         const allocs = allocateShards(capacity, m);
 
-        const meta = metaKey(ttId, { prefix, hashTag: true });
+        const meta = metaKey(ttId, { hashTag: true });
+        const ver = versionKeyByTicketType(ttId, { hashTag: true });
         const keys = [
             meta,
+            ver,
             ...Array.from({ length: m }, (_, i) =>
-                shardKey(ttId, i, { prefix, hashTag: true }),
+                shardKey(ttId, i, { hashTag: true }),
             ),
         ];
+
+        console.log(`[SHARD KEY] - shards: ${keys}`);
 
         const argv = [
             String(capacity), // ARGV[1]
@@ -99,10 +92,34 @@ export class InventoryService {
         ) {
             throw new Error(`INVENTORY_SEED_UNEXPECTED:${res}`);
         }
-        return res; // "OK" | "EXISTS" | "REPAIRED:N"
+
+        if (this.inventoryMetaRepo && eventId) {
+            try {
+                await this.inventoryMetaRepo.upsert({
+                    ttId,
+                    eventID: eventId,
+                    capacity: Number(capacity) || 0,
+                    shardCount: Math.max(1, Math.floor(shardCount)),
+                    version: 0,
+                });
+            } catch (e) {
+                this.logger.warn("[inventory.meta.persist] failed", {
+                    ttId,
+                    eventId,
+                    err: e?.message,
+                });
+            }
+        } else {
+            this.logger.debug?.("[inventory.meta.persist] skipped", {
+                ttId,
+                eventId,
+                hasRepo: !!this.inventoryMetaRepo,
+            });
+        }
+        return res; // "OK" | "EXISTS" | "REPAIRED:N"    }
     }
 
-    async seedManySharded(ticketTypes, { prefix = REDIS_INV_PREFIX } = {}) {
+    async seedManySharded(ticketTypes) {
         if (!Array.isArray(ticketTypes) || ticketTypes.length === 0) return [];
         const results = [];
         for (const t of ticketTypes) {
@@ -110,14 +127,16 @@ export class InventoryService {
             const shardCount =
                 t.shardCount ?? this.config?.inventory?.defaultShardCount ?? 16;
             const r = await this.seedSharded(t.ticketTypeID, cap, shardCount, {
-                prefix,
+                eventId: t.eventId || t.eventID,
             });
-            results.push({ ticketTypeID: t.ticketTypeID, ...r });
+            results.push({ ticketTypeID: t.ticketTypeID, result: String(r) });
         }
+
         return results;
     }
 
     async getShardCount(ttId) {
+        console.log(`[TICKETID] - ${ttId}`);
         const now = Date.now();
         const cached = this._metaCache.get(ttId);
         if (cached && now - cached.ts < SHARDCOUNT_CACHE_TTL_MS) {
@@ -127,11 +146,10 @@ export class InventoryService {
         this.logger.warn("[inv.debug] adapter", {
             hasHgetall: typeof this.redis?.hgetall,
             kind: this.redis?.kind,
-            prefix: this.redis?.prefix,
         });
 
-        const kTag = metaKey(ttId, true); // inv:{TT_A}:meta
-        const kNo = metaKey(ttId, false); // inv:TT_A:meta
+        const kTag = metaKey(ttId, { hashTag: true });
+        const kNo = metaKey(ttId, { hashTag: false });
 
         const m1 = await this.redis.hgetall(kTag);
         const m2 =
@@ -149,12 +167,21 @@ export class InventoryService {
         const sc = Number(m?.shardCount ?? 0);
 
         if (!Number.isFinite(sc) || sc <= 0) {
-            // 5) Log thêm DB/Keyspace (single-node mới có DB)
+            if (this.inventoryMetaRepo) {
+                try {
+                    const doc = await this.inventoryMetaRepo.get(ttId);
+                    const sc2 = Number(doc?.shardCount ?? 0);
+                    if (Number.isFinite(sc2) && sc2 > 0) {
+                        this._metaCache.set(ttId, { shardCount: sc2, ts: now });
+                        return sc2;
+                    }
+                } catch {}
+            }
+
             try {
-                const info = await this.redis.raw?.info?.("keyspace"); // ioredis only
+                const info = await this.redis.raw?.info?.("keyspace");
                 this.logger.warn("[inv.debug] keyspace", { keyspace: info });
             } catch {}
-
             throw new Error(`[inventory] meta missing shardCount for ${ttId}`);
         }
 
@@ -210,16 +237,34 @@ export class InventoryService {
             INVENTORY_MULTI_PROBE,
         );
 
+        if (probes.length) {
+            const inspectKeys = probes
+                .slice(0, Math.min(4, probes.length))
+                .map((i) => shardKey(ttId, i, { hashTag: true }));
+            const vals = await (this.redis.mgetRaw
+                ? this.redis.mgetRaw(inspectKeys)
+                : Promise.all(inspectKeys.map((k) => this.redis.get(k))));
+            this.logger.warn("[reserve.peek]", { ttId, inspectKeys, vals });
+        }
+
         const sha = await this.loadReserveLua();
+        this.logger.warn("[reserve.debug] args", {
+            ttId,
+            qty,
+            typeOfQty: typeof qty,
+        });
 
         for (const idx of probes) {
-            const key = shardKey(ttId, idx);
-            const keys = eventId ? [key, versionKey(eventId)] : [key];
-            const [ok, val, ver] = await this.redis.evalsha(sha, keys, [
+            const shardKeyStr = shardKey(ttId, idx, { hashTag: true });
+            const verKey = versionKeyByTicketType(ttId, { hashTag: true });
+            const keys = [shardKeyStr, verKey];
+
+            this.logger.warn?.("[reserve.keys]", { shardKeyStr, verKey, qty });
+
+            const [ok, val, invVersion] = await this.redis.evalsha(sha, keys, [
                 String(qty),
             ]);
-
-            if (ok === 1 || ok === "1") {
+            if (Number(ok) === 1) {
                 const newRemaining = Number(val);
                 await this._afterChange({
                     eventId,
@@ -229,19 +274,18 @@ export class InventoryService {
                     remaining: newRemaining,
                     qty,
                     shardIndex: idx,
-                    invVersion: Number(ver ?? 0),
+                    invVersion: Number(invVersion ?? 0),
                 });
-
                 return {
                     ok: true,
                     shardIndex: idx,
                     newRemaining,
-                    version: Number(ver ?? 0),
+                    version: Number(invVersion ?? 0),
                 };
             }
         }
 
-        const key0 = shardKey(ttId, probes[0]);
+        const key0 = shardKey(ttId, probes[0], { hashTag: true });
         const cur0 = Number((await this.redis.get(key0)) ?? 0);
         return { ok: false, currentRemaining: cur0 };
     }
@@ -373,13 +417,17 @@ export class InventoryService {
             );
         }
         const sha = await this.loadReleaseLua();
-        const key = shardKey(ttId, shardIndex);
-        const keys = eventId ? [key, versionKey(eventId)] : [key];
-        const [ok, newRemaining, ver] = await this.redis.evalsha(sha, keys, [
-            String(qty),
-        ]);
 
-        if (ok === 1 || ok === "1") {
+        const shardKeyStr = shardKey(ttId, shardIndex, { hashTag: true });
+        const verKey = versionKeyByTicketType(ttId, { hashTag: true });
+        const keys = [shardKeyStr, verKey];
+
+        const [ok, newRemaining, invVersion] = await this.redis.evalsha(
+            sha,
+            keys,
+            [String(qty)],
+        );
+        if (Number(ok) === 1) {
             await this._afterChange({
                 eventId,
                 slug,
@@ -388,14 +436,16 @@ export class InventoryService {
                 remaining: Number(newRemaining),
                 qty,
                 shardIndex,
-                invVersion: Number(ver ?? 0),
+                invVersion: Number(invVersion ?? 0),
             });
+
             return {
                 ok: true,
                 newRemaining: Number(newRemaining),
-                version: Number(ver ?? 0),
+                version: Number(invVersion ?? 0),
             };
         }
+
         return { ok: false, newRemaining: Number(newRemaining) };
     }
 
@@ -406,7 +456,6 @@ export class InventoryService {
             ttIds.map((tt) => this.getShardCount(tt)),
         );
 
-        // 👉 bật hashTag để trùng format với seed
         const keyOpts = { hashTag: true };
         const shardKeys = [];
         for (let i = 0; i < ttIds.length; i++) {
@@ -423,30 +472,10 @@ export class InventoryService {
             sample: shardKeys.slice(0, 8),
         });
 
-        let rawShards, rawVersion;
-
-        if (typeof this.redis.pipeline === "function") {
-            const pipe = this.redis.pipeline();
-            shardKeys.forEach((k) => pipe.get(k));
-            pipe.get(versionKey(eventId)); // key version không cần hashTag
-            const replies = await pipe.exec();
-            rawShards = replies.slice(0, shardKeys.length).map((r) => r[1]);
-            rawVersion = replies[shardKeys.length][1];
-        } else {
-            // Fallback an toàn: mget theo từng TT để tránh MGET cross-slot (nếu dùng cluster)
-            rawShards = [];
-            let cursor = 0;
-            for (let i = 0; i < ttIds.length; i++) {
-                const m = shardCounts[i];
-                const keys = Array.from({ length: m }, (_, j) =>
-                    shardKey(ttIds[i], j, keyOpts),
-                );
-                const part = await this.redis.mget(keys); // adapter có mget([...])
-                rawShards.push(...part);
-                cursor += m;
-            }
-            rawVersion = await this.redis.get(versionKey(eventId));
-        }
+        const rawShards = await this.redis.mgetRaw(shardKeys);
+        const rawVersions = await Promise.all(
+            ttIds.map((tt) => this.redis.get(versionKeyByTicketType(tt))),
+        );
 
         const remains = [];
         let idx = 0;
@@ -458,10 +487,58 @@ export class InventoryService {
             remains.push(sum);
         }
 
-        const invVersion = Number(rawVersion ?? 0);
+        const invVersion = Math.max(
+            0,
+            ...rawVersions
+                .map((v) => Number(v ?? 0))
+                .filter((n) => Number.isFinite(n)),
+        );
+
         return {
             remains,
             invVersion: Number.isFinite(invVersion) ? invVersion : 0,
         };
+    }
+
+    async syncInventoryMeta(ttId, { eventId, shardCount: scOverride } = {}) {
+        if (!this.inventoryMetaRepo || !eventId) {
+            this.logger.debug?.("[inventory.meta.sync] skipped", {
+                ttId,
+                eventId,
+                hasRepo: !!this.inventoryMetaRepo,
+            });
+            return {
+                sum: null,
+                version: null,
+                hasNegative: null,
+                skipped: true,
+            };
+        }
+
+        const m = scOverride || (await this.getShardCount(ttId));
+        const keys = Array.from({ length: m }, (_, i) => shardKey(ttId, i));
+        const vals = this.redis.mgetRaw
+            ? await this.redis.mgetRaw(keys)
+            : await Promise.all(keys.map((k) => this.redis.get(k)));
+
+        const nums = vals.map((v) => Number(v ?? 0));
+        const sum = nums.reduce((a, b) => a + b, 0);
+        const hasNegative = nums.some((n) => n < 0);
+        const version =
+            Number(await this.redis.get(versionKeyByTicketType(ttId))) || 0;
+
+        try {
+            await this.inventoryMetaRepo.touchSync(ttId, {
+                version,
+                negativesDetected: hasNegative,
+            });
+        } catch (e) {
+            this.logger.warn("[inventory.meta.sync] failed", {
+                ttId,
+                eventId,
+                err: e?.message,
+            });
+        }
+        return { sum, version, hasNegative, skipped: false };
     }
 }

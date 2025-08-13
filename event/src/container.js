@@ -38,6 +38,8 @@ import { AvailabilitySSERoutes } from "./routes/availability.see.routes.js";
 import { TestRoutes } from "./routes/test.routes.js";
 import { AvailabilityRoutes } from "./routes/availability.routes.js";
 import { AvailabilityProducer } from "./kafka/availability-lifecycle.producer.js";
+import { debugRouter } from "./routes/debug.routes.js";
+import { InventoryMetaRepo } from "./repo/invetory.repo.js";
 
 export async function configureContainer() {
     const logger = console;
@@ -90,6 +92,8 @@ export async function configureContainer() {
         db: asValue(db),
         handlerMap: asValue(handlerMap),
         httpRegistry: asValue(httpRegistry),
+
+        inventoryMetaRepo: asClass(InventoryMetaRepo).singleton(),
 
         // hạ tầng đã pre-init
         kafkaService: asValue(kafkaServiceInstance),
@@ -195,6 +199,7 @@ export async function configureContainer() {
     if (config.app.nodeEnv === "development") {
         container.register({
             testRoutes: asClass(TestRoutes).singleton(),
+            debugRoutes: asFunction(debugRouter),
         });
     }
 

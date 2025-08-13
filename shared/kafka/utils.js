@@ -1,11 +1,11 @@
-export function buildEnvelope(type, payload, meta) {
+export function buildEnvelope({ type, version, payload, meta }) {
   return {
     type,
-    version: this.schemaVersion,
+    version: version ?? 1,
     payload,
     meta: {
       at: new Date().toISOString(),
-      producer: this.producerName,
+      producer: meta?.producerName,
       ...meta,
     },
   };

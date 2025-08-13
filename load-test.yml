@@ -1,0 +1,16 @@
+config:
+  target: "http://localhost:3006" # Đảm bảo URL này là của API booking-service của bạn
+  phases:
+    - duration: 60 # Thời gian chạy load test (60 giây)
+      arrivalRate: 50 # Số lượng request gửi đến mỗi giây trong 60 giây đầu tiên
+      rampTo: 300 # Tăng dần từ 50 request lên 300 mỗi giây
+    - duration: 60 # Tiếp tục gửi 300 request mỗi giây trong 60 giây tiếp theo
+      arrivalRate: 300 # Giữ nguyên 300 request mỗi giây
+
+scenarios:
+  - flow:
+      - post:
+          url: "/api/checkout/reservations" # Đây là URL của booking API bạn muốn test
+          json:
+            eventId: "EV_123" # Tham số eventId cần thiết cho việc đặt vé
+            quantity: 1 # Số lượng vé bạn muốn đặt

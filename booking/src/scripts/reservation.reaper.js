@@ -36,6 +36,7 @@ export class ReservationReaper {
         this.eventInv = eventInventoryClient;
         this.reservationProducer = reservationProducer;
         this.logger = logger;
+        this.config = config;
         this.interval = null;
 
         const c = config.reaper || {};
@@ -130,14 +131,10 @@ export class ReservationReaper {
             const token = `${now}-${Math.random().toString(36).slice(2)}`; // unique per attempt
 
             // Acquire lock
-            const got = await this.redis.set(
-                lockKey,
-                token,
-                "NX",
-                "EX",
-                this.lockTtl,
-            );
-            if (got !== "OK") continue;
+            const got = await this.redis.setNXEx(lockKey, token, this.lockTtl, {
+                jitter: false,
+            });
+            if (!got) continue;
 
             try {
                 const hKey = `hold:${reservationId}`;
@@ -152,7 +149,7 @@ export class ReservationReaper {
                 }
 
                 /** @type {{eventId:string, userId?:string|null, client?:{ip?:string}, slug?:string, expiresAt?:number, lines?:Array<{ttId:string, qty:number, shardIndex?:number}>}} */
-                const hold = JSON.parse(raw);
+                const hold = typeof raw === "string" ? JSON.parse(raw) : raw;
                 const slug = hold.slug || `reservation:${reservationId}`;
 
                 // Edge: clock skew -> not actually expired; skip (do not zrem)
@@ -216,11 +213,10 @@ export class ReservationReaper {
                             expiredAt: hold.expiresAt,
                             createdAt: hold.createdAt,
                         };
-                        await this.redis.setex(
-                            snapKey,
-                            snapTtlSec,
-                            JSON.stringify(snapshot),
-                        );
+
+                        await this.redis.set(snapKey, snapshot, {
+                            ttl: snapTtlSec,
+                        });
 
                         const when = Number(hold.expiresAt) + graceMs;
                         await this.redis.zadd(

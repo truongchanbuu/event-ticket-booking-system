@@ -17,6 +17,7 @@ function parseArgs() {
         else if (a === "--shard" || a === "-s")
             out.shard = Number(args[++i] || out.shard);
         else if (a === "--prefix" || a === "-p") out.prefix = args[++i];
+        else if (a === "--eventId" || a === "-eid") out.prefix = args[++i];
     }
     return out;
 }
@@ -36,7 +37,7 @@ function parseArgs() {
             opts.ticketType,
             opts.capacity,
             opts.shard,
-            { prefix: opts.prefix },
+            { prefix: opts.prefix, eventId: opts.eventId },
         );
         console.log("[seed-inventory]", {
             ...res,

@@ -53,7 +53,7 @@ export class PaymentClient {
                 ...this._withTimeout(opts.signal, opts.timeoutMs),
             };
             const res = await this.http.post(
-                "/internal/payment/checkout",
+                "/api/internal/payment/checkout",
                 body,
                 httpOpts,
             );
@@ -95,7 +95,7 @@ export class PaymentClient {
 
             const httpOpts = withTimeout(opts.signal, opts.timeoutMs);
             const res = await this.http.post(
-                "/internal/payment/confirm",
+                "/api/internal/payment/confirm",
                 body,
                 httpOpts,
             );
@@ -123,6 +123,49 @@ export class PaymentClient {
                     err?.code ||
                     (statusCode === 504 ? "GATEWAY_TIMEOUT" : "REQUEST_FAILED"),
             });
+        }
+    }
+
+    async refund({ reservationID, reason, metadata, idempotencyKey } = {}) {
+        if (!reservationID || typeof reservationID !== "string") {
+            return {
+                success: false,
+                message: "RESERVATION_ID_REQUIRED",
+                statusCode: 400,
+                data: null,
+            };
+        }
+
+        try {
+            const headers = {};
+            headers["Idempotency-Key"] =
+                idempotencyKey || `${reservationID}:refund`;
+
+            const body = { reservationID, reason, metadata };
+            const res = await this.http.post(
+                "/api/internal/payment/refund",
+                body,
+                {
+                    headers,
+                },
+            );
+
+            if (res?.data?.success === true) return res.data;
+
+            return {
+                success: false,
+                message: res?.data?.message || "PAYMENT_REFUND_FAILED",
+                statusCode: res?.status || res?.data?.statusCode || 500,
+                data: res?.data?.data ?? null,
+            };
+        } catch (e) {
+            this.logger.warn("[PaymentClient.refund] error", e?.message);
+            return {
+                success: false,
+                message: "PAYMENT_REFUND_FAILED",
+                statusCode: 502,
+                data: null,
+            };
         }
     }
 }

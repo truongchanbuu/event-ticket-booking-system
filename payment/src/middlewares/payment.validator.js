@@ -167,4 +167,31 @@ export class PaymentValidator extends BaseValidator {
         }),
         this.handleValidationErrors,
     ];
+
+    static validateRefund = [
+        checkSchema({
+            reservationID: {
+                in: ["body"],
+                exists: { errorMessage: "reservationID is required." },
+                isString: { errorMessage: "reservationID must be a string." },
+                trim: true,
+                notEmpty: { errorMessage: "reservationID cannot be empty." },
+            },
+            reason: {
+                in: ["body"],
+                optional: true,
+                isString: { errorMessage: "reason must be a string." },
+                isLength: {
+                    options: { max: 100 },
+                    errorMessage: "reason too long (max 100).",
+                },
+            },
+            metadata: {
+                in: ["body"],
+                optional: true,
+                isObject: { errorMessage: "metadata must be an object." },
+            },
+        }),
+        this.handleValidationErrors,
+    ];
 }

@@ -1,4 +1,4 @@
-import { updateHoldMetaKeepTtl, ttlRemainingMs } from "./utils/hold-meta.js";
+import { ttlRemainingMs, updateHoldMetaKeepTtl } from "../utils/utils.js";
 
 export class PaymentCanceledHandler {
     constructor({

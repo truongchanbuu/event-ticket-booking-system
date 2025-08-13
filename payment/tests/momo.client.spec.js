@@ -1,7 +1,7 @@
 import nock from "nock";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
-import { MomoClient } from "../src/providers/momo.client.js";
+import { MomoClient } from "../src/clients/momo.client.js";
 
 const endpoint = "https://test-payment.momo.vn";
 

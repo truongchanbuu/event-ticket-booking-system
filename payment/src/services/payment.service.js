@@ -6,31 +6,31 @@ import {
 
 import {
     PAYMENT_STATUS,
+    REFUND_STATUS,
     TERMINAL,
     normalizeStatus,
 } from "../enums/payment-status.js";
+import { MOMO_MODES } from "../enums/payment-provider.js";
+import { genMockMomoKeys } from "../utils/payment.utils.js";
 
 const PAYMENT_COLLECTION = "paymentMethods";
 const PAYMENT_INTENTS = "paymentIntents";
+const PAYMENT_REFUNDS = "paymentRefunds";
 const REFRESH_TTL_MS_DEFAULT = 10_000;
 
 export class PaymentService {
-    constructor({
-        db,
-        redisService,
-        providerClients = {},
-        paymentProducer,
-        logger = console,
-    }) {
+    constructor({ db, redisService, paymentProducer, logger = console }) {
         this.db = db;
         this.redisService = redisService;
         this.logger = logger;
+
+        this.paymentProviderFactory = paymentProviderFactory;
 
         this.paymentCollection = this.db.collection(PAYMENT_COLLECTION);
 
         // INTENTS
         this.paymentIntentCollection = this.db.collection(PAYMENT_INTENTS);
-        this.providers = providerClients;
+        this.paymentRefundCollection = this.db.collection(PAYMENT_REFUNDS);
         this.paymentProducer = paymentProducer;
         this.refreshTtlMs = REFRESH_TTL_MS_DEFAULT;
 
@@ -70,7 +70,6 @@ export class PaymentService {
 
     // ---- Find or create ----
     async findOrCreatePaymentMethod(userID, paymentData) {
-        // Validate provider
         const type = PROVIDER_TYPE_MAP[paymentData.provider];
         if (!type) {
             throw new AppError({
@@ -80,71 +79,164 @@ export class PaymentService {
             });
         }
 
+        if (paymentData.provider === "momo") {
+            const mode =
+                paymentData.mode && MOMO_MODES.has(paymentData.mode)
+                    ? paymentData.mode
+                    : "mock";
+            paymentData.mode = mode;
+
+            if (mode === "mock") {
+                if (!paymentData.mock) paymentData.mock = {};
+                if (
+                    !paymentData.mock.partnerCode ||
+                    !paymentData.mock.accessKey ||
+                    !paymentData.mock.secretKey
+                ) {
+                    paymentData.mock = {
+                        ...genMockMomoKeys(userID),
+                        ...paymentData.mock,
+                    };
+                }
+            } else if (mode === "merchant") {
+                const ok =
+                    paymentData.merchant?.partnerCode &&
+                    paymentData.merchant?.accessKey &&
+                    paymentData.merchant?.secretKey &&
+                    paymentData.merchant?.returnUrl &&
+                    paymentData.merchant?.ipnUrl;
+                if (!ok) {
+                    throw new AppError({
+                        message:
+                            "Missing MoMo merchant credentials (partnerCode/accessKey/secretKey/returnUrl/ipnUrl).",
+                        errorCode: ERROR_CODE.INVALID_DATA,
+                        statusCode: 400,
+                    });
+                }
+            } else if (mode === "manual") {
+                const ok =
+                    paymentData.account ||
+                    paymentData.manual?.momoNumber ||
+                    paymentData.manual?.qrImageUrl;
+                if (!ok) {
+                    throw new AppError({
+                        message:
+                            "Manual MoMo requires account or manual.momoNumber/qrImageUrl.",
+                        errorCode: ERROR_CODE.INVALID_DATA,
+                        statusCode: 400,
+                    });
+                }
+            }
+        }
+
+        // Build unique query
         let findQuery = this.paymentCollection.where("userID", "==", userID);
         let hasUniqueCriteria = false;
 
         switch (paymentData.provider) {
-            case "momo":
-            case "zalopay":
+            case "momo": {
+                findQuery = findQuery
+                    .where("provider", "==", "momo")
+                    .where("mode", "==", paymentData.mode || "mock");
+
+                if (paymentData.mode === "mock") {
+                    const partnerCode = paymentData.mock?.partnerCode;
+                    if (partnerCode) {
+                        findQuery = findQuery.where(
+                            "mock.partnerCode",
+                            "==",
+                            partnerCode,
+                        );
+                        hasUniqueCriteria = true;
+                    }
+                } else if (paymentData.mode === "merchant") {
+                    const partnerCode = paymentData.merchant?.partnerCode;
+                    if (partnerCode) {
+                        findQuery = findQuery.where(
+                            "merchant.partnerCode",
+                            "==",
+                            partnerCode,
+                        );
+                        hasUniqueCriteria = true;
+                    }
+                } else {
+                    const acc =
+                        paymentData.account || paymentData.manual?.momoNumber;
+                    if (!acc) {
+                        throw new AppError({
+                            message:
+                                "Manual MoMo requires account or manual.momoNumber.",
+                            errorCode: ERROR_CODE.INVALID_DATA,
+                            statusCode: 400,
+                        });
+                    }
+                    findQuery = findQuery.where("account", "==", acc);
+                    hasUniqueCriteria = true;
+                }
+                break;
+            }
+            case "zalopay": {
                 if (!paymentData.account) {
                     throw new AppError({
-                        message: `Account identifier (e.g., phone, email) is required for ${paymentData.provider}.`,
+                        message: "Account identifier is required for zalopay.",
                         errorCode: ERROR_CODE.INVALID_DATA,
                         statusCode: 400,
                     });
                 }
                 findQuery = findQuery
-                    .where("provider", "==", paymentData.provider)
+                    .where("provider", "==", "zalopay")
                     .where("account", "==", paymentData.account);
                 hasUniqueCriteria = true;
                 break;
+            }
             case "stripe":
             default:
                 hasUniqueCriteria = false;
                 break;
         }
 
-        // If unique criteria applies, check if method exists
+        // Deduplicate by unique criteria
         if (hasUniqueCriteria) {
-            const querySnapshot = await findQuery.limit(1).get();
-            const existingMethodDoc = querySnapshot.docs[0];
-
-            if (existingMethodDoc) {
-                const existingMethod = {
-                    paymentMethodID: existingMethodDoc.id,
-                    ...existingMethodDoc.data(),
-                };
-
-                if (paymentData.isDefault && !existingMethod.isDefault) {
+            const snap = await findQuery.limit(1).get();
+            const doc = snap.docs[0];
+            if (doc) {
+                const existing = { paymentMethodID: doc.id, ...doc.data() };
+                if (paymentData.isDefault && !existing.isDefault) {
                     await this.setDefaultPaymentMethod(
                         userID,
-                        existingMethod.paymentMethodID,
+                        existing.paymentMethodID,
                     );
-                    return { ...existingMethod, isDefault: true };
+                    return { ...existing, isDefault: true };
                 }
-                return existingMethod;
+                return existing;
             }
         }
 
-        // Create new method
+        const countSnap = await this.paymentCollection
+            .where("userID", "==", userID)
+            .limit(1)
+            .get();
+        const isFirst = countSnap.empty;
+
         const now = new Date().toISOString();
         const newPaymentMethodData = {
             ...paymentData,
             userID,
             type,
-            isDefault: paymentData.isDefault || false,
+            isDefault: paymentData.isDefault || isFirst || false,
             createdAt: now,
             updatedAt: now,
         };
 
-        // If setting as default, unset others first
         if (newPaymentMethodData.isDefault) {
             await this.unsetDefaultAll(userID);
         }
 
+        // (Optional) Encrypt secrets before storing (KMS)
+        // if (newPaymentMethodData.mock?.secretKey) { ... }
+
         const docRef = await this.paymentCollection.add(newPaymentMethodData);
         await this.invalidateCache(userID);
-
         return { paymentMethodID: docRef.id, ...newPaymentMethodData };
     }
 
@@ -494,4 +586,294 @@ export class PaymentService {
             source: "provider",
         };
     }
+
+    async createOrGetRefund({ reservationID, reason, metadata, idemKey }) {
+        // 1) validate
+        if (!reservationID) {
+            return {
+                statusCode: 400,
+                envelope: {
+                    success: false,
+                    message: "reservationID is required.",
+                    errorCode: ERROR_CODE.INVALID_DATA,
+                    statusCode: 400,
+                    data: null,
+                },
+            };
+        }
+        const effectiveIdemKey = idemKey || `${reservationID}:refund`;
+
+        // 2) find intent by reservation (ưu tiên SUCCEEDED)
+        const intentDoc = await this._getByReservationID(reservationID);
+        if (!intentDoc) {
+            return {
+                statusCode: 404,
+                envelope: {
+                    success: false,
+                    message: "Payment intent not found for reservation.",
+                    errorCode: ERROR_CODE.NOT_FOUND,
+                    statusCode: 404,
+                    data: null,
+                },
+            };
+        }
+        if (intentDoc.status !== PAYMENT_STATUS.SUCCEEDED) {
+            return {
+                statusCode: 409,
+                envelope: {
+                    success: false,
+                    message: "NOT_REFUNDABLE",
+                    errorCode: ERROR_CODE.INVALID_DATA,
+                    statusCode: 409,
+                    data: null,
+                },
+            };
+        }
+
+        const {
+            paymentIntentID,
+            provider,
+            amount,
+            currency = "VND",
+            transactionId,
+            orderId,
+        } = intentDoc;
+
+        // 3) idempotency: tìm refund theo (reservationID, idemKey)
+        // (Firestore thật cần composite index; ở đây có thể filter code-side)
+        const existingByIdem = await this._findRefundByReservationAndIdemKey(
+            reservationID,
+            effectiveIdemKey,
+        );
+        if (existingByIdem) {
+            return {
+                statusCode: 200,
+                envelope: {
+                    success: true,
+                    message: "Refund processed",
+                    data: this._refundView(existingByIdem, {
+                        idempotent: true,
+                    }),
+                },
+            };
+        }
+
+        // Đã từng refund full thành công?
+        const existingSucceeded =
+            await this._findRefundSucceededByPaymentIntent(paymentIntentID);
+        if (existingSucceeded) {
+            return {
+                statusCode: 200,
+                envelope: {
+                    success: true,
+                    message: "Refund processed",
+                    data: this._refundView(existingSucceeded, {
+                        idempotent: true,
+                    }),
+                },
+            };
+        }
+
+        // 4) Tạo refund record (PENDING)
+        const nowIso = new Date().toISOString();
+        const newRefund = {
+            reservationID,
+            paymentIntentID,
+            provider,
+            amount,
+            currency,
+            status: REFUND_STATUS.PENDING,
+            reason: reason || null,
+            metadata: metadata || null,
+            idemKey: effectiveIdemKey,
+            providerRefundId: null,
+            lastProviderCheckAt: null,
+            refundedAt: null,
+            errorCode: null,
+            errorMessage: null,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+        };
+
+        const refundRef = await this.paymentRefundCollection.add(newRefund);
+        const refundId = refundRef.id;
+
+        // 5) call provider.refund() (best-effort)
+        let providerResp = null;
+        try {
+            const client = this.providers?.[provider];
+            if (!client || typeof client.refund !== "function") {
+                throw new Error(
+                    `Unsupported or missing provider client for refund: ${provider}`,
+                );
+            }
+
+            providerResp = await client.refund({
+                paymentIntentId: paymentIntentID,
+                transactionId,
+                orderId,
+                amount,
+                currency,
+                reason,
+                metadata,
+            });
+
+            // map status
+            const s = (providerResp?.status || "").toUpperCase();
+            const isSucceeded = s === REFUND_STATUS.SUCCEEDED;
+            const isPending = s === REFUND_STATUS.PENDING;
+            const isFailed = s === REFUND_STATUS.FAILED;
+
+            const upd = {
+                status: isSucceeded
+                    ? REFUND_STATUS.SUCCEEDED
+                    : isFailed
+                      ? REFUND_STATUS.FAILED
+                      : REFUND_STATUS.PENDING,
+                providerRefundId: providerResp?.providerRefundId || null,
+                lastProviderCheckAt: new Date().toISOString(),
+                refundedAt: isSucceeded ? new Date().toISOString() : null,
+                errorCode: providerResp?.errorCode || null,
+                errorMessage: providerResp?.errorMessage || null,
+                updatedAt: new Date().toISOString(),
+                providerLastRaw: providerResp?.raw || providerResp || null,
+            };
+
+            await refundRef.update(upd);
+
+            // 6) publish Kafka khi terminal
+            if (
+                upd.status === REFUND_STATUS.SUCCEEDED ||
+                upd.status === REFUND_STATUS.FAILED
+            ) {
+                const payload = {
+                    reservationID,
+                    paymentIntentID,
+                    update: {
+                        refund: {
+                            status: upd.status,
+                            amount,
+                            currency,
+                            refundId,
+                            providerRefundId: upd.providerRefundId,
+                        },
+                    },
+                    ts: new Date().toISOString(),
+                };
+                const meta = { idempotencyKey: `${refundId}:${upd.status}` };
+                try {
+                    await this.paymentProducer.statusUpdated(payload, meta);
+                } catch (e) {
+                    this.logger.error(
+                        "[PaymentService] publish refund status failed:",
+                        e?.message || e,
+                    );
+                }
+            }
+        } catch (err) {
+            // network/provider error -> giữ PENDING cho retry/confirm sau
+            const upd = {
+                status: REFUND_STATUS.PENDING,
+                lastProviderCheckAt: new Date().toISOString(),
+                errorCode: "PROVIDER_ERROR",
+                errorMessage: err?.message || String(err),
+                updatedAt: new Date().toISOString(),
+            };
+            await refundRef.update(upd);
+        }
+
+        // 7) trả về
+        const snapData =
+            typeof snapData.data === "function"
+                ? snapData.data()
+                : snapData.data || {};
+        const saved = { refundId, ...snapData };
+        return {
+            statusCode: 200,
+            envelope: {
+                success: true,
+                message: "Refund processed",
+                data: this._refundView(saved, { idempotent: false }),
+            },
+        };
+    }
+
+    _refundView(r, { idempotent }) {
+        return {
+            reservationID: r.reservationID,
+            paymentIntentID: r.paymentIntentID,
+            refundId: r.refundId || r.id,
+            provider: r.provider,
+            refundStatus: r.status,
+            amount: r.amount,
+            currency: r.currency,
+            providerRefundId: r.providerRefundId || null,
+            createdAt: r.createdAt,
+            updatedAt: r.updatedAt,
+            idempotent,
+        };
+    }
+
+    async _findRefundByReservationAndIdemKey(reservationID, idemKey) {
+        const q = await this.paymentRefundCollection
+            .where("reservationID", "==", reservationID)
+            .limit(50)
+            .get();
+
+        const doc = (q.docs || [])
+            .map((d) => ({ id: d.id, ...d.data() }))
+            .find((x) => x.idemKey === idemKey);
+
+        return doc ? { refundId: doc.id, ...doc } : null;
+    }
+
+    async _findRefundSucceededByPaymentIntent(paymentIntentID) {
+        const q = await this.paymentRefundCollection
+            .where("paymentIntentID", "==", paymentIntentID)
+            .limit(50)
+            .get();
+
+        const doc = (q.docs || [])
+            .map((d) => ({ id: d.id, ...d.data() }))
+            .find((x) => x.status === REFUND_STATUS.SUCCEEDED);
+
+        return doc ? { refundId: doc.id, ...doc } : null;
+    }
+
+    // async processIpnResult({
+    //     orderId,
+    //     reservationId,
+    //     status,
+    //     amount,
+    //     currency,
+    //     transactionId,
+    //     raw,
+    // }) {
+    //     await this.withIdempotency(`ipn:${orderId}:${status}`, async () => {
+    //         await this.verifyAgainstDB({ orderId, amount, currency });
+
+    //         if (status === "SUCCEEDED") {
+    //             await this.confirmReservationWithPolicy({
+    //                 reservationID: reservationId,
+    //                 transactionId,
+    //                 amount,
+    //                 currency,
+    //             });
+    //             await this.paymentProducer.succeeded({
+    //                 orderId,
+    //                 reservationId,
+    //                 transactionId,
+    //                 amount,
+    //                 currency,
+    //             });
+    //         } else {
+    //             await this.markPaymentFailed(reservationId, status);
+    //             await this.paymentProducer.failed({
+    //                 orderId,
+    //                 reservationId,
+    //                 status,
+    //             });
+    //         }
+    //     });
+    // }
 }

@@ -35,7 +35,7 @@ export const config = {
     },
 
     serviceUrls: {
-        eventService: process.env.EVENT_SERVICE_SECRET_URL,
+        eventService: process.env.EVENT_SERVICE_URL,
         ticketService: process.env.TICKET_SERVICE_URL,
         paymentService: process.env.PAYMENT_SERVICE_URL,
         frontend: process.env.FRONTEND_URL,

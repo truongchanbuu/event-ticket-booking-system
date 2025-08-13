@@ -31,8 +31,7 @@ export const INVENTORY_SHARD_COUNT = (() => {
     return n;
 })();
 
-export const REDIS_INV_PREFIX =
-    process.env.REDIS_INV_PREFIX || process.env.REDIS_PREFIX || "inv";
+export const REDIS_INV_PREFIX = process.env.REDIS_INV_PREFIX || "inv";
 
 export const SHARDCOUNT_CACHE_TTL_MS = Number(
     process.env.INV_SHARDCOUNT_TTL_MS || 5000,

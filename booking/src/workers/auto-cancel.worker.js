@@ -35,10 +35,7 @@ export class AutoCancelWorker {
         this.tickMs = Number(config?.autoCancel?.tickMs ?? 1500);
         this.batchSize = Number(config?.autoCancel?.batchSize ?? 300);
         this.lockTtl = Number(config?.autoCancel?.lockTtl ?? 10);
-        this.enabled = Boolean(
-            config?.reservation?.autoCancel?.enabled ?? true,
-        );
-
+        this.enabled = Boolean(config?.autoCancel?.enabled ?? true);
         this.timer = null;
     }
 
@@ -88,14 +85,11 @@ export class AutoCancelWorker {
 
         for (const reservationId of dueIds) {
             const lockKey = `lock:auto_cancel:${reservationId}`;
-            const got = await this.redis.set(
-                lockKey,
-                "1",
-                "NX",
-                "EX",
-                this.lockTtl,
-            );
-            if (got !== "OK") continue;
+
+            const got = await this.redis.setNXEx(lockKey, "1", this.lockTtl, {
+                jitter: false,
+            });
+            if (!got) continue;
 
             try {
                 processed++;

@@ -1,6 +1,6 @@
 export class PaymentSucceededHandler {
     constructor({ reservationService, redisService, logger = console }) {
-        this.reservationService = reservationService;
+        this.svc = reservationService;
         this.logger = logger;
         this.redis = redisService;
     }
@@ -24,14 +24,12 @@ export class PaymentSucceededHandler {
             await this.svc.confirmReservation({ reservationId });
             return;
         }
-        +(
-            // late payment path
-            this.logger.info(
-                "[PaymentSucceeded] late payment → attempt from snapshot",
-                {
-                    reservationId,
-                },
-            )
+        // late payment path
+        this.logger.info(
+            "[PaymentSucceeded] late payment → attempt from snapshot",
+            {
+                reservationId,p
+            },
         );
         await this.svc.attemptLateCommitFromSnapshot({
             reservationId,
