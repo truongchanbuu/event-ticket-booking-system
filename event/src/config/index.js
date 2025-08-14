@@ -106,6 +106,7 @@ const config = {
         topics: {
             main_events: TOPICS.EVENT, // e.g. "events.lifecycle.v1"
             ticket_type_events: TOPICS.TICKET, // e.g. "events.ticket-types.v1"
+            availability_events: TOPICS.AVAILABILITY,
         },
 
         // group ids: duy nhất cho service
@@ -113,6 +114,9 @@ const config = {
             main_events: process.env.KAFKA_GID_MAIN || "event-service-main",
             ticket_type_group:
                 process.env.KAFKA_GID_TICKET || "event-service-ticket-type",
+            availability_group:
+                process.env.KAFKA_GID_AVAILABILITY ||
+                "event-service-availability",
             dlq_group: process.env.KAFKA_GID_DLQ || "event-service-dlq",
             global_retry_group:
                 process.env.KAFKA_GID_RETRY || "event-service-retry",
@@ -124,7 +128,6 @@ const config = {
                 process.env.KAFKA_DLQ_MAIN || "events.lifecycle.v1.dlq",
         },
 
-        // gợi ý cấu hình partitions/replication mặc định cho ensureTopicsExist
         defaults: {
             replicationFactor: Number.parseInt(
                 process.env.KAFKA_REPL_FACTOR || (isProduction ? "3" : "1"),

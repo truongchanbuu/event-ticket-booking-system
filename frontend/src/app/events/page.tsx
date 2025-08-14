@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { Event, EventFilters } from "@/schema";
 import { useDebounceCallback } from "@/hooks/use-debounce-callback";
 import { AppUser } from "@/schema/user";
+import { usePublicEvents } from "@/hooks/use-public-events";
 
 const MAX_SUGGEST_ORGANIZER = 6;
 const DEBOUNCE_DELAY = 300;
@@ -19,116 +21,73 @@ export default function EventsPage() {
   const [filters, setFilters] = useState<EventFilters>({});
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
-  // Pagination states
-  const [page, setPage] = useState(1);
-  const [events, setEvents] = useState<Event[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  // Debounce filter changes để đỡ re-render
+  const debouncedSetFilters = useDebounceCallback(setFilters, DEBOUNCE_DELAY);
 
+  // ---- ORGANIZERS (mock) ----
   const { data: organizers = [] } = useQuery<AppUser[]>({
     queryKey: ["/api/organizers"],
     queryFn: () => Promise.resolve([]),
   });
-
   const suggestedOrganizers = organizers.slice(0, MAX_SUGGEST_ORGANIZER);
 
-  // Debounced filter change using custom hook
-  const debouncedSetFilters = useDebounceCallback(setFilters, DEBOUNCE_DELAY);
+  // ---- EVENTS (infinite) ----
+  const {
+    data,
+    error,
+    isLoading,
+    isFetchingNextPage,
+    fetchNextPage,
+    hasNextPage,
+    refetch,
+    isRefetching,
+  } = usePublicEvents({
+    limit: 9,
+    sortBy: "createdAt",
+    sortOrder: "desc",
+  });
 
-  // Fetch events with pagination
-  const fetchEvents = async (
-    pageNum: number,
-    currentFilters: EventFilters,
-    append = false
-  ) => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Giả lập API: mockEvents.slice theo page
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      const pageSize = 6;
+  const pages = data?.pages ?? [];
 
-      // Lọc theo filter
-      let filtered = [];
+  const allEvents: Event[] = useMemo(() => {
+    return pages.flatMap((p) => p.data as unknown as Event[]);
+  }, [data]);
 
-      // Filter by categories
-      if (currentFilters.categories && currentFilters.categories.length > 0) {
-        filtered = filtered.filter((event) =>
-          event.categories.some((category) =>
-            currentFilters.categories!.includes(category.id)
-          )
-        );
-      }
+  const filteredEvents = useMemo(() => {
+    let output = allEvents;
 
-      // Filter by search
-      if (currentFilters.search) {
-        const searchTerm = currentFilters.search.toLowerCase();
-        filtered = filtered.filter(
-          (event) =>
-            event.eventTitle.toLowerCase().includes(searchTerm) ||
-            event.eventDesc.toLowerCase().includes(searchTerm) ||
-            event.location.toLowerCase().includes(searchTerm) ||
-            event.organizerName.toLowerCase().includes(searchTerm)
-        );
-      }
-
-      const start = (pageNum - 1) * pageSize;
-      const end = start + pageSize;
-      const data = filtered.slice(start, end);
-      const more = end < filtered.length;
-      setEvents((prev) => (append ? [...prev, ...data] : data));
-      setHasMore(more);
-      setPage(pageNum);
-    } catch (err) {
-      setError("Failed to load events.");
-    } finally {
-      setLoading(false);
-      setIsInitialLoad(false);
+    if (filters.categories && filters.categories.length > 0) {
+      output = output.filter((ev) => {
+        const catIds = Array.isArray(ev.categories)
+          ? ev.categories.map((c: any) => (typeof c === "string" ? c : c.id))
+          : [];
+        return filters.categories!.some((id) => catIds.includes(id));
+      });
     }
-  };
 
-  // Load đầu tiên và khi đổi filter
-  useEffect(() => {
-    setEvents([]);
-    setPage(1);
-    setHasMore(true);
-    fetchEvents(1, filters, false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters]);
+    // filter by search (match vài field cơ bản)
+    if (filters.search) {
+      const term = filters.search.toLowerCase();
+      output = output.filter((ev: any) => {
+        const title = (ev.eventTitle ?? ev.title ?? "").toLowerCase();
+        const desc = (ev.eventDesc ?? ev.description ?? "").toLowerCase();
+        const loc = (ev.location ?? "").toLowerCase();
+        const org = (ev.organizerName ?? "").toLowerCase();
+        return (
+          title.includes(term) ||
+          desc.includes(term) ||
+          loc.includes(term) ||
+          org.includes(term)
+        );
+      });
+    }
 
-  // Loading skeleton chỉ hiển thị khi initial load
-  if (isInitialLoad && loading) {
-    return (
-      <div className="space-y-5 px-10">
-        {/* Page Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Discover Events
-            </h1>
-            <p className="text-gray-600">
-              Find and book amazing events happening around you
-            </p>
-          </div>
-        </div>
+    return output;
+  }, [allEvents, filters]);
 
-        {/* Filter Bar Skeleton */}
-        <div className="shadow-sm border border-gray-200 rounded-lg p-6">
-          <Skeleton className="h-10 w-full mb-6" />
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-10 w-full" />
-            ))}
-          </div>
-        </div>
-
-        {/* Events Grid Skeleton */}
-        <EventLoadingSkeleton count={6} viewMode={viewMode} />
-      </div>
-    );
-  }
+  // Trạng thái
+  const loadMoreDisabled = !hasNextPage || isFetchingNextPage;
+  const showInitialSkeleton = isLoading && !pages?.length;
 
   return (
     <div className="space-y-5 px-10">
@@ -144,73 +103,94 @@ export default function EventsPage() {
         </div>
       </div>
 
-      {/* Search and Filters */}
-      <EventFilterBar
-        filters={filters}
-        onFiltersChange={debouncedSetFilters}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-      />
-
-      {/* Events Grid */}
-      <div
-        className={`grid gap-6 ${
-          viewMode === "grid"
-            ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
-            : "grid-cols-1"
-        }`}
-      >
-        {events.length === 0 && !loading ? (
-          <div className="col-span-full text-center py-12">
-            <p className="text-gray-500 text-lg">
-              No events found matching your criteria.
-            </p>
-            <Button
-              onClick={() => setFilters({})}
-              variant="outline"
-              className="mt-4"
-            >
-              Clear Filters
-            </Button>
-          </div>
-        ) : (
-          <>
-            {events.map((event) => (
-              <EventCard
-                key={event.eventID}
-                event={event}
-                organizerName={event.organizerName}
-                organizerPhotoUrl={event.organizerPhotoUrl}
-              />
-            ))}
-            {/* Loading skeletons for additional items when loading more */}
-            {loading && !isInitialLoad && (
-              <EventLoadingSkeleton count={3} viewMode={viewMode} />
-            )}
-          </>
-        )}
+      {/* Filter Bar */}
+      <div>
+        <EventFilterBar
+          filters={filters}
+          onFiltersChange={debouncedSetFilters}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+        />
       </div>
 
-      {/* Load More Button */}
-      {events.length > 0 && (
+      {/* Initial skeleton */}
+      {showInitialSkeleton && (
+        <>
+          {/* Filter Bar Skeleton */}
+          <div className="shadow-sm border border-gray-200 rounded-lg p-6">
+            <Skeleton className="h-10 w-full mb-6" />
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {[1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+          </div>
+
+          <EventLoadingSkeleton count={9} viewMode={viewMode} />
+        </>
+      )}
+
+      {/* Events Grid */}
+      {!showInitialSkeleton && (
+        <div
+          className={`grid gap-6 ${
+            viewMode === "grid"
+              ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+              : "grid-cols-1"
+          }`}
+        >
+          {filteredEvents.length === 0 && !isLoading ? (
+            <div className="col-span-full text-center py-12">
+              <p className="text-gray-500 text-lg">
+                No events found matching your criteria.
+              </p>
+              <Button
+                onClick={() => setFilters({})}
+                variant="outline"
+                className="mt-4"
+              >
+                Clear Filters
+              </Button>
+            </div>
+          ) : (
+            <>
+              {filteredEvents.map((event) => (
+                <EventCard key={event.eventID} event={event} />
+              ))}
+
+              {/* Loading skeletons khi load thêm page */}
+              {isFetchingNextPage && (
+                <EventLoadingSkeleton count={3} viewMode={viewMode} />
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Load More */}
+      {filteredEvents.length > 0 && (
         <div className="text-center">
           <Button
             variant="outline"
             size="lg"
-            onClick={() => fetchEvents(page + 1, filters, true)}
-            disabled={loading || !hasMore}
+            onClick={() => fetchNextPage()}
+            disabled={loadMoreDisabled}
           >
-            {loading
+            {isFetchingNextPage
               ? "Loading..."
-              : hasMore
+              : hasNextPage
                 ? "Load more event"
                 : "No more event available"}
           </Button>
-          {error && <div className="text-red-500 mt-2">{error}</div>}
+          {error && (
+            <div className="text-red-500 mt-2">
+              {(error as Error).message ?? "Failed to load events."}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Suggested Organizers Section */}
+      {/* Suggested Organizers */}
       <Card className="mb-6">
         <CardHeader>
           <CardTitle>Suggested Organizers</CardTitle>
@@ -248,7 +228,7 @@ export default function EventsPage() {
               <Button
                 variant="outline"
                 onClick={() => {
-                  /* TODO: chuyển hướng sang trang organizers hoặc callback */
+                  /* TODO: chuyển hướng sang trang organizers */
                 }}
                 className="w-full sm:w-auto"
               >

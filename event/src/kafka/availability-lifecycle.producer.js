@@ -22,23 +22,16 @@ export class AvailabilityProducer {
     }
 
     async send(type, key, payload, meta) {
-        const enrichedMeta = {
-            producer: this.producerName,
-            ...meta,
-        };
-
         const record = {
             eventType: type,
             key: String(key ?? ""),
             value: buildEnvelope({
                 type,
                 payload,
-                enrichedMeta,
                 version: this.schemaVersion,
+                meta: { producer: this.producerName, ...(meta || {}) },
             }),
         };
-
-        console.log(`send: ${record}`);
 
         try {
             return await this.sendToTopic(record);

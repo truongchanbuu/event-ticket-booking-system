@@ -6,7 +6,7 @@ export interface APIResponse<T> {
     total: number;
     page: number;
     limit: number;
-    nextCursor?: T;
+    nextCursor?: string | null;
   };
   message: string | undefined | null;
 }
@@ -18,4 +18,5 @@ export interface GetParams {
   status?: string;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
+  cursor?: string;
 }

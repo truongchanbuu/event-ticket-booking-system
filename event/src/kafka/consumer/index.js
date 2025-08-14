@@ -1,3 +1,5 @@
+import { handleAvailabilityMessage } from "../handlers/availability.handler.js";
+
 export class ConsumerOrchestrator {
     constructor({
         container,
@@ -46,13 +48,43 @@ export class ConsumerOrchestrator {
                         );
                         await this.messageDispatcher.dispatch(payload, scope);
                     } finally {
-                        // đảm bảo giải phóng scope
                         if (typeof scope.dispose === "function") {
                             await scope.dispose();
                         }
                         this.logger.info(
                             `Done '${topic}' offset=${message.offset} in ${Date.now() - start}ms`,
                         );
+                    }
+                },
+            },
+            {
+                topic: topics.availability_events,
+                groupId: consumerGroups.availability_group,
+                dlqTopic: dlqTopics.main_events_dlq,
+                retryDelays: ["30s", "2m", "10m", "30m"],
+                numPartitions: defaultPartitions,
+                handler: async (payload) => {
+                    const scope = this.container.createScope();
+                    try {
+                        const deps = {
+                            availabilityService: tryResolve(scope, [
+                                "availabilityService",
+                            ]),
+                            availabilityEvents: tryResolve(scope, [
+                                "availabilityEvents",
+                            ]),
+                            redis: tryResolve(scope, [
+                                "redisService",
+                                "redisClient",
+                                "redis",
+                            ]),
+                            redisPubSub: tryResolve(scope, ["redisPubSub"]),
+                            logger: this.logger,
+                        };
+                        await handleAvailabilityMessage(payload, deps);
+                    } finally {
+                        if (typeof scope.dispose === "function")
+                            await scope.dispose();
                     }
                 },
             },
@@ -141,4 +173,14 @@ export class ConsumerOrchestrator {
 
         this.logger.info("✅ All Kafka consumers started.");
     }
+}
+
+function tryResolve(scope, names) {
+    for (const n of names) {
+        try {
+            const v = scope.resolve(n);
+            if (v) return v;
+        } catch {}
+    }
+    return undefined;
 }

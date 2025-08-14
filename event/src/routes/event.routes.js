@@ -21,8 +21,6 @@ export class EventRoutes {
         //     this.availabilityController.getAvailabilityBySlug,
         // );
 
-        this.router.get("/:slug", this.eventController.getPublicEventDetail);
-
         this.router.get(
             "/:eventID/tickets",
             this.eventController.getEventTicketTypes,
@@ -70,6 +68,10 @@ export class EventRoutes {
             EventValidator.handleValidationErrors,
             this.eventController.removeContributor,
         );
+
+        this.router.get("/:slug", this.eventController.getPublicEventDetail);
+
+        this.router.get(["", "/"], this.eventController.getPublicEvents);
 
         // ===== Privileged actions (owner/admin) =====
         this.router.post(

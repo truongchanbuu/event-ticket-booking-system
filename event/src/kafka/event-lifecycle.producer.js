@@ -1,4 +1,5 @@
 import {
+    buildEnvelope,
     EVENT_CANCELLED,
     EVENT_PUBLISHED,
     TOPICS,

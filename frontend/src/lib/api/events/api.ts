@@ -172,3 +172,20 @@ export async function fetchEventBySlug(
   const result = await res.json();
   return { kind: "ok", data: result.data };
 }
+
+export async function getPublishedEvents(
+  params?: GetParams
+): Promise<EventsResponse> {
+  const searchParams = new URLSearchParams();
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        searchParams.append(key, value.toString());
+      }
+    });
+  }
+
+  const queryString = searchParams.toString();
+  const url = `/public/events${queryString ? `?${queryString}` : ""}`;
+  return fetchEvents<EventsResponse>(url);
+}

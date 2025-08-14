@@ -29,3 +29,9 @@ export function versionKeyEventScoped(eventId, { prefix = "event" } = {}) {
     const e = sanitizeId(eventId);
     return `${prefix}:${e}:inv:version`;
 }
+
+const INV_PREFIX = process.env.REDIS_INV_PREFIX || "inv";
+export const aggregateKeyByTicketType = (ttId, { hashTag = false } = {}) => {
+    const tag = hashTag ? `{${ttId}}` : ttId;
+    return `${INV_PREFIX}:agg:${tag}`;
+};

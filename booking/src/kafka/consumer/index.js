@@ -41,6 +41,12 @@ export class ConsumerOrchestrator {
                 retryDelays: ["30s", "2m", "10m", "30m"],
                 numPartitions: defaultPartitions,
             },
+            {
+                topic: topics.availability_events,
+                groupId: consumerGroups.availability_group, 
+                retryDelays: ["30s", "2m", "10m", "30m"],
+                numPartitions: defaultPartitions,
+            }
         ];
 
         const toEnsure = defs.flatMap((d) => {

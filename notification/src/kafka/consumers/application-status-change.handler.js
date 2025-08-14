@@ -1,10 +1,6 @@
 // src/consumers/handlers/application_notification.handler.js
 import { MESSAGE_CHANNEL } from '../../models/message-channel.js';
 
-/**
- * Một handler chung, có thể tái sử dụng để gửi đi các thông báo
- * liên quan đến kết quả duyệt đơn.
- */
 export class ApplicationNotificationHandler {
   /**
    * Constructor này nhận vào các dependency cần thiết VÀ

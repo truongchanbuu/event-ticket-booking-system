@@ -1,5 +1,14 @@
 import { Kafka, CompressionTypes, logLevel } from "kafkajs";
 import ms from "ms";
+import { decodeEnvelope } from "./utils.js";
+
+const RETRIABLE_ERR_SNIPPETS = [
+  "This server does not host this topic-partition",
+  "NOT_LEADER_FOR_PARTITION",
+  "NOT_LEADER_OR_FOLLOWER",
+  "LEADER_NOT_AVAILABLE",
+  "UNKNOWN_TOPIC_OR_PARTITION",
+];
 
 export class KafkaService {
   /** @private */ kafka;
@@ -78,7 +87,6 @@ export class KafkaService {
 
     const kafkaMessages = messages.map((m) => ({
       key: m.key,
-      // giữ partition nếu được truyền
       partition: typeof m.partition === "number" ? m.partition : undefined,
       value: Buffer.isBuffer(m.value)
         ? m.value
@@ -89,18 +97,34 @@ export class KafkaService {
       headers: m.headers,
     }));
 
-    try {
-      return await this.producer.send({
-        topic,
-        messages: kafkaMessages,
-        compression: options.compression ?? CompressionTypes.GZIP,
-        timeout: 30_000,
-      });
-    } catch (error) {
-      this.logger.error(`❌ Failed to send messages to '${topic}'`, {
-        error: error.message,
-      });
-      throw error;
+    const compression = options.compression ?? CompressionTypes.GZIP;
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        return await this.producer.send({
+          topic,
+          messages: kafkaMessages,
+          compression,
+          timeout: 30_000,
+        });
+      } catch (error) {
+        const msg = String(error?.message || "");
+        const isLeaderErr = RETRIABLE_ERR_SNIPPETS.some((s) => msg.includes(s));
+        if (isLeaderErr && attempt < 3) {
+          this.logger.warn(
+            `[Kafka] metadata/leader error → refresh & retry (${attempt}/3)`,
+            { topic, error: msg }
+          );
+          try {
+            await this.admin.fetchTopicMetadata({ topics: [topic] });
+          } catch (_) {}
+          continue; // thử lại
+        }
+        this.logger.error(`❌ Failed to send messages to '${topic}'`, {
+          error: msg,
+        });
+        throw error;
+      }
     }
   }
 
@@ -145,7 +169,18 @@ export class KafkaService {
       eachMessage: async (payload) => {
         const { topic: tp, partition, message, pause } = payload;
         try {
+          const env = decodeEnvelope(message);
+          payload.decoded = {
+            ...env,
+            headers: message.headers,
+            key: message.key?.toString(),
+            topic: tp,
+            partition,
+            offset: message.offset,
+          };
+
           await handler(payload);
+
           // success -> commit
           await consumer.commitOffsets([
             {
@@ -211,7 +246,7 @@ export class KafkaService {
     retryDelays,
     dlqTopic
   ) {
-    const { message } = payload;
+    const { topic, partition, message } = payload;
     const headers = message.headers || {};
     const attempt = headers["x-retry-attempt"]
       ? parseInt(headers["x-retry-attempt"].toString(), 10)
@@ -230,6 +265,17 @@ export class KafkaService {
     }
 
     const safeValue = ensureSafeValue(message.value);
+    let targetPartition = undefined;
+    try {
+      const md = await this.admin.fetchTopicMetadata({ topics: [nextTopic] });
+      const t = md?.topics?.find((t) => t.name === nextTopic);
+      const cnt = t?.partitions?.length || 0;
+      if (typeof partition === "number" && partition >= 0 && partition < cnt) {
+        targetPartition = partition;
+      }
+    } catch (_) {
+      // Nếu không fetch được metadata, để undefined để Kafka tự băm theo key
+    }
 
     await this.send(nextTopic, [
       {
@@ -242,7 +288,7 @@ export class KafkaService {
           "x-failure-reason": error.message,
           "x-failure-ts": Date.now().toString(),
         },
-        partition: message.partition, // giữ nguyên nếu có
+        partition: targetPartition,
       },
     ]);
   }
@@ -312,9 +358,12 @@ export class KafkaService {
           if (!originalTarget)
             throw new Error("Missing 'x-original-topic' header");
 
-          const safeValue = ensureSafeValue(message.value);
           await this.send(originalTarget, [
-            { key: message.key, value: safeValue, headers: message.headers },
+            {
+              key: message.key,
+              value: message.value,
+              headers: message.headers,
+            },
           ]);
 
           await consumer.commitOffsets([

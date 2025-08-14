@@ -34,7 +34,7 @@ export class TicketClientService {
             if (status !== 200) {
                 this.logger.warn(
                     "[TicketClientService] Non-200 from ticket service",
-                    { eventId, status, message: res?.message },
+                    { eventId, status, message: JSON.stringify(res) },
                 );
             }
 

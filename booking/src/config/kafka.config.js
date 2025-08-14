@@ -45,11 +45,13 @@ export function buildKafkaConfig(env = process.env) {
         producerName: env.KAFKA_PRODUCER_SERVICE_NAME || "booking-service",
 
         topics: {
-            payment_events: TOPICS.PAYMENT, // "payment.lifecycle.events"
+            payment_events: TOPICS.PAYMENT,
+            availability_events: TOPICS.AVAiLABILITY,
         },
 
         consumerGroups: {
             payment_group: env.KAFKA_GID_PAYMENT || "booking-service-payment",
+            availability_group: env.KAFKA_GID_AVAILABILITY || "booking-service-availability",
             dlq_group: env.KAFKA_GID_DLQ || "booking-service-dlq",
             global_retry_group: env.KAFKA_GID_RETRY || "booking-service-retry",
         },

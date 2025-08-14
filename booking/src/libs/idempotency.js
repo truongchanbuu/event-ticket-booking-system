@@ -8,8 +8,8 @@ export async function getIdemCached(redis, idem) {
 }
 
 export async function setIdemPending(redis, idem) {
-    const holdTtlSec = Number(config.holdTtlSec) || 20;
-    const idemTtlPadSec = Number(config.idemTtlPadSec) || 5;
+    const holdTtlSec = Number(config.holdTtlSec) || 300;
+    const idemTtlPadSec = Number(config.idemTtlPadSec) || 60;
     const ttl = holdTtlSec + idemTtlPadSec;
 
     if (ttl <= 0) throw new Error("TTL must be positive");

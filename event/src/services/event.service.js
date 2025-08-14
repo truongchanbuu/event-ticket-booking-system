@@ -177,6 +177,8 @@ export class EventService {
                 ...doc.data(),
             }));
 
+            console.log(`docs: ${JSON.stringify(docs)}`);
+
             const lastDoc = docs[docs.length - 1];
             const lastValue = lastDoc?.get(orderBy);
             const nextCursor =

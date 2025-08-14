@@ -14,7 +14,12 @@ import {
     SHARDCOUNT_CACHE_TTL_MS,
 } from "../config/inventory-flags.js";
 
-import { metaKey, shardKey, versionKeyByTicketType } from "../inventory/key.js";
+import {
+    aggregateKeyByTicketType,
+    metaKey,
+    shardKey,
+    versionKeyByTicketType,
+} from "../inventory/key.js";
 import { allocateShards, pickShardIndex } from "../inventory/sharding.js";
 
 export class InventoryService {
@@ -64,9 +69,12 @@ export class InventoryService {
 
         const meta = metaKey(ttId, { hashTag: true });
         const ver = versionKeyByTicketType(ttId, { hashTag: true });
+        const agg = aggregateKeyByTicketType(ttId, { hashTag: true });
+
         const keys = [
             meta,
             ver,
+            agg,
             ...Array.from({ length: m }, (_, i) =>
                 shardKey(ttId, i, { hashTag: true }),
             ),
@@ -257,29 +265,31 @@ export class InventoryService {
         for (const idx of probes) {
             const shardKeyStr = shardKey(ttId, idx, { hashTag: true });
             const verKey = versionKeyByTicketType(ttId, { hashTag: true });
-            const keys = [shardKeyStr, verKey];
+            const aggKey = aggregateKeyByTicketType(ttId, { hashTag: true });
+            const keys = [shardKeyStr, verKey, aggKey];
 
             this.logger.warn?.("[reserve.keys]", { shardKeyStr, verKey, qty });
 
-            const [ok, val, invVersion] = await this.redis.evalsha(sha, keys, [
-                String(qty),
-            ]);
+            const [ok, newRemainingOnShard, invVersion, newTotal] =
+                await this.redis.evalsha(sha, keys, [String(qty)]);
+
             if (Number(ok) === 1) {
-                const newRemaining = Number(val);
                 await this._afterChange({
                     eventId,
                     slug,
                     ttId,
                     action: "reserve",
-                    remaining: newRemaining,
+                    remaining: Number(newRemainingOnShard),
+                    totalAfter: Number(newTotal),
                     qty,
                     shardIndex: idx,
                     invVersion: Number(invVersion ?? 0),
                 });
+
                 return {
                     ok: true,
                     shardIndex: idx,
-                    newRemaining,
+                    newRemaining: Number(newRemainingOnShard),
                     version: Number(invVersion ?? 0),
                 };
             }
@@ -299,17 +309,11 @@ export class InventoryService {
         qty,
         shardIndex,
         invVersion,
+        totalAfter,
     }) {
         // 1) Invalidate cache theo slug (không block)
         const invalidate = slug
-            ? this.redis.del(`availability:slug:${slug}`).catch((e) => {
-                  this.logger.warn("[availability.invalidate] failed", {
-                      e: e.message,
-                      eventId,
-                      slug,
-                      ttId,
-                  });
-              })
+            ? this.redis.del(`availability:slug:${slug}`).catch(() => {})
             : Promise.resolve();
 
         if (!eventId) {
@@ -317,18 +321,8 @@ export class InventoryService {
             return;
         }
 
-        // 2) Tính tổng sau thay đổi (nếu chưa có aggregate total key)
-        let totalAfter = 0;
-        try {
-            totalAfter = await this._sumShards(ttId);
-        } catch (e) {
-            this.logger.warn("[availability.sum] failed", {
-                ttId,
-                e: e.message,
-            });
-        }
         const delta = action === "reserve" ? -Math.abs(qty) : Math.abs(qty);
-        const totalBefore = totalAfter - delta;
+        const totalBefore = Number(totalAfter) - delta;
 
         // 3) Pub/Sub payload nội bộ (realtime/cache)
         const pubPayload = JSON.stringify({
@@ -365,6 +359,7 @@ export class InventoryService {
                     {
                         eventId,
                         ticketTypeId: ttId,
+                        slug,
                         remaining: totalAfter,
                         delta,
                         invVersion: Number(invVersion ?? 0),
@@ -378,7 +373,7 @@ export class InventoryService {
                     totalBefore > 0
                 ) {
                     await this.availabilityProducer.soldOut(
-                        { eventId, ticketTypeId: ttId },
+                        { eventId, ticketTypeId: ttId, slug },
                         { source: "event-service" },
                     );
                 }
@@ -388,7 +383,12 @@ export class InventoryService {
                     totalAfter > 0
                 ) {
                     await this.availabilityProducer.restocked(
-                        { eventId, ticketTypeId: ttId, remaining: totalAfter },
+                        {
+                            eventId,
+                            ticketTypeId: ttId,
+                            remaining: totalAfter,
+                            slug,
+                        },
                         { source: "event-service" },
                     );
                 }

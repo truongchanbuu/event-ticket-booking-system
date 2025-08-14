@@ -4,7 +4,7 @@ export class EmbeddedBroadcaster {
         this.availability = availabilityService;
         this.logger = logger;
 
-        // slug -> Set<res>
+        // slug -> Set<ServerResponse>
         this.sinks = new Map();
         this.MAX_PER_KEY = 10000;
 
@@ -14,6 +14,8 @@ export class EmbeddedBroadcaster {
 
         // Dedup theo ETag: res -> etag
         this.lastEtag = new WeakMap();
+
+        this.latestInvVersion = new Map();
     }
 
     _setFor(key) {
@@ -21,8 +23,16 @@ export class EmbeddedBroadcaster {
         return this.sinks.get(key);
     }
 
-    _schedulePush = (slug) => {
+    _parseInvVersion(v) {
+        if (v == null) return undefined;
+        const n = Number(v);
+        return Number.isNaN(n) ? undefined : n;
+    }
+
+    _schedulePush = (slug, hint) => {
+        if (!slug) return;
         if (this.pending.has(slug)) return;
+
         const t = setTimeout(async () => {
             this.pending.delete(slug);
             const sinks = this.sinks.get(slug);
@@ -30,7 +40,10 @@ export class EmbeddedBroadcaster {
 
             let snap;
             try {
-                snap = await this.availability.getBySlug(slug);
+                snap = await this.availability.getBySlug(slug, {
+                    minInvVersion: this._parseInvVersion(hint?.invVersion),
+                    forceRefresh: !!hint?.forceRefresh, // bật trong DEV nếu cần
+                });
             } catch (e) {
                 this.logger.warn("[Broadcaster] snapshot failed", {
                     slug,
@@ -40,6 +53,15 @@ export class EmbeddedBroadcaster {
             }
             if (!snap || snap.status !== 200) return;
 
+            this.logger.info("[push.check]", {
+                slug,
+                status: snap?.status,
+                etag: snap?.etag,
+                cacheHit: !!snap?._cacheHit,
+                sinks: sinks.size,
+            });
+
+            const payloadStr = JSON.stringify(snap);
             for (const res of [...sinks]) {
                 try {
                     const last = this.lastEtag.get(res);
@@ -50,8 +72,9 @@ export class EmbeddedBroadcaster {
                         res.write(`id: ${snap.etag}\n`);
                     }
                     res.write(`event: update\n`);
-                    res.write(`data: ${JSON.stringify(snap)}\n\n`);
+                    res.write(`data: ${payloadStr}\n\n`);
                 } catch {
+                    // client đóng kết nối
                     try {
                         res.end();
                     } catch {}
@@ -61,28 +84,41 @@ export class EmbeddedBroadcaster {
             }
             if (sinks.size === 0) this.sinks.delete(slug);
         }, this.coalesceMs);
+
         this.pending.set(slug, t);
     };
 
     async start() {
         await this.sub.connect?.();
 
-        // Nhận mọi sự kiện thay đổi tồn kho
         await this.sub.psubscribe(
-            "availability:*",
+            "availability:slug:*",
             async ({ channel, message }) => {
                 try {
-                    const parts = String(channel).split(":"); // availability:<eventId>[:<slug>]
-                    const eventId = parts[1];
                     const payload = JSON.parse(message || "{}");
-                    const slug = payload.slug || parts[2]; // Ưu tiên slug trong payload
+                    const parts = String(channel).split(":"); // ["availability","slug","<slug>"]
+                    const slug = payload.slug || parts[2];
+                    const invVersion = this._parseInvVersion(
+                        payload?.invVersion,
+                    );
 
-                    if (!slug) return; // không xác định được slug thì bỏ
+                    if (!Number.isNaN(invVersion) && invVersion != null) {
+                        this.latestInvVersion.set(slug, invVersion);
+                    }
+
+                    this.logger.info("[sub.avail]", {
+                        channel,
+                        resolvedSlug: slug,
+                        invVersion,
+                        sinks: this.sinks.get(slug)?.size ?? 0,
+                        payloadKeys: Object.keys(payload || {}),
+                    });
+
+                    if (!slug) return;
                     const sinks = this.sinks.get(slug);
                     if (!sinks || sinks.size === 0) return;
 
-                    // ✅ debounce/coalesce theo slug
-                    this._schedulePush(slug);
+                    this._schedulePush(slug, { invVersion });
                 } catch (e) {
                     this.logger.warn(
                         "[Broadcaster] psubscribe handler failed",
@@ -92,11 +128,11 @@ export class EmbeddedBroadcaster {
             },
         );
 
-        this.logger.info("[Broadcaster] Subscribed availability:*");
+        this.logger.info("[Broadcaster] Subscribed availability:slug:*");
     }
 
     sseHandler = async (req, res) => {
-        const slug = String(req.params.slug || req.query.slug || "");
+        const slug = String(req.params.slug || req.query.slug || "").trim();
         if (!slug) {
             res.status(400).json({ message: "Missing slug" });
             return;
@@ -116,7 +152,9 @@ export class EmbeddedBroadcaster {
         const sinks = this._setFor(slug);
         if (sinks.size >= this.MAX_PER_KEY) {
             res.write(`event: error\ndata: {"message":"Too many clients"}\n\n`);
-            res.end();
+            try {
+                res.end();
+            } catch {}
             return;
         }
         sinks.add(res);
@@ -125,31 +163,10 @@ export class EmbeddedBroadcaster {
             try {
                 res.write(`event: ping\ndata: {}\n\n`);
             } catch {}
-        }, 25000);
+        }, 25_000);
 
-        try {
-            const lastId = req.get?.("Last-Event-ID");
-            const snap = await this.availability.getBySlug(slug);
-            if (snap?.status === 200) {
-                const last = this.lastEtag.get(res);
-                if (!lastId || lastId !== snap.etag || last !== snap.etag) {
-                    if (snap.etag) {
-                        this.lastEtag.set(res, snap.etag);
-                        res.write(`id: ${snap.etag}\n`);
-                    }
-                    res.write(`event: update\n`);
-                    res.write(`data: ${JSON.stringify(snap)}\n\n`);
-                }
-            } else {
-                res.write(
-                    `event: error\ndata: ${JSON.stringify({ status: snap?.status || 503 })}\n\n`,
-                );
-            }
-        } catch {
-            res.write(
-                `event: error\ndata: ${JSON.stringify({ message: "initial snapshot failed" })}\n\n`,
-            );
-        }
+        const hintInv = this.latestInvVersion.get(slug);
+        this._schedulePush(slug, { invVersion: hintInv });
 
         const onClose = () => {
             clearInterval(hb);
@@ -161,6 +178,7 @@ export class EmbeddedBroadcaster {
                 res.end();
             } catch {}
         };
+
         req.on("close", onClose);
         req.on?.("aborted", onClose);
         res.on?.("error", onClose);

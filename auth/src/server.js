@@ -16,8 +16,9 @@ async function bootstrap() {
         // Create and start the app
         const app = createApp({ container, config, rootLogger });
         const PORT = config.app.port;
+        const HOST = process.env.HOST || "0.0.0.0";
 
-        server = app.listen(PORT, () => {
+        server = app.listen(PORT, HOST, () => {
             rootLogger.debug(`🚀 Auth service running on port ${PORT}`);
             rootLogger.debug(`📊 Environment: ${config.app.nodeEnv}`);
         });

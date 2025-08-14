@@ -1,17 +1,18 @@
-# Build Stage
-FROM node:22-alpine AS builder
+# deps
+FROM node:20-bookworm-slim AS deps
 WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-RUN npm run build
+COPY package.json package-lock.json ./
+COPY shared/package.json shared/package.json
+COPY auth/package.json auth/package.json
+RUN npm install --omit=dev --omit=optional --workspace=./auth --include-workspace-root=false
 
-# Run Stage
-FROM node:22-alpine
+# runtime
+FROM gcr.io/distroless/nodejs20:nonroot
 WORKDIR /app
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-
+ENV NODE_ENV=production
 EXPOSE 3000
-CMD ["node", "dist/server.js"]
+COPY --from=deps /app/node_modules ./node_modules
+COPY shared ./shared
+COPY auth   ./auth
+WORKDIR /app/auth
+CMD ["src/server.js"]

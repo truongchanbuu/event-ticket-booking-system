@@ -1,4 +1,5 @@
 export function createRedisPubSub({ redisClient, logger = console }) {
+    // Luôn dùng 1 connection riêng cho SUB
     const sub =
         typeof redisClient.duplicate === "function"
             ? redisClient.duplicate()
@@ -8,60 +9,81 @@ export function createRedisPubSub({ redisClient, logger = console }) {
     sub.on?.("ready", () => logger.info("[RedisSub] ready"));
 
     async function connect() {
-        // node-redis v4 có connect(), ioredis tự connect (trừ khi lazyConnect)
+        // node-redis v4 cần connect(); ioredis thường auto-connect (trừ lazyConnect)
         if (typeof sub.connect === "function") {
-            await sub.connect();
-        } else if (sub.status === "wait" && typeof sub.connect === "function") {
-            // ioredis lazyConnect=true
-            await sub.connect();
+            if (
+                sub.status === "wait" ||
+                sub.status === "end" ||
+                sub.status === "connecting"
+            ) {
+                await sub.connect().catch(() => {}); // node-redis
+            } else {
+                await sub.connect().catch(() => {}); // ioredis lazyConnect
+            }
         }
     }
 
-    // Pattern subscribe cho cả ioredis & node-redis v4
+    // Pattern subscribe (pSubscribe)
     async function psubscribe(pattern, handler) {
+        // node-redis v4 có pSubscribe(pattern, (message, channel)=>{})
         if (typeof sub.pSubscribe === "function") {
-            // node-redis v4: pSubscribe(pattern, (message, channel)=>{})
-            await sub.pSubscribe(pattern, (message, channel) =>
-                handler({ channel, message }),
-            );
+            await sub.pSubscribe(pattern, (message, channel) => {
+                handler({ channel, message });
+            });
             return;
         }
-        if (typeof sub.psubscribe === "function") {
-            // ioredis: psubscribe(pattern, (message, channel)=>{})
-            await sub.psubscribe(pattern, (message, channel) =>
-                handler({ channel, message }),
-            );
+
+        // ioredis: cần psubscribe rồi nghe 'pmessage'
+        if (
+            typeof sub.psubscribe === "function" &&
+            typeof sub.on === "function"
+        ) {
+            // Đăng ký listener 1 lần (idempotent)
+            if (!sub.__hasPmessageHook) {
+                sub.on("pmessage", (_pattern, channel, message) => {
+                    handler({ channel, message });
+                });
+                sub.__hasPmessageHook = true;
+            }
+            await sub.psubscribe(pattern);
             return;
         }
-        throw new Error("Redis client does not support psubscribe/pSubscribe");
+
+        throw new Error("Client does not support pattern subscribe");
     }
 
-    // Channel subscribe (không pattern) cho cả hai
+    // Channel subscribe (không pattern)
     async function subscribe(channel, handler) {
-        if (
-            typeof sub.subscribe === "function" &&
-            sub.options?.modules == null
-        ) {
-            // ioredis: subscribe(channel, (message, ch)=>{})
-            await sub.subscribe(channel, (message, ch) =>
-                handler({ channel: ch, message }),
-            );
-            return;
-        }
-        if (typeof sub.subscribe === "function") {
-            // node-redis v4: subscribe(channel, (message)=>{})
+        // node-redis v4: subscribe(channel, (message)=>{})
+        if (typeof sub.subscribe === "function" && !sub.on) {
             await sub.subscribe(channel, (message) =>
                 handler({ channel, message }),
             );
             return;
         }
-        throw new Error("Redis client does not support subscribe()");
+
+        // ioredis: subscribe rồi nghe 'message'
+        if (
+            typeof sub.subscribe === "function" &&
+            typeof sub.on === "function"
+        ) {
+            if (!sub.__hasMessageHook) {
+                sub.on("message", (ch, message) =>
+                    handler({ channel: ch, message }),
+                );
+                sub.__hasMessageHook = true;
+            }
+            await sub.subscribe(channel);
+            return;
+        }
+
+        throw new Error("Client does not support subscribe");
     }
 
-    // Publisher: dùng client chính (không phải sub)
+    // Publisher: dùng client chính (không phải 'sub')
     async function publish(channel, message) {
         if (typeof redisClient.publish !== "function") {
-            throw new Error("Redis client does not support publish()");
+            throw new Error("Redis client lacks publish()");
         }
         return redisClient.publish(channel, message);
     }

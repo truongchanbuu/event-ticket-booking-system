@@ -26,8 +26,16 @@ export class AvailabilityController {
                 data: null,
             });
         }
-
-        const result = await this.availabilityService.getBySlug(slug);
+        const minInvVersion =
+            req.query.minInvVersion != null
+                ? Number(req.query.minInvVersion)
+                : undefined;
+        const forceRefresh =
+            req.query.force === "1" || req.query.noCache === "1";
+        const result = await this.availabilityService.getBySlug(slug, {
+            minInvVersion,
+            forceRefresh,
+        });
 
         // --- SANITIZE KIỂU DỮ LIỆU ---
         let status = Number.isInteger(result?.status)
@@ -57,21 +65,54 @@ export class AvailabilityController {
         const data = result?.data ?? [];
 
         // --- Headers cache ---
+        const edgeTtl = Number(this.edgeTtlSec) || 0;
         const cacheControl =
-            (Number(this.edgeTtlSec) || 0) > 0
-                ? `public, s-maxage=${Number(this.edgeTtlSec)}, stale-while-revalidate=5`
-                : "no-store";
+            edgeTtl > 0
+                ? `public, max-age=0, s-maxage=${edgeTtl}, stale-while-revalidate=5, stale-if-error=30`
+                : "no-cache";
 
         res.set("Cache-Control", cacheControl);
-        res.set("Vary", "If-None-Match");
+        // res.set("Vary", "If-None-Match");
 
         const ifNoneMatch = req.get("if-none-match") || "";
-        if (status === 200 && etag && ifNoneMatch === etag) {
+        const matches =
+            etag &&
+            ifNoneMatch
+                .split(",")
+                .map((s) => s.trim())
+                .includes(etag);
+        if (status === 200 && matches) {
             return res.status(304).end();
         }
         if (etag) res.set("ETag", etag);
 
         return res.status(status).json(data);
+    }
+
+    async getAvailabilityBySlugHead(req, res) {
+        const slug = String(req.query?.slug ?? "").trim();
+        if (!slug) return res.status(400).end();
+        const result = await this.availabilityService.getBySlug(slug);
+        const status = Number.isInteger(result?.status) ? result.status : 200;
+        const etag = typeof result?.etag === "string" ? result.etag : undefined;
+
+        res.set(
+            "Cache-Control",
+            this.edgeTtlSec > 0
+                ? `public, max-age=0, s-maxage=${this.edgeTtlSec}, stale-while-revalidate=5, stale-if-error=30`
+                : "no-cache",
+        );
+        if (etag) res.set("ETag", etag);
+
+        const ifNoneMatch = req.get("if-none-match") || "";
+        const matches =
+            etag &&
+            ifNoneMatch
+                .split(",")
+                .map((s) => s.trim())
+                .includes(etag);
+        if (status === 200 && matches) return res.status(304).end();
+        return res.status(status).end();
     }
 
     async getAvailabilityBySlug(req, res) {

@@ -3,6 +3,8 @@ import {
     catchAsync,
     ERROR_CODE,
 } from "@event_ticket_booking_system/shared";
+import { sanitizePublicEvent } from "../utils/sanitize.js";
+import { EVENT_STATUS } from "../enums/event-status.js";
 
 export class EventController {
     constructor({ logger, eventService }) {
@@ -19,6 +21,7 @@ export class EventController {
             this.getPublicEventDetail.bind(this),
         );
 
+        this.getPublicEvents = catchAsync(this.getPublicEvents.bind(this));
         this.getEventAttendees = catchAsync(this.getEventAttendees.bind(this));
         this.getEventTicketTypes = catchAsync(
             this.getEventTicketTypes.bind(this),
@@ -29,6 +32,51 @@ export class EventController {
         this.removeContributor = catchAsync(this.removeContributor.bind(this));
         this.createContributor = catchAsync(this.createContributor.bind(this));
         this.updateContributor = catchAsync(this.updateContributor.bind(this));
+    }
+
+    async getPublicEvents(req, res) {
+        const limit = Math.min(Math.max(Number(req.query.limit ?? 20), 1), 100);
+        const orderBy = String(req.query.orderBy ?? "createdAt");
+        const sortOrder =
+            String(req.query.sortOrder ?? "desc").toLowerCase() === "asc"
+                ? "asc"
+                : "desc";
+
+        const lastCursor = decodeCursor(String(req.query.cursor ?? ""));
+
+        const { events, hasMore, nextCursor, total } =
+            await this.eventService.getAllEvents({
+                limit,
+                orderBy,
+                sortOrder,
+                status: EVENT_STATUS.PUBLISHED,
+                isDeleted: false,
+                lastCursor,
+            });
+
+        console.log(`EVENTS: ${events}`);
+
+        const sanitized = events.map((e) => sanitizePublicEvent(e));
+
+        console.log(`SANITIZED: ${sanitized}`);
+
+        res.setHeader(
+            "Cache-Control",
+            "public, s-maxage=15, stale-while-revalidate=60",
+        );
+
+        return res.status(200).json({
+            ok: true,
+            data: {
+                events: sanitized,
+                hasMore,
+                nextCursor: encodeCursor(nextCursor), // FE sẽ gửi lại ở param cursor
+                total,
+                pageSize: limit,
+                orderBy,
+                sortOrder,
+            },
+        });
     }
 
     async getMyEvents(req, res) {
@@ -274,5 +322,21 @@ export class EventController {
         }
 
         return res.json({ success: true, data: eventData });
+    }
+}
+
+// Helper:
+function encodeCursor(cursor) {
+    return cursor
+        ? Buffer.from(JSON.stringify(cursor)).toString("base64")
+        : null;
+}
+
+function decodeCursor(raw) {
+    if (!raw) return null;
+    try {
+        return JSON.parse(Buffer.from(raw, "base64").toString("utf8"));
+    } catch {
+        return null;
     }
 }

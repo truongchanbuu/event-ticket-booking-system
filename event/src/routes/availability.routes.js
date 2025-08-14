@@ -5,6 +5,11 @@ export class AvailabilityRoutes {
         this.router = Router();
         this.availabilityController = availabilityController;
 
+        this.router.head(
+            "/availability",
+            this.availabilityController.getAvailabilityBySlugHead,
+        );
+
         this.router.get(
             ["", "/"],
             this.availabilityController.getAvailabilityBySlug,
