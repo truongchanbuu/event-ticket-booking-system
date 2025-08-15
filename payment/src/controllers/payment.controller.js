@@ -22,7 +22,120 @@ export class PaymentController {
 
         this.ipnMomo = this.ipnMomo.bind(this);
         this.simulateMomoIpn = this.simulateMomoIpn.bind(this);
+
+        this.getPaymentIntentByReservationID = catchAsync(
+            this.getPaymentIntentByReservationID.bind(this),
+        );
+        this.getPaymentByIntentID = catchAsync(
+            this.getPaymentByIntentID.bind(this),
+        );
     }
+
+    _bool = (v) => {
+        if (typeof v === "string") {
+            const s = v.trim().toLowerCase();
+            return (
+                s === "1" ||
+                s === "true" ||
+                s === "yes" ||
+                s === "y" ||
+                s === "on"
+            );
+        }
+        return Boolean(v);
+    };
+
+    _intentView = (i, { includeRaw = false } = {}) => ({
+        paymentIntentID: i.paymentIntentID || i.id || null,
+        reservationID: i.reservationID || null,
+        provider: i.provider || null,
+        status: i.status || null,
+        amount: i.amount ?? null,
+        currency: i.currency || "VND",
+        transactionId: i.transactionId || null,
+        orderId: i.orderId || null,
+        // các field tiện cho FE nếu có
+        qrUrl: i.qrUrl || i.paymentQrUrl || i.qr || null,
+        expiresAt: i.expiresAt || i.expiry || null,
+        // meta từ confirmByIntent()
+        confirmed: Boolean(i.confirmed),
+        refreshed: Boolean(i.refreshed),
+        source: i.source || "cache",
+        createdAt: i.createdAt || null,
+        updatedAt: i.updatedAt || i.statusUpdatedAt || null,
+        ...(includeRaw && i.providerLastRaw
+            ? { providerLastRaw: i.providerLastRaw }
+            : {}),
+    });
+
+    getPaymentIntentByReservationID = async (req, res) => {
+        try {
+            const reservationID = String(
+                req.params?.rid || req.query?.reservationID || "",
+            ).trim();
+            if (!reservationID) {
+                return res.status(400).json({
+                    success: false,
+                    message: "RESERVATION_ID_REQUIRED",
+                    errorCode: ERROR_CODE.INVALID_DATA,
+                });
+            }
+
+            const refresh = this._bool(req.query?.refresh);
+            const includeRaw = this._bool(req.query?.includeRaw);
+
+            const intent = await this.paymentService.confirmByIntent({
+                reservationID,
+                refresh,
+            });
+            const data = this._intentView(intent, { includeRaw });
+
+            return res.status(200).json({ success: true, message: "OK", data });
+        } catch (err) {
+            const status = err?.statusCode || err?.status || 500;
+            return res.status(status).json({
+                success: false,
+                message: err?.message || "INTERNAL_ERROR",
+                errorCode: err?.errorCode || ERROR_CODE.INTERNAL_ERROR,
+            });
+        }
+    };
+
+    getPaymentByIntentID = async (req, res) => {
+        try {
+            const paymentIntentID = String(
+                req.params?.intentId ||
+                    req.params.intentID ||
+                    req.query?.paymentIntentID ||
+                    "",
+            ).trim();
+            if (!paymentIntentID) {
+                return res.status(400).json({
+                    success: false,
+                    message: "PAYMENT_INTENT_ID_REQUIRED",
+                    errorCode: ERROR_CODE.INVALID_DATA,
+                });
+            }
+
+            const refresh = this._bool(req.query?.refresh);
+            const includeRaw = this._bool(req.query?.includeRaw);
+
+            const intent = await this.paymentService.confirmByIntent({
+                paymentIntentID,
+                refresh,
+            });
+            const data = this._intentView(intent, { includeRaw });
+
+            return res.status(200).json({ success: true, message: "OK", data });
+        } catch (err) {
+            const status = err?.statusCode || err?.status || 500;
+            return res.status(status).json({
+                success: false,
+                message: err?.message || "INTERNAL_ERROR",
+                errorCode: err?.errorCode || ERROR_CODE.INTERNAL_ERROR,
+            });
+        }
+    };
 
     async confirm(req, res, next) {
         const payload =

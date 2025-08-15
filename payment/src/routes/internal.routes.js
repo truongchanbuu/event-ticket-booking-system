@@ -8,6 +8,17 @@ export class InternalRoutes {
         this.paymentController = paymentController;
 
         this.router.get(
+            "/payment/intent/by-reservation/:rid",
+            verifyApiToken,
+            this.paymentController.getPaymentIntentByReservationID,
+        );
+
+        this.router.get(
+            "/payment/intent/by-id/:intentId",
+            this.paymentController.getPaymentByIntentID,
+        );
+
+        this.router.get(
             "/payment/checkout/confirm",
             verifyApiToken,
             PaymentValidator.validateConfirmByIntent,
