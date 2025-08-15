@@ -26,6 +26,7 @@ import { MomoProvider } from "./providers/momo.provider.js";
 import { MockMomoProvider } from "./providers/mock-momo.provider.js";
 import { MomoClient } from "./clients/momo.client.js";
 import { PaymentRoutes } from "./routes/payment.routes.js";
+import { makePaymentProviderFactory } from "./providers/provider.factory.js";
 
 export async function configureContainer() {
     const logger = console;

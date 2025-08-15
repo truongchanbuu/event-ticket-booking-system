@@ -132,7 +132,7 @@ export class EventService {
             orderBy = "createdAt",
             sortOrder = "desc",
             status,
-            lastCursor = null, // { valueForOrderBy, id }
+            lastCursor = null,
             isDeleted,
         } = options;
 
@@ -140,14 +140,18 @@ export class EventService {
             let query = this.eventCollection;
 
             if (status !== undefined && status !== null && status !== "") {
+                // Đảm bảo status khớp với dữ liệu thực (lowercase hay UPPERCASE tuỳ bạn)
                 query = query.where("status", "==", status);
             }
 
+            // Chỉ where khi = true; còn false thì lọc ở tầng ứng dụng để không loại doc thiếu field
             if (Object.prototype.hasOwnProperty.call(options, "isDeleted")) {
                 if (typeof isDeleted !== "boolean") {
                     throw new Error("isDeleted must be boolean when provided");
                 }
-                query = query.where("isDeleted", "==", isDeleted);
+                if (isDeleted === true) {
+                    query = query.where("isDeleted", "==", true);
+                }
             }
 
             query = query.orderBy(orderBy, sortOrder).orderBy("__name__");
@@ -162,6 +166,8 @@ export class EventService {
             query = query.limit(limit);
 
             const snapshot = await query.get();
+            console.log(`[getAllEvents] snapshot.size=${snapshot.size}`);
+
             if (snapshot.empty) {
                 return {
                     events: [],
@@ -172,12 +178,15 @@ export class EventService {
             }
 
             const docs = snapshot.docs;
-            const events = docs.map((doc) => ({
+            let events = docs.map((doc) => ({
                 eventID: doc.id,
                 ...doc.data(),
             }));
 
-            console.log(`docs: ${JSON.stringify(docs)}`);
+            // Lọc isDeleted ở tầng ứng dụng khi không yêu cầu true
+            if (isDeleted !== true) {
+                events = events.filter((e) => e.isDeleted !== true);
+            }
 
             const lastDoc = docs[docs.length - 1];
             const lastValue = lastDoc?.get(orderBy);
@@ -190,7 +199,7 @@ export class EventService {
                 events,
                 hasMore: docs.length === limit,
                 nextCursor,
-                total: docs.length,
+                total: events.length,
             };
         } catch (err) {
             this.logger.error("[getAllEvents] error:", err);

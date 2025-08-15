@@ -19,7 +19,7 @@
 export class ReservationReaper {
     /**
      * @param {Object} deps
-     * @param {any} deps.redisClient - Redis client (ioredis/upstash compatible APIs used below)
+     * @param {any} deps.redisService - Redis (ioredis/upstash compatible APIs used below)
      * @param {any} deps.eventInventoryClient - Has method release(ttId, { qty, shardIndex, eventId, slug })
      * @param {any} [deps.reservationProducer] - Optional, has sendReservationExpired(payload, { key })
      * @param {Console} [deps.logger=console]
@@ -29,12 +29,14 @@ export class ReservationReaper {
         redisService,
         eventInventoryClient,
         reservationProducer,
+        redisPubSub,
         logger = console,
         config = {},
     }) {
         this.redis = redisService;
         this.eventInv = eventInventoryClient;
         this.reservationProducer = reservationProducer;
+        this.redisPubSub = redisPubSub || null;
         this.logger = logger;
         this.config = config;
         this.interval = null;
@@ -42,11 +44,75 @@ export class ReservationReaper {
         const c = config.reaper || {};
         this.batchSize = Number(c.batchSize ?? 300);
         this.tickMs = Number(c.tickMs ?? 1500);
-        this.lockTtl = Number(c.lockTtl ?? 10); // seconds
+        this.lockTtl = Number(c.lockTtl ?? 30); // seconds
         this.enabled = Boolean(c.enabled ?? false);
 
         /** @type {string|null} */
         this._compareDelSha = null;
+    }
+
+    async _resolveEventSlug(eventId) {
+        try {
+            const s = await this.redis.hget?.("event:slug", eventId);
+            if (s) return s;
+        } catch {}
+        return `event:${eventId}`;
+    }
+
+    _maxInvVersionFromReleaseOuts(outs = []) {
+        let max = null;
+        for (const o of outs) {
+            const v = Number(
+                o?.status === "fulfilled"
+                    ? (o.value?.invVersion ?? o.value?.version)
+                    : NaN,
+            );
+            if (Number.isFinite(v)) max = max == null ? v : Math.max(max, v);
+        }
+        return max;
+    }
+
+    async _publishAvailabilityWithVersionBySlug(
+        slug,
+        { invVersion, reason } = {},
+    ) {
+        if (!slug) return;
+
+        // Invalidate cache trước khi nudge
+        try {
+            await this.redis.del(`availability:cache:${slug}`);
+            await this.redis.del(`availability:etag:${slug}`);
+        } catch {}
+
+        const msg = JSON.stringify({
+            slug,
+            invVersion: Number.isFinite(invVersion) ? invVersion : undefined,
+            reason: reason || "nudge",
+            ts: Date.now(),
+        });
+
+        // Chọn publisher an toàn
+        const pub =
+            (this.redisPubSub &&
+                typeof this.redisPubSub.publish === "function" &&
+                this.redisPubSub) ||
+            (typeof this.redis?.publish === "function" ? this.redis : null);
+
+        if (!pub) {
+            this.logger.warn(
+                "[reaper] no publisher available for availability nudge",
+            );
+            return;
+        }
+
+        try {
+            await pub.publish(`availability:slug:${slug}`, msg);
+        } catch (e) {
+            this.logger.warn("[reaper] availability nudge failed", {
+                slug,
+                err: e?.message,
+            });
+        }
     }
 
     async start() {
@@ -185,6 +251,23 @@ export class ReservationReaper {
                     await this._safeUnlock(lockKey, token);
                     continue;
                 }
+                try {
+                    const eventSlug = await this._resolveEventSlug(
+                        hold.eventId,
+                    );
+                    const maxVer = this._maxInvVersionFromReleaseOuts(outs); // có thể là null
+                    await this._publishAvailabilityWithVersionBySlug(
+                        eventSlug,
+                        {
+                            invVersion: maxVer, // nếu null → payload không có invVersion (nudge thuần)
+                            reason: "reap",
+                        },
+                    );
+                } catch (e) {
+                    this.logger.debug?.("[reaper] availability nudge failed", {
+                        err: e?.message,
+                    });
+                }
 
                 // Safe remove user_hold only if matches reservationId
                 const userHoldKey = hold.userId
@@ -216,6 +299,7 @@ export class ReservationReaper {
 
                         await this.redis.set(snapKey, snapshot, {
                             ttl: snapTtlSec,
+                            noJitter: true,
                         });
 
                         const when = Number(hold.expiresAt) + graceMs;

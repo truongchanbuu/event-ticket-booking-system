@@ -13,7 +13,7 @@ import {
   ShoppingCart,
 } from "lucide-react";
 
-type AvailabilityItem = {
+export type AvailabilityItem = {
   ticketTypeId: string;
   remaining: number;
   isSoldOut?: boolean;
@@ -57,14 +57,8 @@ export function AvailabilityClient({
   } = useAvailabilityPolling(slug, {
     enabled: allowPolling && !sseConnected,
     baseIntervalMs: 12_000,
-    // etag,
+    etag,
   });
-
-  useEffect(() => {
-    if (!sseTried || sseConnected) return;
-    const timer = setTimeout(() => setSseConnected(false), 2000);
-    return () => clearTimeout(timer);
-  }, [sseTried, sseConnected]);
 
   const data: AvailabilityItem[] | null = useMemo(() => {
     if (liveSnap?.status === 200 && Array.isArray(liveSnap?.data))
@@ -106,6 +100,7 @@ export function AvailabilityClient({
     );
     esRef.current = es;
     setSseTried(true);
+    setSseError(null);
 
     // Grace period: cho SSE 2s để open/update trước khi bật polling
     const grace = setTimeout(() => setAllowPolling(true), 2000);
@@ -127,6 +122,8 @@ export function AvailabilityClient({
       } catch {}
     };
     es.addEventListener("update", onUpdate);
+    es.onmessage = onUpdate;
+    es.addEventListener("ping", () => {});
 
     es.onerror = () => {
       setSseConnected(false);
@@ -154,57 +151,62 @@ export function AvailabilityClient({
       } catch {}
       esRef.current = null;
     };
-  }, [slug]);
+  }, [slug, eventID]);
 
   return (
-    <section className="rounded-2xl border p-4" aria-live="polite">
+    <section
+      className="rounded-xl sm:rounded-2xl border p-3 sm:p-4"
+      aria-live="polite"
+    >
       <section>
-        <h2 className="text-xl font-semibold">Ticket Info</h2>
+        <h2 className="text-lg sm:text-xl font-semibold">Ticket Info</h2>
 
         {!data && loading ? (
-          <div className="flex flex-col items-center py-8 space-y-3">
-            <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
-            <p className="text-sm text-gray-600">Loading event details...</p>
+          <div className="flex flex-col items-center py-6 sm:py-8 space-y-3">
+            <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 text-blue-500 animate-spin" />
+            <p className="text-xs sm:text-sm text-gray-600 text-center px-4">
+              Loading event details...
+            </p>
           </div>
         ) : viewError === "CANCELLED" ? (
-          <div className="flex flex-col items-center py-8 space-y-2">
-            <Calendar className="w-6 h-6 text-red-500" />
-            <div className="text-center">
-              <p className="text-sm font-medium text-red-700">
+          <div className="flex flex-col items-center py-6 sm:py-8 space-y-2">
+            <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-red-500" />
+            <div className="text-center px-4">
+              <p className="text-xs sm:text-sm font-medium text-red-700">
                 Event Cancelled
               </p>
-              <p className="text-xs text-red-600">
+              <p className="text-xs text-red-600 mt-1">
                 This event is no longer available
               </p>
             </div>
           </div>
         ) : viewError === "NOT_FOUND" ? (
-          <div className="flex flex-col items-center py-8 space-y-2">
-            <Search className="w-6 h-6 text-gray-400" />
-            <div className="text-center">
-              <p className="text-sm font-medium text-gray-700">
+          <div className="flex flex-col items-center py-6 sm:py-8 space-y-2">
+            <Search className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400" />
+            <div className="text-center px-4">
+              <p className="text-xs sm:text-sm font-medium text-gray-700">
                 Event Not Found
               </p>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-500 mt-1">
                 The event you're looking for doesn't exist
               </p>
             </div>
           </div>
         ) : viewError ? (
-          <div className="flex flex-col items-center py-8 space-y-2">
-            <AlertCircle className="w-6 h-6 text-red-500" />
-            <div className="text-center">
-              <p className="text-sm font-medium text-red-700">
+          <div className="flex flex-col items-center py-6 sm:py-8 space-y-2">
+            <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-red-500" />
+            <div className="text-center px-4">
+              <p className="text-xs sm:text-sm font-medium text-red-700">
                 Something went wrong
               </p>
-              <p className="text-xs text-red-600">
+              <p className="text-xs text-red-600 mt-1">
                 Failed to load event information
               </p>
             </div>
           </div>
         ) : (
           <div
-            className={`rounded-lg mt-4 p-4 border ${
+            className={`rounded-lg mt-3 sm:mt-4 p-3 sm:p-4 border ${
               soldOut
                 ? "bg-red-50 border-red-100"
                 : lowStock
@@ -212,19 +214,19 @@ export function AvailabilityClient({
                   : "bg-green-50 border-green-100"
             }`}
           >
-            <div className="flex items-center space-x-3">
-              <div className="mt-0.5">
+            <div className="flex items-start sm:items-center space-x-3">
+              <div className="mt-0.5 flex-shrink-0">
                 {soldOut ? (
-                  <Package className="w-5 h-5 text-red-500" />
+                  <Package className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" />
                 ) : lowStock ? (
-                  <Info className="w-5 h-5 text-blue-500" />
+                  <Info className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
                 ) : (
-                  <ShoppingCart className="w-5 h-5 text-green-500" />
+                  <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
                 )}
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 min-w-0 flex-1">
                 <p
-                  className={`text-lg font-semibold ${
+                  className={`text-base sm:text-lg font-semibold leading-tight ${
                     soldOut
                       ? "text-red-700"
                       : lowStock
@@ -241,7 +243,7 @@ export function AvailabilityClient({
                         : `${remaining} Available`}
                 </p>
                 <p
-                  className={`text-sm ${
+                  className={`text-xs sm:text-sm leading-relaxed ${
                     soldOut
                       ? "text-red-600"
                       : lowStock
@@ -266,7 +268,13 @@ export function AvailabilityClient({
       </section>
 
       {!!data?.length && (
-        <TicketTypesDisplay data={data} totalCapacity={totalCapacity} />
+        <div className="mt-4 sm:mt-6">
+          <TicketTypesDisplay
+            eventId={eventID}
+            data={data}
+            totalCapacity={totalCapacity}
+          />
+        </div>
       )}
     </section>
   );

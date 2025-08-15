@@ -36,7 +36,9 @@ export class EventController {
 
     async getPublicEvents(req, res) {
         const limit = Math.min(Math.max(Number(req.query.limit ?? 20), 1), 100);
-        const orderBy = String(req.query.orderBy ?? "createdAt");
+        const orderBy = String(
+            req.query.orderBy ?? req.query.sortBy ?? "createdAt",
+        );
         const sortOrder =
             String(req.query.sortOrder ?? "desc").toLowerCase() === "asc"
                 ? "asc"
@@ -54,11 +56,7 @@ export class EventController {
                 lastCursor,
             });
 
-        console.log(`EVENTS: ${events}`);
-
         const sanitized = events.map((e) => sanitizePublicEvent(e));
-
-        console.log(`SANITIZED: ${sanitized}`);
 
         res.setHeader(
             "Cache-Control",

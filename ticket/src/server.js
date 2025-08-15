@@ -1,3 +1,4 @@
+import { wireGracefulShutdown } from "@event_ticket_booking_system/shared/grateful.js";
 import { createApp } from "./app.js";
 import { configureContainer } from "./container.js";
 import { ConsumerOrchestrator } from "./kafka/consumer/index.js";
@@ -31,39 +32,19 @@ async function bootstrap() {
             rootLogger.debug(`📊 Environment: ${config.app.nodeEnv}`);
         });
 
-        const gracefulShutdown = async (signal) => {
-            rootLogger.debug(
-                `\n🛑 Received ${signal}. Starting graceful shutdown. Draining connections...`,
-            );
-
-            if (server) {
-                await new Promise((resolve, reject) => {
-                    server.close((err) => {
-                        if (err) {
-                            rootLogger.error(
-                                "❌ Error closing HTTP server:",
-                                err,
-                            );
-                            return reject(err);
-                        }
-                        rootLogger.debug(
-                            "✅ HTTP server closed. No new requests will be accepted.",
-                        );
-                        resolve();
-                    });
-                });
-            }
-
-            try {
-                await kafkaService.disconnect();
-                rootLogger.debug("✅ Kafka connections closed gracefully.");
-            } catch (error) {
-                rootLogger.error("❌ Error closing Kafka connections:", error);
-            }
-
-            rootLogger.debug("👋 Shutdown complete. Exiting now.");
-            process.exit(0);
-        };
+        wireGracefulShutdown({
+            server,
+            container,
+            logger: rootLogger,
+            timeoutMs: 5_000,
+            ignoreSignals: ["SIGHUP", "SIGUSR2"],
+            handleSignals: ["SIGINT", "SIGTERM"],
+            onBeforeClose: async () => {
+                readinessFlag = false;
+                await new Promise((r) => setTimeout(r, 5000));
+                await sleep(3000);
+            },
+        });
 
         process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
         process.on("SIGINT", () => gracefulShutdown("SIGINT"));

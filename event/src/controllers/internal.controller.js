@@ -11,10 +11,20 @@ export class InternalController {
         this.getPublishedEventIds = catchAsync(
             this.getPublishedEventIds.bind(this),
         );
+        this.getEventById = catchAsync(this.getEventById.bind(this));
 
         this.getAggregate = catchAsync(this.getAggregate.bind(this));
         this.reserveTicket = catchAsync(this.reserveTicket.bind(this));
         this.releaseTicket = catchAsync(this.releaseTicket.bind(this));
+    }
+
+    async getEventById(req, res) {
+        const { eventID } = req.params;
+        const result = await this.eventService.getEventByID(eventID);
+        return res.status(200).json({
+            success: true,
+            data: result,
+        });
     }
 
     async getEventOrganizerID(req, res) {
@@ -109,11 +119,10 @@ export class InternalController {
                     ok: true,
                     shardIndex: r.shardIndex,
                     newRemaining: r.newRemaining,
-                    version: r.version ?? 0,
+                    invVersion: (r?.version || r?.invVersion) ?? 0,
                 });
             }
 
-            console.log(`result: ${JSON.stringify(r)}`);
             return res.status(409).json({
                 ok: false,
                 error: "INSUFFICIENT_STOCK",
@@ -166,7 +175,7 @@ export class InternalController {
                 return res.status(200).json({
                     ok: true,
                     newRemaining: r.newRemaining,
-                    version: r.version ?? 0,
+                    invVersion: (r?.version || r?.invVersion) ?? 0,
                 });
             }
 

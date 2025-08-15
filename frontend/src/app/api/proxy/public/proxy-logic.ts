@@ -7,6 +7,8 @@ const registry = {
   tickets: process.env.TICKET_SERVICE_URL,
   organizers: process.env.USER_SERVICE_URL,
   events: process.env.EVENT_SERVICE_URL,
+  checkout: process.env.BOOKING_SERVICE_URL,
+  reservations: process.env.BOOKING_SERVICE_URL,
   availability: process.env.EVENT_SERVICE_URL,
   auth: process.env.AUTH_SERVICE_URL,
   media: process.env.MEDIA_SERVICE_URL,

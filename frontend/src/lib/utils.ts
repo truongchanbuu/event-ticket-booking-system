@@ -1,6 +1,7 @@
 import { type ClassValue, clsx } from "clsx";
 import { Timestamp } from "firebase/firestore";
 import { twMerge } from "tailwind-merge";
+import { toUpperCaseFirstLetter } from "./helpers/string.helper";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -219,4 +220,35 @@ export function getBaseUrl() {
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
 
   return fromEnv ?? "http://localhost:4000";
+}
+
+/* ===================== Helpers an toàn ===================== */
+export function toUpperFirstSafe(v: unknown) {
+  const s = typeof v === "string" ? v : String(v ?? "Unknown");
+  try {
+    return toUpperCaseFirstLetter(s);
+  } catch {
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+}
+
+export function toInt(n: unknown, fallback = 0) {
+  const v = Number(n);
+  return Number.isFinite(v) && v >= 0 ? v : fallback;
+}
+
+export function safeFormatDate(x: any) {
+  try {
+    return formatDate(x);
+  } catch {
+    return "TBA";
+  }
+}
+
+export function safeFormatTime(x: any) {
+  try {
+    return formatTime(x);
+  } catch {
+    return "";
+  }
 }

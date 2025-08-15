@@ -8,7 +8,6 @@ export async function fetchAPI<T>(
   path: string,
   options: FetchAPIOptions = {}
 ): Promise<T> {
-  // 1. LUÔN LUÔN gọi đến endpoint proxy của Next.js
   const url = `/api/proxy${path.startsWith("/") ? path : "/" + path}`;
 
   const { skipAuth, headers, body, ...rest } = options;

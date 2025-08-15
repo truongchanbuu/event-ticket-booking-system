@@ -6,7 +6,7 @@ export class AvailabilityRoutes {
         this.availabilityController = availabilityController;
 
         this.router.head(
-            "/availability",
+            "/",
             this.availabilityController.getAvailabilityBySlugHead,
         );
 

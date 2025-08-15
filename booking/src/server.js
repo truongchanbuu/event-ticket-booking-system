@@ -1,3 +1,4 @@
+import { wireGracefulShutdown } from "@event_ticket_booking_system/shared/grateful.js";
 import { createApp } from "./app.js";
 import { configureContainer } from "./container.js";
 // import { ConsumerOrchestrator } from "./kafka/consumer/index.js";
@@ -37,43 +38,19 @@ async function bootstrap() {
         container.resolve("reservationReaper").start();
         container.resolve("autoCancelWorker").start();
 
-        const gracefulShutdown = async (signal) => {
-            rootLogger.debug(
-                `\n🛑 Received ${signal}. Starting graceful shutdown. Draining connections...`,
-            );
-
-            if (server) {
-                await new Promise((resolve, reject) => {
-                    server.close((err) => {
-                        if (err) {
-                            rootLogger.error(
-                                "❌ Error closing HTTP server:",
-                                err,
-                            );
-                            return reject(err);
-                        }
-                        rootLogger.debug(
-                            "✅ HTTP server closed. No new requests will be accepted.",
-                        );
-                        resolve();
-                    });
-                });
-            }
-
-            try {
-                const shutdown = container.resolve("shutdown");
-                await shutdown();
-                rootLogger.debug("✅ Closing connections gracefully.");
-            } catch (error) {
-                rootLogger.error("❌ Error closing connections:", error);
-            }
-
-            rootLogger.debug("👋 Shutdown complete. Exiting now.");
-            process.exit(0);
-        };
-
-        process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-        process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+        wireGracefulShutdown({
+            server,
+            container,
+            logger: rootLogger,
+            timeoutMs: 5_000,
+            ignoreSignals: ["SIGHUP", "SIGUSR2"],
+            handleSignals: ["SIGINT", "SIGTERM"],
+            onBeforeClose: async () => {
+                readinessFlag = false;
+                await new Promise((r) => setTimeout(r, 5000));
+                await sleep(3000);
+            },
+        });
     } catch (error) {
         console.error("❌ Failed to start the Booking service:", error);
         process.exit(1);

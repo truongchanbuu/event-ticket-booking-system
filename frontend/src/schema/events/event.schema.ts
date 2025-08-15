@@ -98,6 +98,7 @@ export const EventSchema = z
     createdAt: z.string().datetime().optional(),
     updatedAt: z.string().datetime().optional(),
     publishedAt: z.string().datetime().optional(),
+    isAllSoldOut: z.boolean().default(false).optional(),
   })
   .refine((data) => new Date(data.endTime) > new Date(data.startTime), {
     message: "Start time must be before end time.",

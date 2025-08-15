@@ -20,6 +20,8 @@ import { PaymentClient } from "./services/payment-client.service.js";
 import { OrderService } from "./services/order.service.js";
 import { handlerMap } from "./kafka/consumer/handleMap.js";
 import { AutoCancelWorker } from "./workers/auto-cancel.worker.js";
+import { OrderController } from "./controllers/order.controller.js";
+import { OrderRoutes } from "./routes/order.routes.js";
 
 export async function configureContainer() {
     const logger = console;
@@ -128,6 +130,7 @@ export async function configureContainer() {
         reservationProducer: asClass(ReservationProducer).singleton(),
 
         // domain services
+        defaultHeaders: asValue({}),
         eventInventoryClient: asClass(EventInventoryClient).singleton(),
         paymentClient: asClass(PaymentClient).singleton(),
         orderService: asClass(OrderService).singleton(),
@@ -135,9 +138,11 @@ export async function configureContainer() {
 
         // controllers
         reservationController: asClass(ReservationController).scoped(),
+        orderController: asClass(OrderController).scoped(),
 
         // routes
         reservationRoutes: asClass(ReservationRoutes).singleton(),
+        orderRoutes: asClass(OrderRoutes).singleton(),
         apiRoutes: asClass(ApiRoutes).singleton(),
 
         // kafka dispatcher

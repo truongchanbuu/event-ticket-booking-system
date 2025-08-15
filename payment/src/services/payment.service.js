@@ -19,7 +19,13 @@ const PAYMENT_REFUNDS = "paymentRefunds";
 const REFRESH_TTL_MS_DEFAULT = 10_000;
 
 export class PaymentService {
-    constructor({ db, redisService, paymentProducer, logger = console }) {
+    constructor({
+        db,
+        redisService,
+        paymentProducer,
+        paymentProviderFactory,
+        logger = console,
+    }) {
         this.db = db;
         this.redisService = redisService;
         this.logger = logger;

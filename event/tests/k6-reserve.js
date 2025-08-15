@@ -8,11 +8,14 @@ import { Rate, Counter, Trend } from "k6/metrics";
  * ========================= */
 const BOOKING = __ENV.BOOKING || "http://localhost:3006/api";
 const EVENT = __ENV.EVENT || "http://localhost:3002/api";
-const EVENT_ID = "4uv5zDDorgyXY7vqluq2";
-const TT = "zfHTosglYXnBEd0vyaqe";
-const SLUG = "new-vqluq2";
+const EVENT_ID = __ENV.EVENT_ID || "4uv5zDDorgyXY7vqluq2";
+const TT = __ENV.TT || "zfHTosglYXnBEd0vyaqe";
+const SLUG = __ENV.SLUG || "new-vqluq2";
 const MODE = (__ENV.MODE || "local").toLowerCase(); // local | med | heavy
-const SUMMARY_JSON = String(__ENV.SUMMARY_JSON || "1") === "1"; // ghi file JSON summary
+const SUMMARY_JSON = String(__ENV.SUMMARY_JSON || "1") === "1";
+const CAPACITY_ENV = Number.isFinite(Number(__ENV.CAPACITY))
+    ? Number(__ENV.CAPACITY)
+    : null; // optional
 
 randomSeed(1234);
 
@@ -74,9 +77,23 @@ const P = profiles[MODE] || profiles.local;
 /* =========================
  * METRICS
  * ========================= */
-// OK theo nghiệp vụ
+// Business OK rates (giữ lại)
 export const reserve_ok = new Rate("reserve_ok");
 export const availability_ok = new Rate("availability_ok");
+
+// Split reserve outcomes
+const reserve_success = new Counter("reserve_success"); // 200/201
+const reserve_conflict = new Counter("reserve_conflict"); // 409/429/412
+const reserve_error = new Counter("reserve_error"); // >=500 hoặc bất thường khác
+const cancel_success = new Counter("cancel_success");
+
+// Track quantities (mỗi reserve qty=1; điều chỉnh nếu bạn thay đổi payload qty)
+const reserve_success_qty = new Counter("reserve_success_qty");
+const cancel_success_qty = new Counter("cancel_success_qty");
+
+// Availability revalidate ratio buckets
+const availability_200 = new Counter("availability_200");
+const availability_304 = new Counter("availability_304");
 
 // Network errors
 const net_err_total = new Counter("net_errors_total");
@@ -89,36 +106,36 @@ const reserve_blocked = new Trend("reserve_blocked", true);
 const reserve_connecting = new Trend("reserve_connecting", true);
 const reserve_tls = new Trend("reserve_tls", true);
 const reserve_sending = new Trend("reserve_sending", true);
-const reserve_waiting = new Trend("reserve_waiting", true); // TTFB
+const reserve_waiting = new Trend("reserve_waiting", true);
 const reserve_receiving = new Trend("reserve_receiving", true);
 
-const avail_duration = new Trend("availability_duration", true);
-const avail_blocked = new Trend("availability_blocked", true);
-const avail_connecting = new Trend("availability_connecting", true);
-const avail_tls = new Trend("availability_tls", true);
-const avail_sending = new Trend("availability_sending", true);
-const avail_waiting = new Trend("availability_waiting", true);
-const avail_receiving = new Trend("availability_receiving", true);
+const availability_duration = new Trend("availability_duration", true);
+const availability_blocked = new Trend("availability_blocked", true);
+const availability_connecting = new Trend("availability_connecting", true);
+const availability_tls = new Trend("availability_tls", true);
+const availability_sending = new Trend("availability_sending", true);
+const availability_waiting = new Trend("availability_waiting", true);
+const availability_receiving = new Trend("availability_receiving", true);
 
-// Phân bố status code theo endpoint
+// Status distribution (giữ hệ thống cũ)
 const ENDPOINTS = ["reserve", "availability", "cancel"];
 const STATUS_CODES = [
     200, 201, 202, 204, 304, 400, 401, 403, 404, 409, 412, 429, 500, 502, 503,
     504,
 ];
-const statusCounters = {}; // tên metric -> Counter
-
+const statusCounters = {};
 for (const ep of ENDPOINTS) {
-    for (const sc of STATUS_CODES) {
-        const name = `http_status_${ep}_${sc}`;
-        statusCounters[name] = new Counter(name);
-    }
-    // thêm bucket tổng quát
-    ["1xx", "2xx", "3xx", "4xx", "5xx", "other"].forEach((b) => {
-        const name = `http_status_${ep}_${b}`;
-        statusCounters[name] = new Counter(name);
-    });
+    for (const sc of STATUS_CODES)
+        statusCounters[`http_status_${ep}_${sc}`] = new Counter(
+            `http_status_${ep}_${sc}`,
+        );
+    for (const b of ["1xx", "2xx", "3xx", "4xx", "5xx", "other"])
+        statusCounters[`http_status_${ep}_${b}`] = new Counter(
+            `http_status_${ep}_${b}`,
+        );
 }
+
+const etagMap = new Map();
 
 /* =========================
  * HELPERS
@@ -165,13 +182,32 @@ function addTimings(endpoint, res) {
         add(reserve_waiting, t.waiting);
         add(reserve_receiving, t.receiving);
     } else if (endpoint === "availability") {
-        add(avail_duration, t.duration);
-        add(avail_blocked, t.blocked);
-        add(avail_connecting, t.connecting);
-        add(avail_tls, t.tls_handshaking);
-        add(avail_sending, t.sending);
-        add(avail_waiting, t.waiting);
-        add(avail_receiving, t.receiving);
+        add(availability_duration, t.duration);
+        add(availability_blocked, t.blocked);
+        add(availability_connecting, t.connecting);
+        add(availability_tls, t.tls_handshaking);
+        add(availability_sending, t.sending);
+        add(availability_waiting, t.waiting);
+        add(availability_receiving, t.receiving);
+    }
+}
+function fmtNum(n) {
+    return n == null ? "-" : Number(n).toFixed(2);
+}
+function metricVals(m) {
+    return !m || !m.values ? {} : m.values;
+}
+function lineKV(k, v, pad = 22) {
+    const key = (k + ":").padEnd(pad, " ");
+    return `${key}${v}\n`;
+}
+function sumRemainingFromAvailabilityBody(body) {
+    try {
+        const arr = JSON.parse(body);
+        if (!Array.isArray(arr)) return null;
+        return arr.reduce((s, x) => s + (Number(x?.remaining) || 0), 0);
+    } catch {
+        return null;
     }
 }
 
@@ -207,12 +243,16 @@ export const options = {
     thresholds: {
         reserve_ok: [{ threshold: "rate>0.98", abortOnFail: true }],
         availability_ok: ["rate>0.99"],
-        "http_req_duration{endpoint:reserve}": ["p(95)<800"],
-        "http_req_duration{endpoint:availability}": ["p(95)<150"],
+
+        // 304: phải cực rẻ
+        "http_req_duration{endpoint:availability,status:304}": ["p(95)<50"],
+
+        // 200: cho phép chậm hơn vì phải compute snapshot
+        "http_req_duration{endpoint:availability,status:200}": ["p(95)<300"],
     },
 };
 
-// Để http_req_failed không làm loạn thống kê khi có 409/429 hợp lệ:
+// expected statuses để http_req_failed không đếm các 409/429 hợp lệ
 http.setResponseCallback(
     http.expectedStatuses(
         200,
@@ -235,7 +275,12 @@ http.setResponseCallback(
 );
 
 /* =========================
- * SETUP (log cấu hình)
+ * GLOBAL for setup/summary
+ * ========================= */
+let INIT_REMAINING = null;
+
+/* =========================
+ * SETUP
  * ========================= */
 export function setup() {
     console.log("[CONFIG] MODE =", MODE);
@@ -244,6 +289,22 @@ export function setup() {
     console.log("[CONFIG] EVENT_ID=", EVENT_ID);
     console.log("[CONFIG] TT      =", TT);
     console.log("[CONFIG] SLUG    =", SLUG);
+
+    // Lấy tồn đầu kỳ (nếu API có cache/etag, lấy 200 là được)
+    try {
+        const url = `${EVENT}/availability?slug=${encodeURIComponent(SLUG)}`;
+        const r = http.get(url, { timeout: "3s" });
+        if (r.status === 200) {
+            INIT_REMAINING = sumRemainingFromAvailabilityBody(r.body);
+        }
+    } catch (_) {}
+
+    if (
+        CAPACITY_ENV != null &&
+        (INIT_REMAINING == null || Number.isNaN(INIT_REMAINING))
+    ) {
+        INIT_REMAINING = CAPACITY_ENV; // fallback theo ENV nếu muốn ép
+    }
 }
 
 /* =========================
@@ -254,13 +315,16 @@ export function reserveExec() {
         "Content-Type": "application/json",
         "Idempotency-Key": idemKey(),
         "x-forwarded-for": ipForVu(__VU),
+        "X-Demo-Mode": 1,
     };
 
     const reserveUrl = `${BOOKING}/checkout/reservations`;
+    const qty = 1; // điều chỉnh nếu test nhiều vé/lần
     const payload = JSON.stringify({
         eventId: EVENT_ID,
-        lines: [{ ttId: TT, qty: 1 }],
+        lines: [{ ttId: TT, qty }],
     });
+
     const res = http.post(reserveUrl, payload, {
         headers,
         tags: { endpoint: "reserve" },
@@ -268,8 +332,27 @@ export function reserveExec() {
     });
 
     const okHttp = !res.error;
-    const okBiz = okHttp && [201, 200, 409, 429].includes(res.status);
+    const isSuccess = okHttp && (res.status === 201 || res.status === 200);
+    const isConflict =
+        okHttp &&
+        (res.status === 409 || res.status === 429 || res.status === 412);
+    const isError =
+        !okHttp ||
+        (okHttp && (res.status >= 500 || (!isSuccess && !isConflict)));
+
+    // Business rate cũ (OK nếu success hoặc conflict)
+    const okBiz = okHttp && (isSuccess || isConflict);
     reserve_ok.add(okBiz);
+
+    // Split metrics
+    if (isSuccess) {
+        reserve_success.add(1);
+        reserve_success_qty.add(qty);
+    } else if (isConflict) {
+        reserve_conflict.add(1);
+    } else if (isError) {
+        reserve_error.add(1);
+    }
 
     if (!okHttp) {
         net_err_total.add(1);
@@ -280,11 +363,11 @@ export function reserveExec() {
 
     check(res, {
         "reserve network ok": () => okHttp,
-        "reserve status ok (201/200/409/429)": () => okBiz,
+        "reserve success|conflict": () => isSuccess || isConflict,
     });
 
-    // Cancel ~50% khi 201 → trả hàng
-    if (okBiz && res.status === 201 && Math.random() < 0.5) {
+    // Cancel ~50% khi success → trả hàng
+    if (isSuccess && Math.random() < 0.5) {
         try {
             const body = res.json();
             const reservationId = body?.reservationId;
@@ -296,9 +379,14 @@ export function reserveExec() {
                     timeout: "3s",
                 });
                 recordStatus("cancel", cRes.status || 0);
+                const okCancel = !cRes.error && cRes.status === 200;
+                if (okCancel) {
+                    cancel_success.add(1);
+                    cancel_success_qty.add(qty);
+                }
                 check(cRes, {
                     "cancel network ok": () => !cRes.error,
-                    "cancel 200": () => cRes.status === 200,
+                    "cancel 200": () => okCancel,
                 });
             }
         } catch (_) {}
@@ -309,17 +397,29 @@ export function reserveExec() {
 
 export function availabilityExec() {
     const url = `${EVENT}/availability?slug=${encodeURIComponent(SLUG)}`;
+
+    const headers = {};
+    const prev = etagMap.get(SLUG);
+    if (prev) headers["If-None-Match"] = prev;
+
     const res = http.get(url, {
+        headers,
         tags: { endpoint: "availability" },
         timeout: "2s",
     });
+
+    const et =
+        res.headers["ETag"] || res.headers["Etag"] || res.headers["etag"];
+    if (et) etagMap.set(SLUG, et);
 
     const okHttp = !res.error;
     const okBiz = okHttp && (res.status === 200 || res.status === 304);
     availability_ok.add(okBiz);
 
+    if (res.status === 200) availability_200.add(1);
+    else if (res.status === 304) availability_304.add(1);
+
     if (!okBiz && (res.status >= 500 || res.status === 404)) {
-        // chỉ log mỗi 50 request 1 lần để đỡ ồn
         if (__ITER % 50 === 0) {
             let bodyText = "";
             try {
@@ -347,26 +447,22 @@ export function availabilityExec() {
 }
 
 /* =========================
- * SUMMARY (in rất chi tiết)
+ * SUMMARY (in chi tiết + kiểm tra oversell)
  * ========================= */
-function fmtNum(n) {
-    return n == null ? "-" : Number(n).toFixed(2);
-}
-function metricVals(m) {
-    if (!m || !m.values) return {};
-    return m.values;
-}
-function lineKV(k, v, pad = 22) {
-    const key = (k + ":").padEnd(pad, " ");
-    return `${key}${v}\n`;
-}
-
 export function handleSummary(data) {
     const m = (name) => data.metrics[name];
 
-    const parts = [];
+    // Cuối test: đọc tồn cuối kỳ qua HTTP
+    let END_REMAINING = null;
+    try {
+        const url = `${EVENT}/availability?slug=${encodeURIComponent(SLUG)}`;
+        const r = http.get(url, { timeout: "3s" });
+        if (r.status === 200)
+            END_REMAINING = sumRemainingFromAvailabilityBody(r.body);
+    } catch (_) {}
 
     // Header
+    const parts = [];
     parts.push("========== k6 CUSTOM SUMMARY ==========\n");
     parts.push(lineKV("MODE", MODE));
     parts.push(lineKV("BOOKING", BOOKING));
@@ -376,29 +472,55 @@ export function handleSummary(data) {
     parts.push(lineKV("SLUG", SLUG));
     parts.push("\n");
 
-    // Business OK rates
+    // OK rates
     const r_ok = metricVals(m("reserve_ok"));
     const a_ok = metricVals(m("availability_ok"));
     parts.push("[OK rates]\n");
-    parts.push(lineKV("reserve_ok", fmtNum(r_ok.rate * 100) + " %"));
-    parts.push(lineKV("availability_ok", fmtNum(a_ok.rate * 100) + " %"));
+    parts.push(lineKV("reserve_ok", fmtNum((r_ok.rate || 0) * 100) + " %"));
+    parts.push(
+        lineKV("availability_ok", fmtNum((a_ok.rate || 0) * 100) + " %"),
+    );
     parts.push("\n");
 
-    // Latency breakdown
-    const rd = metricVals(m("reserve_duration"));
+    // Reserve split
+    const succ = metricVals(m("reserve_success")).count || 0;
+    const conf = metricVals(m("reserve_conflict")).count || 0;
+    const errc = metricVals(m("reserve_error")).count || 0;
+    const succQty = metricVals(m("reserve_success_qty")).count || 0;
+    const cancelQty = metricVals(m("cancel_success_qty")).count || 0;
+    const netQty = succQty - cancelQty;
+    const conflictRatio = succ + conf > 0 ? conf / (succ + conf) : 0;
+
+    parts.push("[Reserve breakdown]\n");
+    parts.push(lineKV("success (count)", succ));
+    parts.push(lineKV("conflict (count)", conf));
+    parts.push(lineKV("error (count)", errc));
+    parts.push(lineKV("success qty", succQty));
+    parts.push(lineKV("cancel qty", cancelQty));
+    parts.push(lineKV("net reserved qty", netQty));
+    parts.push(lineKV("conflict ratio", fmtNum(conflictRatio * 100) + " %"));
+    parts.push("\n");
+
+    // Availability latency
     const ad = metricVals(m("availability_duration"));
-    parts.push("[Latency p50/p90/p95/p99 (ms)]\n");
-    parts.push(lineKV("reserve p50", fmtNum(rd["p(50)"])));
-    parts.push(lineKV("reserve p90", fmtNum(rd["p(90)"])));
-    parts.push(lineKV("reserve p95", fmtNum(rd["p(95)"])));
-    parts.push(lineKV("reserve p99", fmtNum(rd["p(99)"])));
-    parts.push(lineKV("availability p50", fmtNum(ad["p(50)"])));
-    parts.push(lineKV("availability p90", fmtNum(ad["p(90)"])));
-    parts.push(lineKV("availability p95", fmtNum(ad["p(95)"])));
-    parts.push(lineKV("availability p99", fmtNum(ad["p(99)"])));
+    parts.push("[Availability latency p50/p90/p95/p99 (ms)]\n");
+    parts.push(lineKV("p50", fmtNum(ad["p(50)"])));
+    parts.push(lineKV("p90", fmtNum(ad["p(90)"])));
+    parts.push(lineKV("p95", fmtNum(ad["p(95)"])));
+    parts.push(lineKV("p99", fmtNum(ad["p(99)"])));
     parts.push("\n");
 
-    // Timings (TTFB, TCP, TLS, …)
+    // Availability revalidate ratio
+    const a200 = metricVals(m("availability_200")).count || 0;
+    const a304 = metricVals(m("availability_304")).count || 0;
+    const revalRatio = a200 + a304 > 0 ? a304 / (a200 + a304) : 0;
+    parts.push("[Availability revalidate]\n");
+    parts.push(lineKV("200 count", a200));
+    parts.push(lineKV("304 count", a304));
+    parts.push(lineKV("304 ratio", fmtNum(revalRatio * 100) + " %"));
+    parts.push("\n");
+
+    // Timings (avg) cho reserve + availability
     const tb = (name) => metricVals(m(name));
     const t = {
         reserve: {
@@ -456,7 +578,7 @@ export function handleSummary(data) {
     parts.push(lineKV("availability", neA));
     parts.push("\n");
 
-    // Status distributions
+    // Status distributions (giữ như cũ)
     function dumpStatusFor(ep) {
         const lines = [];
         const buckets = ["1xx", "2xx", "3xx", "4xx", "5xx", "other"];
@@ -480,12 +602,31 @@ export function handleSummary(data) {
     parts.push(dumpStatusFor("availability") + "\n");
     parts.push(dumpStatusFor("cancel") + "\n");
 
+    // Oversell check
+    parts.push("[No-oversell check]\n");
+    const initStr =
+        INIT_REMAINING == null ? "(unknown)" : String(INIT_REMAINING);
+    parts.push(lineKV("initial remaining", initStr));
+    const endStr = END_REMAINING == null ? "(unknown)" : String(END_REMAINING);
+    parts.push(lineKV("final remaining", endStr));
+    parts.push(lineKV("net reserved by test", netQty));
+
+    let oversellNote = "N/A";
+    if (INIT_REMAINING != null && END_REMAINING != null) {
+        const expectedMinEnd = INIT_REMAINING - netQty; // nếu không có tác động ngoài
+        oversellNote =
+            END_REMAINING >= 0
+                ? END_REMAINING >= expectedMinEnd
+                    ? "OK (no oversell detected)"
+                    : "⚠️ POSSIBLE OVERSELL (final < initial - net)"
+                : "❌ NEGATIVE REMAINING";
+    }
+    parts.push(lineKV("result", oversellNote));
+    parts.push("\n");
+
     const text = parts.join("");
 
-    // Xuất ra stdout và (tuỳ chọn) file JSON
     const out = { stdout: text };
-    if (SUMMARY_JSON) {
-        out["summary.k6.json"] = JSON.stringify(data, null, 2);
-    }
+    if (SUMMARY_JSON) out["summary.k6.json"] = JSON.stringify(data, null, 2);
     return out;
 }

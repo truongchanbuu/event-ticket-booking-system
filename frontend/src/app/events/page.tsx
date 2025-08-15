@@ -5,7 +5,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import EventCard from "@/components/events/event-card";
 import EventFilterBar from "@/components/events/event-filter-bar";
 import EventLoadingSkeleton from "@/components/events/event-loading-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,6 +12,7 @@ import type { Event, EventFilters } from "@/schema";
 import { useDebounceCallback } from "@/hooks/use-debounce-callback";
 import { AppUser } from "@/schema/user";
 import { usePublicEvents } from "@/hooks/use-public-events";
+import { PublicEventCard } from "@/components/events/public-event-card";
 
 const MAX_SUGGEST_ORGANIZER = 6;
 const DEBOUNCE_DELAY = 300;
@@ -49,9 +49,12 @@ export default function EventsPage() {
 
   const pages = data?.pages ?? [];
 
+  const extractEvents = (p: any): Event[] =>
+    p?.data?.events ?? p?.data?.data?.events ?? p?.events ?? [];
+
   const allEvents: Event[] = useMemo(() => {
-    return pages.flatMap((p) => p.data as unknown as Event[]);
-  }, [data]);
+    return (pages ?? []).flatMap(extractEvents);
+  }, [pages]);
 
   const filteredEvents = useMemo(() => {
     let output = allEvents;
@@ -71,8 +74,8 @@ export default function EventsPage() {
       output = output.filter((ev: any) => {
         const title = (ev.eventTitle ?? ev.title ?? "").toLowerCase();
         const desc = (ev.eventDesc ?? ev.description ?? "").toLowerCase();
-        const loc = (ev.location ?? "").toLowerCase();
-        const org = (ev.organizerName ?? "").toLowerCase();
+        const loc = (ev.location?.address ?? "").toLowerCase();
+        const org = (ev.organizer?.name ?? "").toLowerCase();
         return (
           title.includes(term) ||
           desc.includes(term) ||
@@ -155,7 +158,7 @@ export default function EventsPage() {
           ) : (
             <>
               {filteredEvents.map((event) => (
-                <EventCard key={event.eventID} event={event} />
+                <PublicEventCard key={event.eventID} event={event} />
               ))}
 
               {/* Loading skeletons khi load thêm page */}

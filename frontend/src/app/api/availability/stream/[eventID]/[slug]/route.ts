@@ -24,8 +24,6 @@ export async function GET(
     }
   );
 
-  console.log(`upstream: ${JSON.stringify(upstreamRes)}`);
-
   if (!upstreamRes.ok || !upstreamRes.body) {
     return new Response("Upstream SSE error", { status: 502 });
   }

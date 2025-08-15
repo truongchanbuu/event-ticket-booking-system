@@ -144,7 +144,6 @@ export class InventoryService {
     }
 
     async getShardCount(ttId) {
-        console.log(`[TICKETID] - ${ttId}`);
         const now = Date.now();
         const cached = this._metaCache.get(ttId);
         if (cached && now - cached.ts < SHARDCOUNT_CACHE_TTL_MS) {

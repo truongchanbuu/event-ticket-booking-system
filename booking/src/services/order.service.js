@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 export class OrderService {
     constructor({ db, logger = console } = {}) {
         if (!db) throw new Error("FIRESTORE_REQUIRED");
@@ -8,6 +10,8 @@ export class OrderService {
         this.ordersCol = this.db.collection("orders");
         this.ticketsCol = this.db.collection("tickets");
         this.ledgerCol = this.db.collection("reservation_commits");
+
+        this.claimTtlMs = 30 * 24 * 3600 * 1000;
     }
 
     deriveOrderId(reservationId) {
@@ -27,6 +31,7 @@ export class OrderService {
             currency = "VND",
             paymentIntentId = undefined,
             maxWritesPerTxn = 400,
+            claimTtlMs = this.claimTtlMs,
         } = opts;
 
         const items = this._itemsFromLines(hold.lines);
@@ -52,6 +57,10 @@ export class OrderService {
             );
         }
 
+        const claimToken = this._randTokenHex(24);
+        const claimTokenHash = this._sha256Hex(claimToken);
+        const claimExpiresAt = Date.now() + Number(claimTtlMs);
+
         // Prebuild order payload; createdAt/updatedAt stamped at create-time.
         const baseOrderDoc = this._buildOrderDoc(hold, {
             orderId,
@@ -59,6 +68,8 @@ export class OrderService {
             amount,
             currency,
             paymentIntentId,
+            claimTokenHash,
+            claimExpiresAt,
         });
 
         let already = false;
@@ -92,7 +103,13 @@ export class OrderService {
             txns: executedTxns,
         });
 
-        return { orderId, already, ticketCount };
+        return {
+            orderId,
+            already,
+            ticketCount,
+            claimToken: already ? null : claimToken,
+            claimExpiresAt,
+        };
     }
 
     /* ==========================
@@ -140,6 +157,11 @@ export class OrderService {
             items: meta.items,
             createdAt: nowIso,
             updatedAt: nowIso,
+            claim: {
+                tokenHash: meta.claimTokenHash, // sha256 hex
+                expiresAt: meta.claimExpiresAt, // ms epoch
+                rotated: false,
+            },
         };
     }
 
@@ -262,5 +284,79 @@ export class OrderService {
 
     _clone(obj) {
         return JSON.parse(JSON.stringify(obj));
+    }
+
+    _randTokenHex(bytes = 24) {
+        return crypto.randomBytes(bytes).toString("hex");
+    }
+    _sha256Hex(s) {
+        return createHash("sha256").update(String(s)).digest("hex");
+    }
+    _tsEqHex(a, b) {
+        const ab = Buffer.from(String(a), "utf8");
+        const bb = Buffer.from(String(b), "utf8");
+        if (ab.length !== bb.length) return false;
+        return timingSafeEqual(ab, bb);
+    }
+
+    async getOrderWithTicketsByClaim(orderId, claimToken) {
+        if (!orderId || !claimToken) return { ok: false, error: "BAD_REQUEST" };
+
+        const orderRef = this.ordersCol.doc(String(orderId));
+        const snap = await orderRef.get();
+        if (!snap.exists) return { ok: false, error: "ORDER_NOT_FOUND" };
+        const o = snap.data();
+
+        const exp = Number(o?.claim?.expiresAt || 0);
+        const hash = o?.claim?.tokenHash || "";
+        if (!hash) return { ok: false, error: "CLAIM_NOT_SET" };
+        if (exp && exp < Date.now())
+            return { ok: false, error: "CLAIM_EXPIRED" };
+
+        const okHash = this._tsEqHex(hash, this._sha256Hex(claimToken));
+        if (!okHash) return { ok: false, error: "CLAIM_INVALID" };
+
+        // Lấy tickets theo orderId
+        const tSnap = await this.ticketsCol
+            .where("orderId", "==", orderId)
+            .get();
+        const tickets = tSnap.docs.map((d) => d.data());
+
+        // Mask buyer khi trả về qua claim (tránh lộ PII)
+        const buyer = this._maskBuyer(o?.buyer || null);
+
+        return {
+            ok: true,
+            order: {
+                orderId: o.orderId,
+                eventId: o.eventId,
+                status: o.status,
+                amount: o.amount,
+                currency: o.currency,
+                items: o.items,
+                buyer, // masked
+                createdAt: o.createdAt,
+                updatedAt: o.updatedAt,
+            },
+            tickets,
+        };
+    }
+
+    _maskBuyer(b) {
+        if (!b) return null;
+        const maskEmail = (e) =>
+            typeof e === "string" ? e.replace(/(^.).*(@.*$)/, "$1***$2") : null;
+        const onlyDigits = (s) => String(s || "").replace(/\D/g, "");
+        const maskPhone = (p) => {
+            const d = onlyDigits(p);
+            if (!d) return null;
+            const last4 = d.slice(-4);
+            return `***-***-${last4}`;
+        };
+        return {
+            name: b.name ?? null,
+            email: b.email ? maskEmail(b.email) : null,
+            phone: b.phone ? maskPhone(b.phone) : null,
+        };
     }
 }

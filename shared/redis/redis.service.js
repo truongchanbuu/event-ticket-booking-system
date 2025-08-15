@@ -153,7 +153,11 @@ export class RedisService {
     }
   }
 
-  async set(key, value, { ttl = this.defaultTTL, trackingKey } = {}) {
+  async set(
+    key,
+    value,
+    { ttl = this.defaultTTL, trackingKey, noJitter = false } = {}
+  ) {
     const k = this._key(key);
     const tagKey = trackingKey ? this._key(trackingKey) : null;
     try {
@@ -164,7 +168,8 @@ export class RedisService {
         );
         return false;
       }
-      const ttlJit = this._jit(ttl);
+
+      const ttlJit = noJitter ? ttl : this._jit(ttl);
 
       // Atomic path when trackingKey is provided and Lua is available
       if (trackingKey && this.SHA_SET_TAG) {
@@ -466,6 +471,11 @@ export class RedisService {
       if (this.r?.raw?.zadd) {
         return await this.r.raw.zadd(k, ...args);
       }
+
+      if (this.r?.raw?.zAdd) {
+        return await this.r.raw.zAdd(k, ...args);
+      }
+
       return await this.r.zadd(k, ...args);
     } catch (e) {
       this.logger.error(`[Redis] ZADD ${k}`, { e: e.message });

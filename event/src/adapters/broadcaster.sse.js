@@ -31,6 +31,17 @@ export class EmbeddedBroadcaster {
 
     _schedulePush = (slug, hint) => {
         if (!slug) return;
+        if (
+            hint?.invVersion != null &&
+            !Number.isNaN(Number(hint.invVersion))
+        ) {
+            const cur = this.latestInvVersion.get(slug);
+            const next = Math.max(
+                Number(cur ?? -Infinity),
+                Number(hint.invVersion),
+            );
+            this.latestInvVersion.set(slug, next);
+        }
         if (this.pending.has(slug)) return;
 
         const t = setTimeout(async () => {
@@ -38,10 +49,14 @@ export class EmbeddedBroadcaster {
             const sinks = this.sinks.get(slug);
             if (!sinks || sinks.size === 0) return;
 
+            const effInv =
+                this._parseInvVersion(this.latestInvVersion.get(slug)) ??
+                this._parseInvVersion(hint?.invVersion);
+
             let snap;
             try {
                 snap = await this.availability.getBySlug(slug, {
-                    minInvVersion: this._parseInvVersion(hint?.invVersion),
+                    minInvVersion: effInv,
                     forceRefresh: !!hint?.forceRefresh, // bật trong DEV nếu cần
                 });
             } catch (e) {
@@ -82,7 +97,11 @@ export class EmbeddedBroadcaster {
                     this.lastEtag.delete(res);
                 }
             }
-            if (sinks.size === 0) this.sinks.delete(slug);
+
+            if (sinks.size === 0) {
+                this.sinks.delete(slug);
+                this.latestInvVersion.delete(slug);
+            }
         }, this.coalesceMs);
 
         this.pending.set(slug, t);
@@ -159,6 +178,11 @@ export class EmbeddedBroadcaster {
         }
         sinks.add(res);
 
+        const lastId = req.get?.("Last-Event-ID");
+        if (lastId) {
+            this.lastEtag.set(res, lastId);
+        }
+
         const hb = setInterval(() => {
             try {
                 res.write(`event: ping\ndata: {}\n\n`);
@@ -172,7 +196,11 @@ export class EmbeddedBroadcaster {
             clearInterval(hb);
             const set = this.sinks.get(slug);
             set?.delete(res);
-            if (set && set.size === 0) this.sinks.delete(slug);
+            if (set && set.size === 0) {
+                this.sinks.delete(slug);
+                this.latestInvVersion.delete(slug);
+            }
+
             this.lastEtag.delete(res);
             try {
                 res.end();

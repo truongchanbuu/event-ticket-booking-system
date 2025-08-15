@@ -10,7 +10,6 @@ import {
   Plus,
   Star,
   User,
-  Variable,
   XCircle,
 } from "lucide-react";
 import { formatDate, formatTime } from "@/lib/utils";

@@ -1,23 +1,18 @@
 import { createHash } from "crypto";
-
 import { EVENT_STATUS } from "../enums/event-status.js";
-import {
-    AppError,
-    ERROR_CODE,
-    sleep,
-    withTimeout,
-} from "@event_ticket_booking_system/shared";
+import { sleep, withTimeout } from "@event_ticket_booking_system/shared";
 
-const T_EVENTS_MS = 600; // detail theo slug (qua proxy)
-const T_TICKETS_MS = 600; // ticket types
-const T_INV_MS = 250; // redis (nhanh hơn)
+/** Timeouts (ms) */
+const T_EVENTS_MS = 600; // fetch event detail by slug
+const T_TICKETS_MS = 600; // fetch ticket types
+const T_INV_MS = 250; // read inventory (fast)
 
 export class AvailabilityService {
     constructor({
-        redisService,
-        eventService,
-        inventoryService,
-        ticketClientService,
+        redisService, // KV (get/set/del)
+        eventService, // events.getPublicEventDetail(slug)
+        inventoryService, // inv.readAggregatedCountersWithVersion(eventId, ttIds)
+        ticketClientService, // ticketClientService.getEventTicketTypes(eventId)
         logger = console,
         config,
     }) {
@@ -26,14 +21,21 @@ export class AvailabilityService {
         this.inv = inventoryService;
         this.ticketClientService = ticketClientService;
         this.logger = logger;
-        this.ttlMs = config?.availability?.serverCacheTtlMs ?? 0;
-        this.inflight = new Map();
-        this.coalesceMs = config?.availability?.coalesceMs ?? 150;
+
+        this.ttlMs = config?.availability?.serverCacheTtlMs ?? 0; // payload cache TTL (ms)
+        this.coalesceMs = config?.availability?.coalesceMs ?? 150; // micro-batching
         this.MAX_INFLIGHT = 5000;
+
+        /** inflight: Map<string, {p: Promise<Payload>, min: number}> */
+        this.inflight = new Map();
     }
 
+    /** ------------ Keys & helpers ------------ */
     cacheKey(slug) {
         return `availability:slug:${slug}`;
+    }
+    etagKey(slug) {
+        return `avail:etag:${slug}`;
     }
 
     etagOf(total, status, remains, ticketTypesVersion = 0, invVersion = 0) {
@@ -51,17 +53,61 @@ export class AvailabilityService {
         return `W/"${b64}"`;
     }
 
+    async setEtag(slug, etag, ttlSecHint) {
+        if (!slug || !etag) return;
+        const ttlSec =
+            Number.isFinite(ttlSecHint) && ttlSecHint > 0
+                ? Math.floor(ttlSecHint)
+                : Math.max(5, Math.ceil((this.ttlMs || 0) / 1000) || 30);
+        try {
+            await this.cache.set(this.etagKey(slug), etag, { ttl: ttlSec });
+        } catch (e) {
+            this.logger?.warn?.("[availability] setEtag failed", {
+                slug,
+                err: e?.message,
+            });
+        }
+    }
+
+    async peekEtag(slug) {
+        if (!slug) return null;
+        try {
+            const et = await this.cache.get(this.etagKey(slug));
+            if (typeof et === "string" && et.length) return et;
+
+            const cached = await this.cache.get(this.cacheKey(slug));
+            return typeof cached?.etag === "string" ? cached.etag : null;
+        } catch {
+            return null;
+        }
+    }
+
+    async invalidateBySlug(slug) {
+        if (!slug) return;
+        try {
+            await this.cache.del(this.cacheKey(slug));
+            await this.cache.del(this.etagKey(slug));
+        } catch (e) {
+            this.logger?.warn?.("[availability] invalidateBySlug failed", {
+                slug,
+                err: e?.message,
+            });
+        }
+    }
+
+    /** ------------ Core API ------------ */
     async getBySlug(slug, opts = {}) {
         const forceRefresh = !!opts.forceRefresh;
-
-        const _rawMin = opts.minInvVersion;
-        const minInvVersion = _rawMin == null ? undefined : Number(_rawMin);
+        const rawMin = opts.minInvVersion;
+        const minInvVersion = rawMin == null ? undefined : Number(rawMin);
         const hasMin = !(minInvVersion == null || Number.isNaN(minInvVersion));
 
         if (!slug) return { status: 400, data: { message: "Missing slug" } };
 
         const key = this.cacheKey(slug);
+        const ttlSecPayload = Math.ceil((this.ttlMs || 0) / 1000);
 
+        // 1) try fast server cache (honor minInvVersion)
         if (this.ttlMs > 0 && !forceRefresh) {
             const cached = await this.cache.get(key);
             if (cached) {
@@ -72,15 +118,25 @@ export class AvailabilityService {
             }
         }
 
+        // 2) inflight coalesce (xét minInvVersion)
         if (this.inflight.size >= this.MAX_INFLIGHT) {
             return { status: 503, data: { message: "Busy" } };
         }
 
-        if (!this.inflight.has(slug)) {
+        const wantMin = hasMin ? minInvVersion : 0;
+        const ent = this.inflight.get(slug);
+        if (!ent || forceRefresh || wantMin > ent.min) {
+            // dùng min lớn hơn trong số các requester → đảm bảo đáp ứng mọi caller
+            const effectiveMin = forceRefresh
+                ? wantMin
+                : Math.max(wantMin, ent?.min ?? 0);
+
             const p = (async () => {
                 try {
+                    // micro-batching
                     await sleep(this.coalesceMs);
 
+                    // 2.1) Event detail
                     const detail = await withTimeout(
                         (signal) =>
                             this.events.getPublicEventDetail(slug, { signal }),
@@ -108,15 +164,13 @@ export class AvailabilityService {
                                 trackingKey: `event:${detail.eventID || detail.eventId}`,
                             });
                         }
+                        // Luôn xóa ETag để client không 304 sau khi CANCELLED
+                        await this.cache.del(this.etagKey(slug));
                         return payload;
                     }
 
                     const eventId = detail.eventID || detail.eventId;
                     if (!eventId) {
-                        console.warn("[availability] missing eventId", {
-                            slug,
-                            detailKeys: Object.keys(detail),
-                        });
                         const payload = {
                             status: 404,
                             data: { message: "Not found" },
@@ -126,6 +180,7 @@ export class AvailabilityService {
                         return payload;
                     }
 
+                    // 2.2) Ticket types
                     const ttResp = await withTimeout(
                         () =>
                             this.ticketClientService.getEventTicketTypes(
@@ -146,7 +201,6 @@ export class AvailabilityService {
                     const ticketTypeIds = ttItems
                         .map((t) => t.ticketTypeID || t.id)
                         .filter(Boolean);
-
                     const ticketTypesVersion =
                         (Number.isFinite(ttResp.version)
                             ? ttResp.version
@@ -155,8 +209,9 @@ export class AvailabilityService {
                             .update(ticketTypeIds.join(","))
                             .digest("base64url");
 
+                    // 2.3) No TT → empty payload (vẫn có ETag/Version)
                     if (!ticketTypeIds.length) {
-                        const effInvVerEmpty = hasMin ? minInvVersion : 0;
+                        const effInvVerEmpty = effectiveMin || 0;
                         const payload = {
                             status: 200,
                             data: [],
@@ -171,21 +226,24 @@ export class AvailabilityService {
                             _invVersion: effInvVerEmpty,
                         };
                         if (this.ttlMs) {
+                            const ttl = ttlSecPayload;
                             await this.cache.set(key, payload, {
-                                ttl: Math.ceil(this.ttlMs / 1000),
+                                ttl,
                                 trackingKey: `event:${eventId}`,
                             });
                         }
+                        await this.setEtag(slug, payload.etag, ttlSecPayload);
                         return payload;
                     }
 
+                    // 2.4) Inventory read (with version)
                     const invRes = await withTimeout(
                         () =>
                             this.inv.readAggregatedCountersWithVersion(
                                 eventId,
                                 ticketTypeIds,
                             ),
-                        250,
+                        T_INV_MS,
                     );
                     const remains = invRes?.remains;
                     const invVerRead = Number(invRes?.invVersion ?? 0);
@@ -193,10 +251,7 @@ export class AvailabilityService {
                     const safeRemains = ticketTypeIds.map((_, i) =>
                         Number.isFinite(remains?.[i]) ? remains[i] : 0,
                     );
-
-                    const effInvVer = hasMin
-                        ? Math.max(invVerRead, minInvVersion)
-                        : invVerRead;
+                    const effInvVer = Math.max(invVerRead, effectiveMin || 0);
 
                     const data = ticketTypeIds.map((id, i) => ({
                         ticketTypeId: id,
@@ -225,15 +280,17 @@ export class AvailabilityService {
                     };
 
                     if (this.ttlMs) {
+                        const ttl = ttlSecPayload;
                         await this.cache.set(key, payload, {
-                            ttl: Math.ceil(this.ttlMs / 1000),
+                            ttl,
                             trackingKey: `event:${eventId}`,
                         });
                     }
+                    await this.setEtag(slug, payload.etag, ttlSecPayload);
 
                     return payload;
                 } catch (err) {
-                    console.error("[availability] getBySlug failed", {
+                    this.logger?.error?.("[availability] getBySlug failed", {
                         slug,
                         e: err?.message,
                         code: err?.code,
@@ -247,10 +304,14 @@ export class AvailabilityService {
                 }
             })();
 
-            this.inflight.set(slug, p);
-            p.finally(() => this.inflight.delete(slug));
+            this.inflight.set(slug, { p, min: effectiveMin });
+            p.finally(() => {
+                const cur = this.inflight.get(slug);
+                if (cur?.p === p) this.inflight.delete(slug);
+            });
         }
 
-        return this.inflight.get(slug);
+        // 3) trả promise inflight hiện tại
+        return this.inflight.get(slug).p;
     }
 }
