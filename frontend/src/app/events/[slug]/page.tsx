@@ -29,7 +29,7 @@ export async function generateMetadata({
   }
 
   if (result.kind === "cancelled") {
-    const title = "Sự kiện đã huỷ";
+    const title = "Event Cancelled";
     const description = result.reason || "Sự kiện này đã bị huỷ.";
     return {
       title,

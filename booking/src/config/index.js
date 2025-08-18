@@ -15,6 +15,13 @@ export const config = {
             enabled: process.env.RESERVATION_AUTOCANCEL_ENABLED !== "false",
         },
     },
+    reaper: {
+        batchSize: 300,
+        enabled: true,
+        tickMs: 1500,
+        lockTtl: 30,
+    },
+
     autoCancel: {
         tickMs: Number(process.env.AUTOCANCEL_TICK_MS ?? 1500),
         batchSize: Number(process.env.AUTOCANCEL_BATCH_SIZE ?? 300),

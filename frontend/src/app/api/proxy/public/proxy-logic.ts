@@ -41,7 +41,7 @@ export async function handler(
   req: NextRequest,
   ctx: { params: { service: string; path?: string[] } }
 ) {
-  const { service, path = [] } = ctx.params;
+  const { service, path = [] } = await ctx.params;
   const base = registry[service as keyof typeof registry];
   if (!base)
     return NextResponse.json({ message: "Service not found" }, { status: 404 });
@@ -84,6 +84,7 @@ export async function handler(
       headers: sanitizeHeaders(upstream.headers),
     });
   } catch (err: any) {
+    console.log(`Proxy error ${err}`);
     const code = err?.name === "AbortError" ? 504 : 502;
     return NextResponse.json(
       { message: code === 504 ? "Gateway timeout" : "Proxy error" },

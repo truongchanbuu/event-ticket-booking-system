@@ -28,14 +28,14 @@ module.exports = {
                 AUTOCANCEL_TICK_MS: 1500,
                 AUTOCANCEL_BATCH_SIZE: 300,
                 AUTOCANCEL_LOCK_TTL: 10,
-                REAPER_ENABLED: true, // Reaper vẫn phải chạy để thả vé ngay khi hết TTL
+                REAPER_ENABLED: true,
                 REAPER_TICK_MS: 1500,
                 REAPER_BATCH_SIZE: 300,
                 REAPER_LOCK_TTL: 10,
                 LOG_LEVEL: "warn",
                 BOOKING_DISABLE_KAFKA: true,
-                RATE_LIMIT_PER_MINUTE: 0, // Hoặc bạn bypass trong code (xem dưới)
-                HOLD_TTL_SEC: 20, // TTL ngắn để Reaper thu hồi nhanh
+                RATE_LIMIT_PER_MINUTE: 0,
+                HOLD_TTL_SEC: 900,
                 MAX_QTY_PER_LINE: 1,
                 BOOKING_INLINE_INVENTORY: true,
             },

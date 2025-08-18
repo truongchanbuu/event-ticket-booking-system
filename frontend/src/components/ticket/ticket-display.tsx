@@ -177,9 +177,6 @@ export function TicketTypesDisplay({
         qty,
       });
 
-      console.log(`out: ${JSON.stringify(out)}`);
-
-      // Nếu BE trả kèm payment.intent (best-effort), lưu tx để trang checkout khôi phục ngay QR
       if (out?.payment?.transactionId) {
         try {
           sessionStorage.setItem(
@@ -189,7 +186,11 @@ export function TicketTypesDisplay({
         } catch {}
       }
 
-      router.push(`/checkout/${encodeURIComponent(out.reservationId)}`);
+      const reservationID =
+        out?.reservationId || out?.rid || out?.reservationID;
+      if (reservationID) {
+        router.push(`/checkout/${encodeURIComponent(reservationID)}`);
+      }
     } catch (e: any) {
       setErr("Cannot reserve a ticket. Please try again.");
     } finally {
@@ -340,6 +341,7 @@ export function TicketTypesDisplay({
                   </div>
 
                   <button
+                    type="button"
                     disabled={reserveDisabled}
                     onClick={() => onSelect(ticket, qty)}
                     className={`py-2 px-4 rounded-md font-medium text-sm transition-colors flex-shrink-0 ${

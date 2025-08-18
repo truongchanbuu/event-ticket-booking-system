@@ -252,3 +252,31 @@ export function safeFormatTime(x: any) {
     return "";
   }
 }
+
+export function toEpochMs(t?: number | string) {
+  if (t == null) return undefined;
+  if (typeof t === "string") {
+    const parsed = Date.parse(t);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  // number: có thể là giây (10 chữ số) hoặc ms (13 chữ số)
+  // mốc 1e11 ~ năm 2004 (ms). <1e11 coi là giây.
+  return t < 1e11 ? t * 1000 : t;
+}
+
+export function safeParseJSON<T>(raw: string | null): T | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+export const pad2 = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+export const msToMMSS = (ms: number) => {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const mm = Math.floor(s / 60);
+  const ss = s % 60;
+  return `${pad2(mm)}:${pad2(ss)}`;
+};

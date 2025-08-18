@@ -323,15 +323,29 @@ export class RedisService {
     return p;
   }
 
-  hgetall = (k) => this.r.hgetall(this._key(k));
-  hget = (k, f) =>
-    this.r.raw.hget
-      ? this.r.raw.hget(this._key(k), f)
-      : this.r.hget(this._key(k), f);
-  hset = (k, f, v) =>
-    this.r.raw.hset
-      ? this.r.raw.hset(this._key(k), f, v)
-      : this.r.hset(this._key(k), f, v);
+  hgetall = async (k) => {
+    const key = this._key(k);
+    if (this.r?.raw?.hgetall) return this.r.raw.hgetall(key);
+    if (this.r?.hgetall) return this.r.hgetall(key);
+    if (this.r?.sendCommand) return this.r.sendCommand(["HGETALL", key]);
+    throw new Error("HGETALL_UNSUPPORTED");
+  };
+
+  hget = async (k, f) => {
+    const key = this._key(k);
+    if (this.r?.raw?.hget) return this.r.raw.hget(key, f);
+    if (this.r?.hget) return this.r.hget(key, f);
+    if (this.r?.sendCommand) return this.r.sendCommand(["HGET", key, f]);
+    throw new Error("HGET_UNSUPPORTED");
+  };
+
+  hset = async (k, f, v) => {
+    const key = this._key(k);
+    if (this.r?.raw?.hset) return this.r.raw.hset(key, f, v);
+    if (this.r?.hset) return this.r.hset(key, f, v);
+    if (this.r?.sendCommand) return this.r.sendCommand(["HSET", key, f, v]);
+    throw new Error("HSET_UNSUPPORTED");
+  };
 
   pttl = async (key) => {
     const k = this._key(key);

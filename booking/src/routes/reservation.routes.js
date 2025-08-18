@@ -7,6 +7,11 @@ export class ReservationRoutes {
         this.router = Router();
         this.reservationController = reservationController;
 
+        this.router.post(
+            "/reservations/:rid/buyer-claim",
+            this.reservationController.buyerClaim,
+        );
+
         this.router.get(
             "/reservations/:rid",
             this.reservationController.getReservationByID,

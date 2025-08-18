@@ -29,7 +29,7 @@ export async function setIdemFinal(redis, idem, statusCode, body) {
 
     return redis.set(
         idemKey(idem),
-        JSON.stringify({ status: "done", statusCode, body }),
+        { status: "done", statusCode, body },
         { ttl },
     );
 }

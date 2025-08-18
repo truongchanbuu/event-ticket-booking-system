@@ -13,6 +13,7 @@ export class ReservationController {
         this.confirmReservation = catchAsync(
             this.confirmReservation.bind(this),
         );
+        this.buyerClaim = catchAsync(this.buyerClaim.bind(this));
     }
 
     async getReservationByID(req, res) {
@@ -69,6 +70,8 @@ export class ReservationController {
                 userAgent,
             });
 
+            console.log(`result from reservation: ${JSON.stringify(result)}`);
+
             return res.status(result.statusCode).json(result.body);
         } finally {
             this.logger.info("[/checkout/reservations] done", {
@@ -94,4 +97,70 @@ export class ReservationController {
         });
         return res.status(result.statusCode).json(result.body);
     }
+
+    buyerClaim = async (req, res) => {
+        const reservationId = String(req.params?.rid || "").trim();
+        if (!reservationId) {
+            return res
+                .status(400)
+                .json({ success: false, error: "RESERVATION_ID_REQUIRED" });
+        }
+
+        // chấp nhận nhiều dạng payload: { buyer }, { buyerClaim }, hoặc body thẳng
+        const buyer = req.body?.buyer || req.body?.buyerClaim || req.body || {};
+
+        const userId =
+            req.user?.uid ||
+            req.userId ||
+            req.userID ||
+            buyer.userID ||
+            buyer.userId ||
+            null;
+
+        const resp = await this.svc.setBuyerClaim({
+            reservationId,
+            buyer,
+            userId,
+            clientIp: req.ip,
+            userAgent: req.get("user-agent"),
+        });
+
+        const statusCode = Number(resp?.statusCode) || 200;
+        const body = resp?.body || {};
+
+        // === ĐÃ CHUẨN HÓA Ở SERVICE ===
+        if (body.success === true) {
+            // nếu service đã gói sẵn data thì chuyển nguyên si,
+            // còn nếu vẫn trả rời rạc thì map sang data
+            const data = body.data ?? {
+                reservationId: body.reservationId,
+                ttlMs: body.ttlMs,
+                claim: body.claim,
+                serverTime: body.serverTime,
+            };
+
+            return res.status(statusCode).json({ success: true, data });
+        }
+
+        // === TƯƠNG THÍCH NGƯỢC VỚI KIỂU CŨ { ok } ===
+        if (body.ok === true) {
+            return res.status(statusCode).json({
+                success: true,
+                data: {
+                    reservationId: body.reservationId,
+                    ttlMs: body.ttlMs,
+                    claim: body.claim,
+                    serverTime: body.serverTime,
+                },
+            });
+        }
+
+        // === NHÁNH LỖI ===
+        const errorCode = body.error || "INTERNAL";
+        // nếu service trả về 2xx nhưng body không ok/success -> coi như lỗi 500
+        const finalStatus = statusCode >= 400 ? statusCode : 500;
+        return res
+            .status(finalStatus)
+            .json({ success: false, error: errorCode });
+    };
 }

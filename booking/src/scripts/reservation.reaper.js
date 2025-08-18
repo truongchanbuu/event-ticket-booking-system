@@ -145,12 +145,13 @@ export class ReservationReaper {
     async _ensureCompareDel() {
         if (this._compareDelSha) return this._compareDelSha;
         const sha = await this.redis.scriptLoad(`
-      if redis.call("GET", KEYS[1]) == ARGV[1] then
-        return redis.call("DEL", KEYS[1])
-      else
-        return 0
-      end
-    `);
+            if redis.call("GET", KEYS[1]) == ARGV[1] then
+                return redis.call("DEL", KEYS[1])
+            else
+                return 0
+            end
+        `);
+
         this._compareDelSha = sha;
         return sha;
     }
@@ -283,10 +284,11 @@ export class ReservationReaper {
                     const graceMs = Number(
                         this.config?.reservation?.graceMs ?? 0,
                     );
+
                     if (graceMs > 0) {
                         // 1) Lưu snapshot (để late payment có thể re-reserve)
                         const snapKey = `reservation:expired:${reservationId}`;
-                        const snapTtlSec = Math.ceil((graceMs + 30_000) / 1000); // buffer 30s
+                        const snapTtlSec = Math.ceil((graceMs + 30_000) / 1000);
                         const snapshot = {
                             v: 1,
                             reservationId,

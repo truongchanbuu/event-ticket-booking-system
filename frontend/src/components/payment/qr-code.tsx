@@ -9,7 +9,7 @@ interface QRCodeProps {
   fgColor?: string;
 }
 
-export default function TicketQRCode({
+export default function CustomQRCode({
   value,
   size = QRCODE_SIZE,
   bgColor = "#ffffff",

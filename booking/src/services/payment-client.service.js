@@ -100,7 +100,70 @@ export class PaymentClient {
         }, ttl);
     }
 
+    async _get(path, { params, timeoutMs, signal, headers } = {}) {
+        const ttl =
+            Number.isFinite(timeoutMs) && timeoutMs > 0
+                ? timeoutMs
+                : this.defaultTimeoutMs;
+
+        return withTimeout(async (timeoutSignal) => {
+            let finalSignal = timeoutSignal;
+            try {
+                if (
+                    signal &&
+                    typeof AbortSignal !== "undefined" &&
+                    AbortSignal.any
+                ) {
+                    finalSignal = AbortSignal.any([timeoutSignal, signal]);
+                }
+            } catch {}
+
+            const res = await this.http.get(path, {
+                params,
+                headers,
+                signal: finalSignal,
+            });
+            return this._normalizeFromAxios(res);
+        }, ttl);
+    }
+
+    static PATH_INTENT_BY_RSV = "/api/internal/payment/intent/by-reservation";
+    static PATH_INTENT_BY_ID = "/api/internal/payment/intent/by-id";
+
     // ========== APIs ==========
+    async getByReservationId(reservationID, opts = {}) {
+        try {
+            const id = String(reservationID || "").trim();
+            if (!id) {
+                return this._asErrorEnvelope({
+                    message: "RESERVATION_ID_REQUIRED",
+                    statusCode: 400,
+                    errorCode: "BAD_REQUEST",
+                });
+            }
+
+            const headers = this._mergeHeaders(
+                opts.defaultHeaders,
+                opts.headers,
+            );
+            return await this._get(PaymentClient.PATH_INTENT_BY_RSV, {
+                params: { reservationID: id },
+                timeoutMs: opts.timeoutMs,
+                signal: opts.signal,
+                headers,
+            });
+        } catch (err) {
+            const statusCode = this._pickStatusCodeFromError(err);
+            const data = err?.response?.data;
+            if (data && typeof data.success === "boolean") return data; // giữ nguyên envelope upstream
+            return this._asErrorEnvelope({
+                message: err?.message || "REQUEST_FAILED",
+                statusCode,
+                errorCode: this._pickErrorCodeFromError(err, statusCode),
+            });
+        }
+    }
+
     async checkout(body, opts = {}) {
         try {
             const reservationID = String(

@@ -103,12 +103,10 @@ export function AvailabilityClient({
     setSseError(null);
 
     // Grace period: cho SSE 2s để open/update trước khi bật polling
-    const grace = setTimeout(() => setAllowPolling(true), 2000);
+    const grace = setTimeout(() => setAllowPolling(true), 5000);
 
     es.onopen = () => {
-      setSseConnected(true);
-      // nhận open rồi thì tắt cho phép polling (nếu trước đó đã bật)
-      setAllowPolling(false);
+      setSseTried(true);
     };
 
     const onUpdate = (ev: MessageEvent) => {
@@ -130,7 +128,13 @@ export function AvailabilityClient({
       setAllowPolling(true);
     };
 
-    const onErrorEvent = (ev: MessageEvent) => {
+    const onErrorEvent = (ev: MessageEvent | Event) => {
+      if (!("data" in ev) || typeof (ev as any).data !== "string") {
+        setSseConnected(false);
+        setAllowPolling(true);
+        return;
+      }
+
       try {
         const err = JSON.parse(ev.data);
         if (err?.status === 410) setSseError("CANCELLED");
@@ -146,6 +150,7 @@ export function AvailabilityClient({
       clearTimeout(grace);
       es.removeEventListener("update", onUpdate);
       es.removeEventListener("error", onErrorEvent);
+      es.onmessage = null;
       try {
         es.close();
       } catch {}

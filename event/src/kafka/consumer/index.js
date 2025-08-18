@@ -70,14 +70,7 @@ export class ConsumerOrchestrator {
                             availabilityService: tryResolve(scope, [
                                 "availabilityService",
                             ]),
-                            availabilityEvents: tryResolve(scope, [
-                                "availabilityEvents",
-                            ]),
-                            redis: tryResolve(scope, [
-                                "redisService",
-                                "redisClient",
-                                "redis",
-                            ]),
+                            redis: tryResolve(scope, ["redisService"]),
                             redisPubSub: tryResolve(scope, ["redisPubSub"]),
                             logger: this.logger,
                         };

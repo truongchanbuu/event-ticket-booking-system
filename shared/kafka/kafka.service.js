@@ -1,6 +1,7 @@
 import { Kafka, CompressionTypes, logLevel } from "kafkajs";
 import ms from "ms";
 import { decodeEnvelope } from "./utils.js";
+import { sleep } from "../helpers/utils.js";
 
 const RETRIABLE_ERR_SNIPPETS = [
   "This server does not host this topic-partition",
@@ -331,7 +332,7 @@ export class KafkaService {
     });
 
     await consumer.connect();
-    await consumer.subscribe({ topics: allRetryTopics, fromBeginning: true });
+    await consumer.subscribe({ topics: allRetryTopics, fromBeginning: false });
 
     this.logger.info(
       `✅ Global Retry Handler listening ${
@@ -341,48 +342,66 @@ export class KafkaService {
 
     await consumer.run({
       autoCommit: false,
-      eachMessage: async ({ topic, partition, message }) => {
+      eachBatchAutoResolve: false,
+      eachBatch: async ({
+        batch,
+        resolveOffset,
+        heartbeat,
+        isRunning,
+        isStale,
+        commitOffsetsIfNecessary,
+      }) => {
+        const topic = batch.topic;
+        const partition = batch.partition;
         const delayString = topic.split(".").pop() || "0s";
         const delayMs = ms(delayString);
 
-        // WARNING: sleep chặn partition; chỉ nên dùng cho lưu lượng thấp hoặc delay ngắn
-        this.logger.info(`[RETRY] Waiting ${delayString} before re-drive`, {
-          topic,
-          offset: message.offset,
-        });
-        await sleep(delayMs);
+        for (const message of batch.messages) {
+          this.logger.info(`[RETRY] Waiting ${delayString} before re-drive`, {
+            topic,
+            partition,
+            offset: message.offset,
+          });
 
-        try {
-          const originalTarget =
-            message.headers?.["x-original-topic"]?.toString();
-          if (!originalTarget)
-            throw new Error("Missing 'x-original-topic' header");
-
-          await this.send(originalTarget, [
-            {
-              key: message.key,
-              value: message.value,
-              headers: message.headers,
-            },
-          ]);
-
-          await consumer.commitOffsets([
-            {
-              topic,
-              partition,
-              offset: (Number(message.offset) + 1).toString(),
-            },
-          ]);
-        } catch (error) {
-          this.logger.error(
-            `[RETRY] Re-drive failed; message will be retried.`,
-            {
-              topic,
-              offset: message.offset,
-              error: error.message,
-            }
+          const ok = await waitWithHeartbeat(
+            delayMs,
+            { heartbeat, isRunning, isStale },
+            5000,
+            this.logger
           );
-          // Không commit -> sẽ re-process (đúng ý)
+          if (!ok) return;
+
+          try {
+            const originalTarget =
+              message.headers?.["x-original-topic"]?.toString();
+            if (!originalTarget)
+              throw new Error("Missing 'x-original-topic' header");
+
+            await this.send(originalTarget, [
+              {
+                key: message.key,
+                value: message.value,
+                headers: message.headers, // giữ nguyên headers (x-retry-attempt,...)
+              },
+            ]);
+
+            resolveOffset(message.offset);
+            await commitOffsetsIfNecessary(); // commit đúng generation
+          } catch (error) {
+            this.logger.error(
+              `[RETRY] Re-drive failed; message will be retried.`,
+              {
+                topic,
+                partition,
+                offset: message.offset,
+                error: error.message,
+              }
+            );
+            // KHÔNG resolveOffset -> sẽ reprocess
+          }
+
+          // thân thiện với group khi batch lớn
+          await heartbeat();
         }
       },
     });
@@ -604,3 +623,24 @@ const ensureSafeValue = (value) => {
   if (typeof value !== "string") return String(value);
   return value;
 };
+
+async function waitWithHeartbeat(
+  totalMs,
+  tools,
+  tickMs = 5000,
+  logger = console
+) {
+  let left = totalMs;
+  while (left > 0) {
+    const step = Math.min(tickMs, left);
+    await sleep(step);
+    if (!tools.isRunning() || tools.isStale()) return false;
+    try {
+      await tools.heartbeat();
+    } catch (e) {
+      logger.warn("[RETRY] heartbeat failed", { error: e.message });
+    }
+    left -= step;
+  }
+  return true;
+}

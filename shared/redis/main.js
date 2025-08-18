@@ -95,6 +95,14 @@ export function createRedisClient({ config, logger = console }) {
           ? io.hset(k, rest[0])
           : io.hset(k, ...rest),
       hdel: (k, ...fields) => io.hdel(k, ...fields),
+      hget: (k, f) => io.hget(k, f),
+      publish: (ch, msg) => io.publish(ch, msg),
+      subscribe: (ch) => io.subscribe(ch),
+      psubscribe: (pat) => io.psubscribe(pat),
+      on: (...a) => io.on(...a),
+      multi: () => io.multi(),
+      pipeline: () => io.pipeline(),
+      unlink: (...keys) => io.unlink?.(...keys), // (tuỳ)
       // script
       script: (sub, lua) => io.script(sub, lua),
       evalsha: (sha, numKeys, ...args) => io.evalsha(sha, numKeys, ...args),
@@ -158,6 +166,14 @@ export function createRedisClient({ config, logger = console }) {
           ? cluster.hset(k, rest[0])
           : cluster.hset(k, ...rest),
       hdel: (k, ...fields) => cluster.hdel(k, ...fields),
+      hget: (k, f) => cluster.hget(k, f),
+      publish: (ch, msg) => cluster.publish(ch, msg),
+      subscribe: (ch) => cluster.subscribe(ch),
+      psubscribe: (pat) => cluster.psubscribe(pat),
+      on: (...a) => cluster.on(...a),
+      multi: () => cluster.multi(),
+      pipeline: () => cluster.pipeline(),
+      unlink: (...keys) => cluster.unlink?.(...keys),
       zadd: (k, ...args) => cluster.zadd(k, ...args),
       script: (sub, lua) => cluster.script(sub, lua),
       evalsha: (sha, numKeys, ...args) =>

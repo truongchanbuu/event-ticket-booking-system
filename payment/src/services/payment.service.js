@@ -1,3 +1,4 @@
+// services/payment.service.js
 import {
     AppError,
     ERROR_CODE,
@@ -19,18 +20,10 @@ const PAYMENT_REFUNDS = "paymentRefunds";
 const REFRESH_TTL_MS_DEFAULT = 10_000;
 
 export class PaymentService {
-    constructor({
-        db,
-        redisService,
-        paymentProducer,
-        paymentProviderFactory,
-        logger = console,
-    }) {
+    constructor({ db, redisService, paymentProducer, logger = console }) {
         this.db = db;
         this.redisService = redisService;
         this.logger = logger;
-
-        this.paymentProviderFactory = paymentProviderFactory;
 
         this.paymentCollection = this.db.collection(PAYMENT_COLLECTION);
 
@@ -45,14 +38,14 @@ export class PaymentService {
         };
     }
 
-    // ---- Utility ----
+    // ---------- Utility ----------
     async invalidateCache(userID) {
         await this.redisService.del(
             this.CACHE_KEYS.PAYMENT_METHODS_BY_USER_ID(userID),
         );
     }
 
-    // ---- Get methods ----
+    // ---------- Get methods ----------
     async getPaymentMethodsByUserID(userID) {
         const cacheKey = this.CACHE_KEYS.PAYMENT_METHODS_BY_USER_ID(userID);
 
@@ -63,10 +56,7 @@ export class PaymentService {
                 .orderBy("createdAt", "asc")
                 .get();
 
-            if (querySnapshot.empty) {
-                return [];
-            }
-
+            if (querySnapshot.empty) return [];
             return querySnapshot.docs.map((doc) => ({
                 paymentMethodID: doc.id,
                 ...doc.data(),
@@ -74,7 +64,7 @@ export class PaymentService {
         });
     }
 
-    // ---- Find or create ----
+    // ---------- Find or create ----------
     async findOrCreatePaymentMethod(userID, paymentData) {
         const type = PROVIDER_TYPE_MAP[paymentData.provider];
         if (!type) {
@@ -238,15 +228,12 @@ export class PaymentService {
             await this.unsetDefaultAll(userID);
         }
 
-        // (Optional) Encrypt secrets before storing (KMS)
-        // if (newPaymentMethodData.mock?.secretKey) { ... }
-
         const docRef = await this.paymentCollection.add(newPaymentMethodData);
         await this.invalidateCache(userID);
         return { paymentMethodID: docRef.id, ...newPaymentMethodData };
     }
 
-    // ---- Unset all defaults ----
+    // ---------- Unset all defaults ----------
     async unsetDefaultAll(userID) {
         const methodsSnapshot = await this.paymentCollection
             .where("userID", "==", userID)
@@ -266,7 +253,7 @@ export class PaymentService {
         await batch.commit();
     }
 
-    // ---- Set default ----
+    // ---------- Set default ----------
     async setDefaultPaymentMethod(userID, paymentMethodID) {
         await this.db.runTransaction(async (transaction) => {
             const methodToSetRef = this.paymentCollection.doc(paymentMethodID);
@@ -296,7 +283,7 @@ export class PaymentService {
         await this.invalidateCache(userID);
     }
 
-    // ---- Update ----
+    // ---------- Update ----------
     async updatePaymentMethod(userID, paymentMethodID, updates) {
         const docRef = this.paymentCollection.doc(paymentMethodID);
 
@@ -316,7 +303,7 @@ export class PaymentService {
         };
     }
 
-    // ---- Delete ----
+    // ---------- Delete ----------
     async deletePaymentMethod(userID, paymentMethodID) {
         const doc = await this.paymentCollection.doc(paymentMethodID).get();
         if (!doc.exists || doc.data().userID !== userID) {
@@ -336,7 +323,6 @@ export class PaymentService {
                     errorCode: ERROR_CODE.INVALID_DATA,
                 });
             }
-            // Auto-promote another method to default
             const newDefault = methods.find(
                 (m) => m.paymentMethodID !== paymentMethodID,
             );
@@ -365,7 +351,6 @@ export class PaymentService {
     }
 
     async _getByReservationID(reservationID) {
-        // cần index: paymentIntents(reservationID asc)
         const qs = await this.paymentIntentCollection
             .where("reservationID", "==", reservationID)
             .limit(1)
@@ -413,10 +398,124 @@ export class PaymentService {
     }
 
     /**
+     * Tạo document intent chuẩn trong Firestore (docId = intentId).
+     */
+    async createIntentDoc({
+        intentId,
+        reservationID,
+        providerOriginal,
+        providerUsed,
+        transactionId,
+        buyer,
+        expiresAt,
+        amount = null,
+        currency = "VND",
+    }) {
+        if (!intentId || !reservationID) {
+            throw new AppError({
+                message: "intentId & reservationID are required.",
+                errorCode: ERROR_CODE.INVALID_DATA,
+                statusCode: 400,
+            });
+        }
+
+        const nowIso = new Date().toISOString();
+        const doc = {
+            reservationID,
+            provider: providerUsed,
+            providerOriginal: providerOriginal || providerUsed,
+            status: PAYMENT_STATUS.PENDING,
+            orderId: `ORD_${intentId}`,
+            transactionId: transactionId || null,
+            amount,
+            currency,
+            buyer: buyer || null,
+            metadata: { isMock: /mock/i.test(providerUsed) },
+            statusHistory: [],
+            lastProviderCheckAt: null,
+            statusUpdatedAt: nowIso,
+            expiresAt,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+        };
+
+        await this.paymentIntentCollection.doc(intentId).set(doc);
+        return { paymentIntentID: intentId, ...doc };
+    }
+
+    /**
+     * Update intent status (từ mockpay/auto hoặc provider IPN/verify).
+     */
+    async updateIntentStatus({ intentId, newStatus, providerResp }) {
+        const docRef = this.paymentIntentCollection.doc(intentId);
+        let before = null;
+        let after = null;
+
+        await this.db.runTransaction(async (tx) => {
+            const snap = await tx.get(docRef);
+            if (!snap.exists) {
+                throw new AppError({
+                    message: "Payment intent not found.",
+                    errorCode: ERROR_CODE.NOT_FOUND,
+                    statusCode: 404,
+                });
+            }
+
+            const cur = snap.data();
+            before = { paymentIntentID: intentId, ...cur };
+            const curStatus = cur.status || PAYMENT_STATUS.PENDING;
+
+            if (TERMINAL.has(curStatus)) {
+                after = before;
+                return;
+            }
+
+            const normalized = normalizeStatus(
+                newStatus || PAYMENT_STATUS.PENDING,
+            );
+            const nowIso = new Date().toISOString();
+            const upd = {
+                updatedAt: nowIso,
+                lastProviderCheckAt: nowIso,
+                providerLastRaw: providerResp || null,
+            };
+
+            if (normalized !== curStatus) {
+                upd.status = normalized;
+                upd.statusUpdatedAt = nowIso;
+                upd.statusHistory = [
+                    ...(cur.statusHistory || []),
+                    {
+                        from: curStatus,
+                        to: normalized,
+                        at: nowIso,
+                        reason: "updateIntentStatus",
+                    },
+                ];
+            }
+
+            if (
+                providerResp?.transactionId &&
+                providerResp.transactionId !== cur.transactionId
+            ) {
+                upd.transactionId = providerResp.transactionId;
+            }
+
+            tx.update(docRef, upd);
+            after = { ...before, ...upd };
+        });
+
+        const oldStatus = before.status || PAYMENT_STATUS.PENDING;
+        const effStatus = after.status || oldStatus;
+        if (effStatus !== oldStatus) {
+            await this._maybePublishStatusChange(oldStatus, effStatus, after);
+        }
+
+        return { ...after, status: effStatus };
+    }
+
+    /**
      * Confirm/check trạng thái payment theo paymentIntentID hoặc reservationID.
-     * - Không tin client payload: load toàn bộ từ DB
-     * - Nếu đã terminal => trả ngay
-     * - Nếu PENDING: chỉ gọi provider.verify khi refresh=true hoặc quá TTL
      */
     async confirmByIntent({ paymentIntentID, reservationID, refresh = false }) {
         if (!paymentIntentID && !reservationID) {
@@ -427,7 +526,6 @@ export class PaymentService {
             });
         }
 
-        // 1) Load intent từ DB
         const intent =
             (paymentIntentID &&
                 (await this._getByPaymentIntentID(paymentIntentID))) ||
@@ -441,7 +539,6 @@ export class PaymentService {
             });
         }
 
-        // Force fields we rely on
         const {
             paymentIntentID: pid,
             reservationID: rid,
@@ -454,7 +551,6 @@ export class PaymentService {
             lastProviderCheckAt,
         } = intent;
 
-        // 2) Nếu terminal -> trả luôn (idempotent)
         if (TERMINAL.has(currentStatus)) {
             return {
                 ...intent,
@@ -465,7 +561,6 @@ export class PaymentService {
             };
         }
 
-        // 3) PENDING: quyết định có cần refresh provider?
         const now = Date.now();
         const lastCheckMs = lastProviderCheckAt
             ? new Date(lastProviderCheckAt).getTime()
@@ -482,7 +577,6 @@ export class PaymentService {
             };
         }
 
-        // 4) Gọi provider.verify bằng dữ liệu từ DB
         const client = this.providers?.[provider];
         if (!client || typeof client.verify !== "function") {
             throw new AppError({
@@ -502,7 +596,6 @@ export class PaymentService {
 
         const newStatus = normalizeStatus(providerResp?.status);
 
-        // 5) Ghi nhận cập nhật trong transaction (chống race & idempotent)
         const docRef = this.paymentIntentCollection.doc(pid);
         let updated = null;
 
@@ -519,7 +612,6 @@ export class PaymentService {
             const cur = snap.data();
             const curStatus = cur.status || PAYMENT_STATUS.PENDING;
 
-            // Nếu đã terminal, không downgrade/regress
             if (TERMINAL.has(curStatus)) {
                 updated = { paymentIntentID: pid, ...cur, status: curStatus };
                 return;
@@ -531,7 +623,6 @@ export class PaymentService {
                 providerLastRaw: providerResp || null,
             };
 
-            // Chỉ cập nhật khi status đổi
             if (newStatus !== curStatus) {
                 fieldsToUpdate.status = newStatus;
                 fieldsToUpdate.statusUpdatedAt = nowIso;
@@ -545,7 +636,6 @@ export class PaymentService {
                     },
                 ];
 
-                // Cập nhật các field nếu provider trả chính xác hơn
                 if (
                     providerResp?.transactionId &&
                     providerResp.transactionId !== cur.transactionId
@@ -570,7 +660,6 @@ export class PaymentService {
             updated = { paymentIntentID: pid, ...cur, ...fieldsToUpdate };
         });
 
-        // 6) Publish event nếu status đổi (idempotent nhờ idempotencyKey)
         const oldStatus = intent.status || PAYMENT_STATUS.PENDING;
         const effectiveStatus = updated.status || oldStatus;
         if (effectiveStatus !== oldStatus) {
@@ -594,7 +683,6 @@ export class PaymentService {
     }
 
     async createOrGetRefund({ reservationID, reason, metadata, idemKey }) {
-        // 1) validate
         if (!reservationID) {
             return {
                 statusCode: 400,
@@ -609,7 +697,6 @@ export class PaymentService {
         }
         const effectiveIdemKey = idemKey || `${reservationID}:refund`;
 
-        // 2) find intent by reservation (ưu tiên SUCCEEDED)
         const intentDoc = await this._getByReservationID(reservationID);
         if (!intentDoc) {
             return {
@@ -645,8 +732,6 @@ export class PaymentService {
             orderId,
         } = intentDoc;
 
-        // 3) idempotency: tìm refund theo (reservationID, idemKey)
-        // (Firestore thật cần composite index; ở đây có thể filter code-side)
         const existingByIdem = await this._findRefundByReservationAndIdemKey(
             reservationID,
             effectiveIdemKey,
@@ -664,7 +749,6 @@ export class PaymentService {
             };
         }
 
-        // Đã từng refund full thành công?
         const existingSucceeded =
             await this._findRefundSucceededByPaymentIntent(paymentIntentID);
         if (existingSucceeded) {
@@ -680,7 +764,6 @@ export class PaymentService {
             };
         }
 
-        // 4) Tạo refund record (PENDING)
         const nowIso = new Date().toISOString();
         const newRefund = {
             reservationID,
@@ -704,8 +787,6 @@ export class PaymentService {
         const refundRef = await this.paymentRefundCollection.add(newRefund);
         const refundId = refundRef.id;
 
-        // 5) call provider.refund() (best-effort)
-        let providerResp = null;
         try {
             const client = this.providers?.[provider];
             if (!client || typeof client.refund !== "function") {
@@ -714,7 +795,7 @@ export class PaymentService {
                 );
             }
 
-            providerResp = await client.refund({
+            const providerResp = await client.refund({
                 paymentIntentId: paymentIntentID,
                 transactionId,
                 orderId,
@@ -724,10 +805,8 @@ export class PaymentService {
                 metadata,
             });
 
-            // map status
             const s = (providerResp?.status || "").toUpperCase();
             const isSucceeded = s === REFUND_STATUS.SUCCEEDED;
-            const isPending = s === REFUND_STATUS.PENDING;
             const isFailed = s === REFUND_STATUS.FAILED;
 
             const upd = {
@@ -747,7 +826,6 @@ export class PaymentService {
 
             await refundRef.update(upd);
 
-            // 6) publish Kafka khi terminal
             if (
                 upd.status === REFUND_STATUS.SUCCEEDED ||
                 upd.status === REFUND_STATUS.FAILED
@@ -777,7 +855,6 @@ export class PaymentService {
                 }
             }
         } catch (err) {
-            // network/provider error -> giữ PENDING cho retry/confirm sau
             const upd = {
                 status: REFUND_STATUS.PENDING,
                 lastProviderCheckAt: new Date().toISOString(),
@@ -788,12 +865,9 @@ export class PaymentService {
             await refundRef.update(upd);
         }
 
-        // 7) trả về
-        const snapData =
-            typeof snapData.data === "function"
-                ? snapData.data()
-                : snapData.data || {};
-        const saved = { refundId, ...snapData };
+        // ---- RETURN (fix bug snapData) ----
+        const snap = await refundRef.get();
+        const saved = { refundId, ...(snap.data?.() || snap.data || {}) };
         return {
             statusCode: 200,
             envelope: {
@@ -845,41 +919,4 @@ export class PaymentService {
 
         return doc ? { refundId: doc.id, ...doc } : null;
     }
-
-    // async processIpnResult({
-    //     orderId,
-    //     reservationId,
-    //     status,
-    //     amount,
-    //     currency,
-    //     transactionId,
-    //     raw,
-    // }) {
-    //     await this.withIdempotency(`ipn:${orderId}:${status}`, async () => {
-    //         await this.verifyAgainstDB({ orderId, amount, currency });
-
-    //         if (status === "SUCCEEDED") {
-    //             await this.confirmReservationWithPolicy({
-    //                 reservationID: reservationId,
-    //                 transactionId,
-    //                 amount,
-    //                 currency,
-    //             });
-    //             await this.paymentProducer.succeeded({
-    //                 orderId,
-    //                 reservationId,
-    //                 transactionId,
-    //                 amount,
-    //                 currency,
-    //             });
-    //         } else {
-    //             await this.markPaymentFailed(reservationId, status);
-    //             await this.paymentProducer.failed({
-    //                 orderId,
-    //                 reservationId,
-    //                 status,
-    //             });
-    //         }
-    //     });
-    // }
 }

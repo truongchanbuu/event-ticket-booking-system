@@ -23,12 +23,7 @@ export async function handleAvailabilityMessage(payload, deps) {
     const logger = deps?.logger || console;
     const availabilityService = deps?.availabilityService || null;
     const redis = deps?.redis || deps?.redisService || deps?.redisClient;
-    const redisPubSub = deps?.redisPubSub || redis;
-    if (!redis || typeof redis.publish !== "function") {
-        throw new Error(
-            "handleAvailabilityMessage: redis with publish() required",
-        );
-    }
+    const redisPubSub = deps?.redisPubSub;
 
     // 1) Chuẩn hoá mảng sự kiện
     const env =
@@ -113,7 +108,11 @@ export async function handleAvailabilityMessage(payload, deps) {
             // ghi lại last version
             await redis.set(verKey, String(ev.invVersion)).catch(() => {});
             // lưu map eventId -> slug (hữu ích cho dịch vụ khác)
-            await redis.hset?.("event:slug", ev.eventId, slug).catch(() => {});
+            await (redis?.hset ?? redis?.r?.hset)?.(
+                "event:slug",
+                ev.eventId,
+                slug,
+            ).catch(() => {});
         }
 
         // 3.3) Publish SSE nudge (bắt buộc; nếu fail → throw để Kafka retry)
@@ -123,7 +122,7 @@ export async function handleAvailabilityMessage(payload, deps) {
         });
         const chan = `availability:slug:${slug}`;
         try {
-            await (redisPubSub.publish ?? redis.publish).call(
+            await (redisPubSub.publish ?? redis?.r?.publish).call(
                 redisPubSub,
                 chan,
                 msg,
